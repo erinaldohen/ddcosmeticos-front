@@ -1,0 +1,105 @@
+/* src/pages/Dashboard/Dashboard.css */
+
+/* CABEÇALHO DA PÁGINA */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+}
+
+.page-title h1 {
+  font-size: 1.8rem;
+  color: #1A1A1A; /* Preto Suave */
+  font-weight: 700;
+}
+
+.page-title p {
+  color: #666666;
+  margin-top: 4px;
+}
+
+.header-actions button {
+  padding: 12px 20px;
+  background-color: #F22998; /* ROSA DA MARCA */
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.header-actions button:hover {
+  background-color: #D11075;
+}
+
+/* GRID DE CARTÕES */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 24px;
+  margin-bottom: 40px;
+}
+
+/* O ESTILO "CLEAN & SOLID" DO CARTÃO */
+.kpi-card {
+  background-color: #FFFFFF;
+  padding: 24px;
+  border-radius: 12px;
+  /* A mesma sombra do login para consistência */
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  border: 1px solid #F0F0F0;
+  transition: transform 0.2s;
+}
+
+.kpi-card:hover {
+  transform: translateY(-3px);
+  border-color: #F22998; /* Detalhe rosa ao passar o mouse */
+}
+
+.card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.card-label {
+  font-size: 0.9rem;
+  color: #666666;
+  font-weight: 500;
+}
+
+.icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+}
+
+/* Cores específicas para os ícones */
+.icon-money { background: #ECFDF5; color: #10B981; } /* Verde Dinheiro */
+.icon-pink { background: #FDF2F8; color: #F22998; } /* Rosa Marca */
+.icon-blue { background: #EFF6FF; color: #3B82F6; } /* Azul Info */
+
+.card-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1A1A1A;
+  margin-bottom: 8px;
+}
+
+.card-footer {
+  font-size: 0.85rem;
+  color: #666666;
+  border-top: 1px solid #F5F5F5;
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.trend-up { color: #10B981; font-weight: 600; }
+.trend-down { color: #EF4444; font-weight: 600; }

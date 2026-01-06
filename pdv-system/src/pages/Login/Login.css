@@ -1,0 +1,117 @@
+/* RESET BÁSICO */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+.login-page {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  background-color: #F0F2F5; /* Cinza bem suave, padrão corporativo */
+  font-family: 'Inter', -apple-system, sans-serif;
+  align-items: center;
+  justify-content: center;
+}
+
+/* O CARTÃO SÓLIDO */
+.login-card {
+  background-color: #FFFFFF;
+  width: 100%;
+  max-width: 420px;
+  padding: 40px;
+  border-radius: 12px; /* Cantos levemente arredondados */
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); /* Sombra difusa e elegante */
+  text-align: center;
+}
+
+/* LOGO E TÍTULO */
+.logo-area {
+  margin-bottom: 30px;
+}
+
+.logo-img {
+  width: 150px; /* Tamanho controlado */
+  margin-bottom: 20px;
+}
+
+.login-title h2 {
+  font-size: 1.5rem;
+  color: #1A1A1A;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.login-title p {
+  color: #666666;
+  font-size: 0.95rem;
+}
+
+/* FORMULÁRIO */
+.form-area {
+  margin-top: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px; /* Espaço entre os inputs */
+}
+
+.input-wrapper {
+  text-align: left;
+}
+
+.input-wrapper label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.custom-input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 1rem;
+  color: #333;
+  background-color: #FAFAFA;
+  border: 1px solid #E0E0E0;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+/* FOCO ELEGANTE: A cor da marca aparece aqui */
+.custom-input:focus {
+  background-color: #FFF;
+  border-color: #F22998; /* SEU ROSA */
+  box-shadow: 0 0 0 4px rgba(242, 41, 152, 0.1);
+}
+
+/* BOTÃO FORTE */
+.btn-login {
+  margin-top: 10px;
+  width: 100%;
+  padding: 16px;
+  background-color: #F22998; /* SEU ROSA */
+  color: white;
+  font-size: 1rem;
+  font-weight: 700;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-login:hover {
+  background-color: #D11075; /* Rosa mais escuro no hover */
+}
+
+/* LINK SECUNDÁRIO */
+.forgot-pass {
+  margin-top: 20px;
+  display: block;
+  font-size: 0.9rem;
+  color: #F22998;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.forgot-pass:hover {
+  text-decoration: underline;
+}

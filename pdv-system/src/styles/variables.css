@@ -1,0 +1,35 @@
+:root {
+  /* --- PALETA DA MARCA (Vibrante & Elegante) --- */
+  --primary: #F22998;
+  --secondary: #0BD9BF;
+  --dark-base: #1A0B14;
+
+  /* Gradiente Assinatura (Mistura o Rosa e o Turquesa de forma suave) */
+  --brand-gradient: linear-gradient(135deg, #F22998 0%, #B01069 60%, #1A0B14 100%);
+  --brand-gradient-light: linear-gradient(135deg, #F22998 0%, #0BD9BF 100%);
+
+  /* --- FUNDOS --- */
+  --bg-app: #F8F9FA;       /* Cinza quase branco (Fundo base) */
+  --bg-surface: #FFFFFF;   /* Branco puro (Cards) */
+
+  /* --- TIPOGRAFIA --- */
+  --text-title: #1F1F1F;
+  --text-body: #555555;
+  --text-muted: #999999;
+
+  /* --- UX / UI --- */
+  --radius-lg: 20px;       /* Cantos bem arredondados (Moderno) */
+  --radius-md: 12px;
+  --shadow-float: 0 20px 50px rgba(0,0,0,0.1); /* Sombra de flutuação */
+  --shadow-card: 0 4px 20px rgba(0,0,0,0.05);
+}
+
+body {
+  background-color: var(--bg-app);
+  color: var(--text-body);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  margin: 0;
+}
+
+/* Reset para inputs e botões ficarem bonitos */
+input, button { font-family: inherit; }

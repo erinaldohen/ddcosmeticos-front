@@ -1,0 +1,107 @@
+/* src/components/Layout/MainLayout.css */
+
+.layout-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  background-color: #F0F2F5; /* O mesmo cinza do Login */
+  font-family: 'Inter', sans-serif;
+  overflow: hidden;
+}
+
+/* --- SIDEBAR (BRANCO SÓLIDO) --- */
+.sidebar {
+  width: 270px;
+  background-color: #FFFFFF;
+  border-right: 1px solid #E0E0E0; /* Separação sutil */
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  z-index: 50;
+  transition: all 0.3s ease;
+}
+
+.brand-area {
+  margin-bottom: 40px;
+  padding: 0 10px;
+  text-align: center;
+}
+
+.sidebar-logo {
+  width: 120px; /* Tamanho elegante */
+  height: auto;
+}
+
+/* MENU DE NAVEGAÇÃO */
+.nav-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px;
+  color: #666666; /* Cinza médio para itens normais */
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+  font-size: 0.95rem;
+}
+
+/* HOVER (Passar o mouse) */
+.nav-item:hover {
+  background-color: #FAFAFA;
+  color: #1A1A1A;
+}
+
+/* ATIVO (Onde o usuário está) */
+.nav-item.active {
+  background-color: #FEF2F8; /* Rosa bem clarinho de fundo */
+  color: #F22998; /* O Rosa da Marca no texto */
+  font-weight: 600;
+}
+
+.nav-icon {
+  margin-right: 12px;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+}
+
+/* BOTÃO DE SAIR (No final) */
+.nav-item.logout {
+  margin-top: auto; /* Empurra para o final da tela */
+  color: #DC2626; /* Vermelho suave */
+}
+.nav-item.logout:hover {
+  background-color: #FEF2F2;
+}
+
+/* --- ÁREA PRINCIPAL --- */
+.main-content {
+  flex: 1; /* Ocupa o resto da tela */
+  padding: 32px 40px;
+  overflow-y: auto; /* Permite rolar se tiver muita coisa */
+}
+
+/* Responsividade para celular */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    height: 70px;
+    flex-direction: row;
+    justify-content: space-around;
+    padding: 10px;
+    border-right: none;
+    border-top: 1px solid #E0E0E0;
+  }
+  .brand-area { display: none; }
+  .nav-item span { display: none; } /* Só ícones */
+  .nav-item.logout { margin-top: 0; }
+}
