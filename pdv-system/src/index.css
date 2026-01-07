@@ -1,0 +1,74 @@
+/* src/index.css */
+
+/* --- IMPORTANTE: RESET E VARIÁVEIS GLOBAIS --- */
+:root {
+  /* Paleta DD Cosméticos */
+  --primary: #F22998;          /* Magenta (Ação/Aviso) */
+  --primary-dark: #C21875;     /* Magenta Escuro (Hover) */
+  --secondary: #0BD9BF;        /* Teal (Sucesso) */
+  --error: #DC2626;            /* Vermelho (Erro) */
+
+  /* Fontes e UX */
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  /* Cores do Toastify (Variáveis nativas da lib) */
+  --toastify-color-light: #ffffff;
+  --toastify-color-dark: #121212;
+  --toastify-color-info: #3498db;
+  --toastify-color-success: #0BD9BF; /* Teal */
+  --toastify-color-warning: #F22998; /* Magenta (Substitui o Laranja) */
+  --toastify-color-error: #DC2626;   /* Vermelho Profundo */
+}
+
+/* Reset Básico */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #F0F2F5; /* Fundo padrão do sistema */
+  color: #1A1A1A;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+/* --- OVERRIDE AGRESSIVO DO TOASTIFY (Para matar o laranja de vez) --- */
+
+/* 1. Força o fundo do WARNING para Magenta */
+.Toastify__toast--warning {
+  background-color: #F22998 !important;
+  color: #FFFFFF !important;
+}
+
+/* 2. Força a barra de progresso do WARNING */
+.Toastify__progress-bar--warning {
+  background-color: #960D59 !important; /* Magenta bem escuro */
+}
+
+/* 3. Força o ícone do WARNING para Branco (para não ficar amarelo) */
+.Toastify__toast--warning .Toastify__toast-icon svg path {
+  fill: #FFFFFF !important;
+}
+
+/* 4. Estilo Geral dos Toasts (Moderno e Arredondado) */
+.Toastify__toast {
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
+  font-weight: 500 !important;
+  padding: 16px !important;
+}
+
+/* Ajuste para telas pequenas */
+@media (max-width: 480px) {
+  .Toastify__toast-container {
+    padding: 0 10px !important;
+  }
+  .Toastify__toast {
+    margin-bottom: 10px !important;
+    border-radius: 8px !important;
+  }
+}

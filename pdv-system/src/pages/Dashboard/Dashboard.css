@@ -101,5 +101,11 @@
   margin-top: 12px;
 }
 
+.icon-alert {
+  background: #FDF2F8; /* Rosa quase branco */
+  color: #F22998;      /* Magenta da Marca */
+  border: 1px solid rgba(242, 41, 152, 0.2); /* Borda sutil */
+}
+
 .trend-up { color: #10B981; font-weight: 600; }
 .trend-down { color: #EF4444; font-weight: 600; }
