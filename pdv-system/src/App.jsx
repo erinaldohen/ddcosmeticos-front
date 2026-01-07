@@ -8,6 +8,7 @@ import PrivateRoute from './components/PrivateRoute';
 
 import Login from './pages/Login/Login';
 import Dashboard from './pages/Dashboard/Dashboard';
+import ProdutoList from './pages/Produtos/ProdutoList';
 
 // Importe seu CSS global (aquele que corrigimos o laranja)
 import './index.css';
@@ -26,6 +27,7 @@ function App() {
         <Route path="/" element={<Login />} />
 
         {/* ROTA PROTEGIDA (Só quem tem token entra) */}
+        {/* Nova Rota de Dashboard */}
         <Route
           path="/dashboard"
           element={
@@ -33,6 +35,15 @@ function App() {
               <Dashboard />
             </PrivateRoute>
           }
+        />
+
+        {/* Nova Rota de Produtos */}
+        <Route path="/produtos"
+         element={
+             <PrivateRoute>
+                 <ProdutoList />
+             </PrivateRoute>
+            }
         />
 
         {/* Dica de Ouro: Redirecionar qualquer rota desconhecida para o Login */}

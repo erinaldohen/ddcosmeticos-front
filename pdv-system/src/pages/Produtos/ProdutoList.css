@@ -1,0 +1,272 @@
+:root {
+  --primary: #F22998;
+  --primary-hover: #d11a80;
+  --primary-light: #fdf2f8; /* Fundo suave para hover/ícones */
+  --text-dark: #1e293b;
+  --text-gray: #64748b;
+  --bg-body: #f1f5f9;
+  --border-color: #e2e8f0;
+  --white: #ffffff;
+}
+
+.container-fluid {
+  padding: 24px;
+  background-color: var(--bg-body);
+  min-height: 100vh;
+}
+
+/* Header */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.page-title h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-dark);
+  margin: 0;
+}
+
+.page-title p {
+  color: var(--text-gray);
+  margin: 4px 0 0 0;
+  font-size: 0.9rem;
+}
+
+.action-btn-primary {
+  background-color: var(--primary);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: 0 4px 6px rgba(242, 41, 152, 0.2);
+  transition: all 0.2s ease;
+}
+
+.action-btn-primary:hover {
+  background-color: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+/* Datagrid Container */
+.datagrid-container {
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Toolbar */
+.toolbar {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--white);
+}
+
+.search-box {
+  position: relative;
+  max-width: 400px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-gray);
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 10px 10px 40px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color 0.2s;
+  color: var(--text-dark);
+}
+
+.search-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(242, 41, 152, 0.1);
+}
+
+/* Tabela */
+.custom-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.custom-table th {
+  background-color: #f8fafc;
+  text-align: left;
+  padding: 14px 24px;
+  font-weight: 600;
+  color: var(--text-gray);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.custom-table td {
+  padding: 16px 24px;
+  color: var(--text-dark);
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+  font-size: 0.9rem;
+}
+
+.custom-table tbody tr:hover {
+  background-color: var(--primary-light);
+}
+
+/* Célula de Informação do Produto */
+.product-info-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.product-icon-wrapper {
+  width: 40px;
+  height: 40px;
+  background-color: #f1f5f9;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-gray);
+  flex-shrink: 0;
+}
+
+.product-name {
+  font-weight: 600;
+  color: var(--text-dark);
+  margin-bottom: 2px;
+}
+
+.ean-cell {
+  font-family: 'Consolas', monospace;
+  font-size: 0.8rem;
+  color: var(--text-gray);
+}
+
+.font-price {
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Badges e Estoque */
+.stock-value { font-weight: 600; }
+.stock-low { color: #dc2626; }
+
+.status-badge {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.status-success { background: #dcfce7; color: #166534; }
+.status-warning { background: #fef9c3; color: #854d0e; }
+.status-danger  { background: #fee2e2; color: #991b1b; }
+
+/* Ações */
+.actions-cell {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.icon-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 6px;
+  color: var(--text-gray);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn:hover { background-color: #e2e8f0; color: var(--text-dark); }
+.icon-btn.edit:hover { color: #3b82f6; background-color: #eff6ff; }
+.icon-btn.delete:hover { color: #ef4444; background-color: #fef2f2; }
+
+/* Loading e Empty State */
+.loading-state, .empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-gray);
+}
+.spinner {
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid var(--primary);
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 15px auto;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* Pagination Footer */
+.pagination-footer {
+  padding: 12px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--border-color);
+  background-color: #f8fafc;
+}
+
+.page-info {
+  font-size: 0.85rem;
+  color: var(--text-gray);
+}
+
+.pagination-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-page {
+  padding: 6px 14px;
+  border: 1px solid var(--border-color);
+  background: var(--white);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: var(--text-dark);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: 0.2s;
+}
+
+.btn-page:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.btn-page:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: #f1f5f9;
+}
