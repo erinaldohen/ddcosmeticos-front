@@ -136,9 +136,25 @@ const ProdutoList = () => {
                       <tr key={prod.id}>
                         <td>
                           <div className="product-info-cell">
+                            {/* ATUALIZADO: Lógica de Imagem */}
                             <div className="product-icon-wrapper">
-                              <Package size={20} />
+                              {prod.urlImagem ? (
+                                <img
+                                  src={prod.urlImagem}
+                                  alt={prod.descricao}
+                                  className="product-thumb"
+                                  onError={(e) => {
+                                    // Se a imagem falhar, esconde a tag img para mostrar o fundo ou pode-se manipular para mostrar ícone
+                                    e.target.style.display = 'none';
+                                    // Opcional: injetar o ícone via DOM ou estado se necessário,
+                                    // mas apenas esconder evita o ícone de "imagem quebrada"
+                                  }}
+                                />
+                              ) : (
+                                <Package size={20} />
+                              )}
                             </div>
+
                             <div>
                               <div className="product-name">{prod.descricao}</div>
                               <div className="ean-cell">{prod.codigoBarras || 'SEM EAN'}</div>

@@ -85,6 +85,18 @@ export const produtoService = {
       console.error(`Erro ao excluir produto ${id}:`, error);
       throw error;
     }
+  },
+
+  // --- NOVO MÉTODO: CONSULTA EXTERNA (COSMOS) ---
+  consultarEan: async (ean) => {
+    try {
+      // Chama o endpoint de integração do backend
+      const response = await api.get(`${RESOURCE_URL}/consulta-externa/${ean}`);
+      return response.data;
+    } catch (error) {
+      // Repassa o erro para ser tratado no front (ex: 404 não encontrado)
+      throw error;
+    }
   }
 };
 

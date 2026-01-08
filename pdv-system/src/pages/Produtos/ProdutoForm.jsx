@@ -6,7 +6,7 @@ import { toast } from 'react-toastify';
 import {
   Save, ArrowLeft, Package, Barcode, DollarSign,
   Layers, Tag, Image, FileText, Ruler, Percent,
-  Landmark, Truck
+  Landmark, Truck, DownloadCloud, Search
 } from 'lucide-react';
 import './ProdutoForm.css';
 
@@ -16,6 +16,7 @@ const ProdutoForm = () => {
   const isEditMode = !!id;
 
   const [loading, setLoading] = useState(false);
+  const [searchingEan, setSearchingEan] = useState(false); // Estado para o loading da busca
 
   const [formData, setFormData] = useState({
     descricao: '',
@@ -104,6 +105,56 @@ const ProdutoForm = () => {
     }
   };
 
+  // --- NOVA FUNÇÃO: BUSCAR DADOS PELO EAN (ATUALIZADA) ---
+  const handleBuscarEan = async () => {
+    const ean = formData.codigoBarras;
+    if (!ean || ean.length < 8) {
+      toast.warning("Digite um código de barras válido para buscar.");
+      return;
+    }
+
+    setSearchingEan(true);
+    try {
+      const dadosExternos = await produtoService.consultarEan(ean);
+
+      // Preenche o formulário com o que voltou da API, incluindo regras fiscais
+      setFormData(prev => ({
+        ...prev,
+        // Identificação e Imagem
+        descricao: dadosExternos.nome || prev.descricao,
+        urlImagem: dadosExternos.urlImagem || prev.urlImagem,
+
+        // Classificação (Novos campos que estavam sendo ignorados)
+        marca: dadosExternos.marca || prev.marca,
+        categoria: dadosExternos.categoria || prev.categoria,
+
+        // Fiscal (Dados calculados no backend)
+        ncm: dadosExternos.ncm || prev.ncm,
+        cest: dadosExternos.cest || prev.cest,
+        cst: dadosExternos.cst || prev.cst, // Preenche CSOSN (500 ou 102)
+
+        // Monofásico: Se vier da API (true/false), usa. Senão mantém o atual.
+        monofasico: dadosExternos.monofasico !== undefined ? dadosExternos.monofasico : prev.monofasico,
+
+        // Classificação da Reforma (Padrão, Reduzida, Cesta Básica)
+        classificacaoReforma: dadosExternos.classificacaoReforma || prev.classificacaoReforma
+      }));
+
+      // Feedback inteligente
+      if (dadosExternos.ncm) {
+        toast.success("Dados encontrados e regras fiscais aplicadas!");
+      } else {
+        toast.warning("Produto encontrado, mas sem dados fiscais (NCM).");
+      }
+
+    } catch (error) {
+      console.error(error);
+      toast.info("Produto não encontrado na base externa. Preencha manualmente.");
+    } finally {
+      setSearchingEan(false);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
 
@@ -188,6 +239,33 @@ const ProdutoForm = () => {
                 <h3 className="section-title"><Package size={20} /> Informações Básicas</h3>
 
                 <div className="form-row">
+                  <div className="form-group flex-1">
+                    <label><Barcode size={16} /> Código de Barras (EAN)</label>
+
+                    {/* INPUT GROUP COM BOTÃO DE BUSCA */}
+                    <div className="input-action-group">
+                      <input
+                        type="text"
+                        name="codigoBarras"
+                        value={formData.codigoBarras}
+                        onChange={handleChange}
+                        placeholder="789..."
+                        // Permite buscar ao dar Enter no campo EAN
+                        onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleBuscarEan(); } }}
+                      />
+                      <button
+                        type="button"
+                        className="btn-search-icon"
+                        onClick={handleBuscarEan}
+                        title="Buscar dados na nuvem"
+                        disabled={searchingEan}
+                      >
+                        {searchingEan ? <div className="spinner-small"></div> : <DownloadCloud size={18} />}
+                      </button>
+                    </div>
+                    {/* ---------------------------------- */}
+
+                  </div>
                   <div className="form-group flex-2">
                     <label>Descrição do Produto *</label>
                     <input
@@ -199,28 +277,26 @@ const ProdutoForm = () => {
                       placeholder="Ex: Creme Hidratante Facial 50g"
                     />
                   </div>
-                  <div className="form-group flex-1">
-                    <label><Barcode size={16} /> Código de Barras (EAN)</label>
-                    <input
-                      type="text"
-                      name="codigoBarras"
-                      value={formData.codigoBarras}
-                      onChange={handleChange}
-                      placeholder="789..."
-                    />
-                  </div>
                 </div>
 
                 <div className="form-row">
                    <div className="form-group flex-2">
                     <label><Image size={16} /> URL da Imagem</label>
-                    <input
-                      type="text"
-                      name="urlImagem"
-                      value={formData.urlImagem}
-                      onChange={handleChange}
-                      placeholder="https://..."
-                    />
+                    <div className="url-preview-group">
+                        <input
+                        type="text"
+                        name="urlImagem"
+                        value={formData.urlImagem}
+                        onChange={handleChange}
+                        placeholder="https://..."
+                        />
+                        {/* Pequeno preview da imagem se a URL for válida */}
+                        {formData.urlImagem && (
+                            <div className="mini-preview">
+                                <img src={formData.urlImagem} alt="Preview" onError={(e) => e.target.style.display='none'} />
+                            </div>
+                        )}
+                    </div>
                   </div>
                   <div className="form-group checkbox-group flex-1">
                     <label className="checkbox-label">

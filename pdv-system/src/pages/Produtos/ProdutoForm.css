@@ -119,6 +119,79 @@
   padding-left: 40px; /* Espaço para o R$ */
 }
 
+/* --- Input com Botão de Ação (Para busca de EAN) --- */
+.input-action-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-action-group input {
+  padding-right: 45px; /* Espaço para o botão */
+}
+
+.btn-search-icon {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background-color: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-search-icon:hover {
+  background-color: var(--primary-hover);
+}
+
+.btn-search-icon:disabled {
+  background-color: #cbd5e1;
+  cursor: not-allowed;
+}
+
+/* Spinner pequeno para dentro do botão */
+.spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ffffff;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* --- Preview da Imagem no Input de URL --- */
+.url-preview-group {
+  position: relative;
+  width: 100%;
+}
+
+.mini-preview {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background: white;
+}
+
+.mini-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 /* Destaques */
 .label-highlight {
   color: var(--primary) !important;
