@@ -1,33 +1,65 @@
-/* Reutiliza variáveis do ProdutoList.css */
+/* Reutiliza variáveis do :root globais */
 
 .form-container {
-  background: var(--white);
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  border: 1px solid var(--border-color);
-  padding: 32px;
-  max-width: 900px;
-  margin: 0 auto; /* Centraliza na tela */
+  background: transparent; /* Remove o fundo do container pai para destacar as seções */
+  box-shadow: none;
+  border: none;
+  padding: 0;
+  max-width: 1000px;
+  margin: 0 auto;
 }
 
+/* --- ESTILO DAS SEÇÕES (CARDS) --- */
+.form-section {
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05); /* Sombra suave */
+  border: 1px solid var(--border-color);
+  padding: 24px;
+  margin-bottom: 24px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-section:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.section-title {
+  font-size: 1.1rem;
+  color: var(--text-dark);
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  border-bottom: 2px solid #f1f5f9; /* Linha separadora no título */
+}
+
+.section-title svg {
+  color: var(--primary);
+}
+
+/* Layout Grid/Flex */
 .form-row {
   display: flex;
   gap: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .form-group {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .flex-2 { flex: 2; }
 .flex-1 { flex: 1; }
+.flex-small { flex: 0.5; min-width: 100px; }
 
 .form-group label {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--text-gray);
   display: flex;
@@ -35,16 +67,20 @@
   gap: 6px;
 }
 
-.form-group input {
-  padding: 12px;
+.form-group input,
+.form-group select {
+  padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid var(--border-color);
-  font-size: 1rem;
+  font-size: 0.95rem;
   color: var(--text-dark);
   transition: all 0.2s;
+  background-color: #fff;
+  width: 100%;
 }
 
-.form-group input:focus {
+.form-group input:focus,
+.form-group select:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(242, 41, 152, 0.1);
   outline: none;
@@ -53,45 +89,95 @@
 .form-group input:disabled {
   background-color: #f8fafc;
   cursor: not-allowed;
+  color: #94a3b8;
+  border-color: #e2e8f0;
 }
 
 .form-group small {
   color: #94a3b8;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  margin-top: 2px;
 }
 
-/* Destaque para preço de venda */
+/* --- Input Groups (Prefixo R$) --- */
+.input-prefix-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-prefix-group .prefix {
+  position: absolute;
+  left: 12px;
+  color: var(--text-gray);
+  font-weight: 600;
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+.input-prefix-group input {
+  padding-left: 40px; /* Espaço para o R$ */
+}
+
+/* Destaques */
 .label-highlight {
   color: var(--primary) !important;
 }
-.input-highlight {
-  border-color: #fbcfe8 !important;
-  background-color: #fdf2f8;
+
+.highlight-group input {
+  background-color: #fff0f7;
+  border-color: #fce7f3;
   font-weight: 700;
+  color: var(--primary);
 }
 
-/* Checkbox estilizado */
+.highlight-group .prefix {
+  color: var(--primary);
+}
+
+/* Checkbox */
 .checkbox-group {
   justify-content: center;
+  align-items: flex-start;
+  padding-top: 28px;
 }
+
 .checkbox-label {
   cursor: pointer;
   user-select: none;
-  font-size: 1rem !important;
+  font-size: 0.95rem !important;
   color: var(--text-dark) !important;
+  display: flex;
+  align-items: center;
 }
+
 .checkbox-label input {
   width: 18px;
   height: 18px;
   accent-color: var(--primary);
+  margin-right: 8px;
+  vertical-align: middle;
+  width: auto;
 }
 
-/* Botões do Header e Ações */
+/* Botões de Ação */
+.form-actions {
+  margin-top: 16px;
+  padding: 20px;
+  background: var(--white);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  /* Fixar a barra de ações no fundo se quiser (sticky) */
+  /* position: sticky; bottom: 20px; z-index: 10; box-shadow: 0 -4px 10px rgba(0,0,0,0.05); */
+}
+
 .btn-secondary {
   background: white;
   border: 1px solid var(--border-color);
   color: var(--text-dark);
-  padding: 10px 16px;
+  padding: 8px 16px;
   border-radius: 8px;
   cursor: pointer;
   display: flex;
@@ -99,17 +185,12 @@
   gap: 8px;
   font-weight: 500;
   transition: 0.2s;
-}
-.btn-secondary:hover {
-  background-color: #f1f5f9;
+  font-size: 0.9rem;
 }
 
-.form-actions {
-  margin-top: 32px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  justify-content: flex-end;
+.btn-secondary:hover {
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
 }
 
 /* Responsividade */
@@ -117,5 +198,14 @@
   .form-row {
     flex-direction: column;
     gap: 16px;
+  }
+
+  .checkbox-group {
+    padding-top: 0;
+    align-items: center;
+  }
+
+  .form-container {
+    padding: 0 10px;
   }
 }
