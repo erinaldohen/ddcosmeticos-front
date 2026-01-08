@@ -1,0 +1,121 @@
+/* Reutiliza variáveis do ProdutoList.css */
+
+.form-container {
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid var(--border-color);
+  padding: 32px;
+  max-width: 900px;
+  margin: 0 auto; /* Centraliza na tela */
+}
+
+.form-row {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.form-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.flex-2 { flex: 2; }
+.flex-1 { flex: 1; }
+
+.form-group label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-gray);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-group input {
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  font-size: 1rem;
+  color: var(--text-dark);
+  transition: all 0.2s;
+}
+
+.form-group input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(242, 41, 152, 0.1);
+  outline: none;
+}
+
+.form-group input:disabled {
+  background-color: #f8fafc;
+  cursor: not-allowed;
+}
+
+.form-group small {
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+/* Destaque para preço de venda */
+.label-highlight {
+  color: var(--primary) !important;
+}
+.input-highlight {
+  border-color: #fbcfe8 !important;
+  background-color: #fdf2f8;
+  font-weight: 700;
+}
+
+/* Checkbox estilizado */
+.checkbox-group {
+  justify-content: center;
+}
+.checkbox-label {
+  cursor: pointer;
+  user-select: none;
+  font-size: 1rem !important;
+  color: var(--text-dark) !important;
+}
+.checkbox-label input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+
+/* Botões do Header e Ações */
+.btn-secondary {
+  background: white;
+  border: 1px solid var(--border-color);
+  color: var(--text-dark);
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  transition: 0.2s;
+}
+.btn-secondary:hover {
+  background-color: #f1f5f9;
+}
+
+.form-actions {
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Responsividade */
+@media (max-width: 768px) {
+  .form-row {
+    flex-direction: column;
+    gap: 16px;
+  }
+}

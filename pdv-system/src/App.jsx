@@ -3,14 +3,14 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// Importa o Guarda que acabamos de criar
+// Componentes e Layouts
 import PrivateRoute from './components/PrivateRoute';
-
 import Login from './pages/Login/Login';
 import Dashboard from './pages/Dashboard/Dashboard';
 import ProdutoList from './pages/Produtos/ProdutoList';
+import ProdutoForm from './pages/Produtos/ProdutoForm'; // <--- IMPORTANTE: Importar o Form
 
-// Importe seu CSS global (aquele que corrigimos o laranja)
+// CSS Global
 import './index.css';
 
 function App() {
@@ -23,11 +23,13 @@ function App() {
       />
 
       <Routes>
-        {/* ROTA PÚBLICA (Qualquer um acessa) */}
+        {/* ROTA PÚBLICA */}
         <Route path="/" element={<Login />} />
+        <Route path="/login" element={<Login />} />
 
-        {/* ROTA PROTEGIDA (Só quem tem token entra) */}
-        {/* Nova Rota de Dashboard */}
+        {/* ROTAS PROTEGIDAS */}
+
+        {/* Dashboard */}
         <Route
           path="/dashboard"
           element={
@@ -37,16 +39,39 @@ function App() {
           }
         />
 
-        {/* Nova Rota de Produtos */}
-        <Route path="/produtos"
-         element={
+        {/* --- Rotas de Produtos --- */}
+
+        {/* Listagem */}
+        <Route
+          path="/produtos"
+          element={
              <PrivateRoute>
                  <ProdutoList />
              </PrivateRoute>
             }
         />
 
-        {/* Dica de Ouro: Redirecionar qualquer rota desconhecida para o Login */}
+        {/* Novo Produto */}
+        <Route
+          path="/produtos/novo"
+          element={
+             <PrivateRoute>
+                 <ProdutoForm />
+             </PrivateRoute>
+            }
+        />
+
+        {/* Editar Produto (Recebe o ID) */}
+        <Route
+          path="/produtos/editar/:id"
+          element={
+             <PrivateRoute>
+                 <ProdutoForm />
+             </PrivateRoute>
+            }
+        />
+
+        {/* Rota Coringa - Redireciona para Login se não achar nada */}
         <Route path="*" element={<Login />} />
       </Routes>
     </Router>

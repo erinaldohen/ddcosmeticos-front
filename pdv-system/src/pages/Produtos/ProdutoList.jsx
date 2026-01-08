@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Plus, Edit, Trash2, Package,
-  ChevronLeft, ChevronRight, AlertCircle, CheckCircle
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import './ProdutoList.css';
 
@@ -24,7 +24,7 @@ const ProdutoList = () => {
   const carregarProdutos = useCallback(async (paginaParaCarregar, termo = '') => {
     setLoading(true);
     try {
-      const dados = await produtoService.listar(paginaParaCarregar, 10, termo); // Sugiro 10 itens por vez para ficar mais leve visualmente
+      const dados = await produtoService.listar(paginaParaCarregar, 10, termo);
       setProdutos(dados.itens);
       setTotalPages(dados.totalPaginas);
       setTotalElements(dados.totalElementos);
@@ -158,16 +158,19 @@ const ProdutoList = () => {
                         </td>
                         <td>
                           <div className="actions-cell">
+                            {/* Botão de Editar com Tooltip Customizado */}
                             <button
                               className="icon-btn edit"
-                              title="Editar"
+                              data-tooltip="Editar Produto"
                               onClick={() => navigate(`/produtos/editar/${prod.id}`)}
                             >
                               <Edit size={18} />
                             </button>
+
+                            {/* Botão de Inativar com Tooltip Customizado */}
                             <button
                               className="icon-btn delete"
-                              title="Inativar"
+                              data-tooltip="Inativar Produto"
                               onClick={() => handleDelete(prod.id)}
                             >
                               <Trash2 size={18} />

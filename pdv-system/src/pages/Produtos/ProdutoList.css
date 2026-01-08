@@ -7,6 +7,8 @@
   --bg-body: #f1f5f9;
   --border-color: #e2e8f0;
   --white: #ffffff;
+  --tooltip-bg: #1e293b; /* Cor de fundo do tooltip (mesma do text-dark ou preto suave) */
+  --tooltip-text: #ffffff;
 }
 
 .container-fluid {
@@ -203,6 +205,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative; /* Necessário para o tooltip */
 }
 
 .icon-btn:hover { background-color: #e2e8f0; color: var(--text-dark); }
@@ -269,4 +272,60 @@
   opacity: 0.5;
   cursor: not-allowed;
   background-color: #f1f5f9;
+}
+
+/* --- Tooltip Customizado (NOVO) --- */
+
+/* O texto do tooltip (caixa preta) */
+.icon-btn[data-tooltip]::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%; /* Fica acima do botão */
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px); /* Centraliza e sobe um pouco */
+
+  background-color: var(--tooltip-bg);
+  color: var(--tooltip-text);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none; /* Mouse ignora a caixa */
+  transition: all 0.2s ease;
+  z-index: 100;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* A setinha do tooltip */
+.icon-btn[data-tooltip]::after {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(0); /* Posição inicial */
+
+  border: 5px solid transparent;
+  border-top-color: var(--tooltip-bg);
+
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+
+/* Efeito ao passar o mouse */
+.icon-btn[data-tooltip]:hover::before {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-12px); /* Sobe suavemente */
+}
+
+.icon-btn[data-tooltip]:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(-2px); /* Encosta no topo do botão */
 }

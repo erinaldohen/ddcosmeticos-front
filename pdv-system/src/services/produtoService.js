@@ -1,42 +1,33 @@
-import axios from 'axios';
+import api from './api'; // Usa a instância configurada com o Token
 
-// -----------------------------------------------------------------------------
-// CONFIGURAÇÃO DA API
-// Se o seu backend estiver em outra porta (ex: 3000, 5000), altere aqui.
-// -----------------------------------------------------------------------------
-const API_URL = 'http://localhost:8080/api/v1/produtos';
+// O baseURL já está configurado no api.js (geralmente http://localhost:8080/api/v1)
+// Então aqui usamos apenas o recurso relativo.
+const RESOURCE_URL = '/produtos';
 
 export const produtoService = {
 
   /**
    * Lista produtos com paginação e filtro
-   * @param {number} pagina - Número da página (começa em 0)
-   * @param {number} tamanho - Itens por página
-   * @param {string} filtro - Texto para busca (Nome, EAN, etc)
    */
   listar: async (pagina = 0, tamanho = 10, filtro = '') => {
     try {
-      // Configura os parâmetros da URL
       const params = new URLSearchParams();
       params.append('page', pagina);
       params.append('size', tamanho);
 
-      // IMPORTANTE: Aqui definimos o nome do campo de busca.
-      // Se seu backend espera "nome", "q", ou "termo", altere a string 'descricao' abaixo.
       if (filtro) {
+        // O backend espera 'descricao' ou 'termo', ajuste conforme seu Controller
         params.append('descricao', filtro);
       }
 
-      // Faz a chamada: http://localhost:8080/api/produtos?page=0&size=10&descricao=...
-      const response = await axios.get(`${API_URL}`, { params });
+      const response = await api.get(RESOURCE_URL, { params });
       const data = response.data;
 
-      // Normaliza a resposta (Aceita padrão Spring Boot ou Lista Simples)
       return {
-        itens: data.content || data.itens || (Array.isArray(data) ? data : []),
+        itens: data.content || data.itens || [],
         totalPaginas: data.totalPages || 0,
         totalElementos: data.totalElements || 0,
-        paginaAtual: data.number || pagina
+        paginaAtual: data.number || 0
       };
     } catch (error) {
       console.error("Erro no serviço de listagem:", error);
@@ -46,10 +37,11 @@ export const produtoService = {
 
   /**
    * Busca um único produto pelo ID (Para edição)
+   * Nome ajustado para 'obterPorId' para compatibilidade com o Form
    */
-  buscarPorId: async (id) => {
+  obterPorId: async (id) => {
     try {
-      const response = await axios.get(`${API_URL}/${id}`);
+      const response = await api.get(`${RESOURCE_URL}/${id}`);
       return response.data;
     } catch (error) {
       console.error(`Erro ao buscar produto ${id}:`, error);
@@ -58,21 +50,27 @@ export const produtoService = {
   },
 
   /**
-   * Salva um produto (Cria se não tiver ID, Atualiza se tiver ID)
+   * Salva um novo produto (POST)
    */
   salvar: async (produto) => {
     try {
-      if (produto.id) {
-        // Atualizar (PUT)
-        const response = await axios.put(`${API_URL}/${produto.id}`, produto);
-        return response.data;
-      } else {
-        // Criar Novo (POST)
-        const response = await axios.post(API_URL, produto);
-        return response.data;
-      }
+      const response = await api.post(RESOURCE_URL, produto);
+      return response.data;
     } catch (error) {
       console.error("Erro ao salvar produto:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Atualiza um produto existente (PUT)
+   */
+  atualizar: async (id, produto) => {
+    try {
+      const response = await api.put(`${RESOURCE_URL}/${id}`, produto);
+      return response.data;
+    } catch (error) {
+      console.error("Erro ao atualizar produto:", error);
       throw error;
     }
   },
@@ -82,10 +80,12 @@ export const produtoService = {
    */
   excluir: async (id) => {
     try {
-      await axios.delete(`${API_URL}/${id}`);
+      await api.delete(`${RESOURCE_URL}/${id}`);
     } catch (error) {
       console.error(`Erro ao excluir produto ${id}:`, error);
       throw error;
     }
   }
 };
+
+export default produtoService;
