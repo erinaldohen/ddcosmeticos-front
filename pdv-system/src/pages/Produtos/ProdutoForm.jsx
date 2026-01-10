@@ -26,14 +26,21 @@ const ProdutoForm = () => {
     categoria: '',
     subcategoria: '',
     unidade: 'UN',
+
+    // FISCAL
     ncm: '',
     cest: '',
-    cst: '',
+    cst: '102', // Padrão seguro para Simples Nacional
     classificacaoReforma: 'PADRAO',
     monofasico: false,
+
     urlImagem: '',
-    precoCusto: '', // Agora será tratado como String formatada no formulário
-    precoVenda: '', // Agora será tratado como String formatada no formulário
+
+    // FINANCEIRO
+    precoCusto: '',
+    precoVenda: '',
+    precoMedio: '0,00', // Campo visual (calculado pelo backend)
+
     quantidadeEmEstoque: 0,
     estoqueMinimo: 5,
     diasParaReposicao: 0,
@@ -43,26 +50,25 @@ const ProdutoForm = () => {
 
   // --- FUNÇÕES AUXILIARES DE FORMATAÇÃO ---
 
-  // Converte número (10.5) para String formatada ("10,50")
   const formatarValorInicial = (valor) => {
     if (!valor) return '';
     return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(valor);
   };
 
-  // Aplica máscara enquanto digita (Ex: 1234 -> 12,34)
+  const formatarValor4Casas = (valor) => {
+    if (!valor) return '0,0000';
+    return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 }).format(valor);
+  };
+
   const aplicarMascaraMoeda = (valor) => {
     if (!valor) return '';
-    // Remove tudo que não é dígito
     const apenasNumeros = valor.replace(/\D/g, "");
-    // Converte para centavos e formata
     const numero = Number(apenasNumeros) / 100;
     return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numero);
   };
 
-  // Converte String formatada ("1.234,56") para Float (1234.56) para envio ao backend
   const converterParaFloat = (valorFormatado) => {
     if (!valorFormatado) return 0;
-    // Remove pontos de milhar e troca vírgula por ponto
     const valorLimpo = valorFormatado.toString().replace(/\./g, '').replace(',', '.');
     return parseFloat(valorLimpo);
   };
@@ -79,20 +85,25 @@ const ProdutoForm = () => {
       const dados = await produtoService.obterPorId(id);
       setFormData({
         ...dados,
-        // Campos de texto simples
         marca: dados.marca || '',
         categoria: dados.categoria || '',
         subcategoria: dados.subcategoria || '',
         unidade: dados.unidade || 'UN',
+
+        // Fiscal
         ncm: dados.ncm || '',
         cest: dados.cest || '',
-        cst: dados.cst || '',
+        cst: dados.cst || '102',
         classificacaoReforma: dados.classificacaoReforma || 'PADRAO',
+        monofasico: dados.monofasico || false,
+
         urlImagem: dados.urlImagem || '',
-        // Formata os preços para exibição inicial
         precoCusto: formatarValorInicial(dados.precoCusto),
         precoVenda: formatarValorInicial(dados.precoVenda),
-        // Numéricos
+
+        // Exibe o preço médio calculado pelo backend (apenas leitura)
+        precoMedio: formatarValor4Casas(dados.precoMedioPonderado),
+
         diasParaReposicao: dados.diasParaReposicao || 0,
         estoqueFiscal: dados.estoqueFiscal || 0,
         estoqueNaoFiscal: dados.estoqueNaoFiscal || 0
@@ -105,7 +116,7 @@ const ProdutoForm = () => {
     }
   };
 
-  // --- NOVA FUNÇÃO: BUSCAR DADOS PELO EAN (ATUALIZADA) ---
+  // --- NOVA FUNÇÃO: BUSCAR DADOS PELO EAN ---
   const handleBuscarEan = async () => {
     const ean = formData.codigoBarras;
     if (!ean || ean.length < 8) {
@@ -117,34 +128,26 @@ const ProdutoForm = () => {
     try {
       const dadosExternos = await produtoService.consultarEan(ean);
 
-      // Preenche o formulário com o que voltou da API, incluindo regras fiscais
+      // Preenche o formulário com o que voltou da API, incluindo inteligência fiscal do Backend
       setFormData(prev => ({
         ...prev,
-        // Identificação e Imagem
         descricao: dadosExternos.nome || prev.descricao,
         urlImagem: dadosExternos.urlImagem || prev.urlImagem,
-
-        // Classificação (Novos campos que estavam sendo ignorados)
         marca: dadosExternos.marca || prev.marca,
         categoria: dadosExternos.categoria || prev.categoria,
 
-        // Fiscal (Dados calculados no backend)
+        // Fiscal (Backend já calculou isso baseado no NCM)
         ncm: dadosExternos.ncm || prev.ncm,
         cest: dadosExternos.cest || prev.cest,
-        cst: dadosExternos.cst || prev.cst, // Preenche CSOSN (500 ou 102)
-
-        // Monofásico: Se vier da API (true/false), usa. Senão mantém o atual.
+        cst: dadosExternos.cst || prev.cst,
         monofasico: dadosExternos.monofasico !== undefined ? dadosExternos.monofasico : prev.monofasico,
-
-        // Classificação da Reforma (Padrão, Reduzida, Cesta Básica)
         classificacaoReforma: dadosExternos.classificacaoReforma || prev.classificacaoReforma
       }));
 
-      // Feedback inteligente
-      if (dadosExternos.ncm) {
-        toast.success("Dados encontrados e regras fiscais aplicadas!");
+      if(dadosExternos.ncm) {
+          toast.success("Dados encontrados e regras fiscais aplicadas!");
       } else {
-        toast.warning("Produto encontrado, mas sem dados fiscais (NCM).");
+          toast.warning("Produto encontrado, mas sem dados fiscais (NCM).");
       }
 
     } catch (error) {
@@ -157,18 +160,10 @@ const ProdutoForm = () => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-
-    // Tratamento especial para campos de moeda
     if (name === 'precoCusto' || name === 'precoVenda') {
-      setFormData(prev => ({
-        ...prev,
-        [name]: aplicarMascaraMoeda(value)
-      }));
+      setFormData(prev => ({ ...prev, [name]: aplicarMascaraMoeda(value) }));
     } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: type === 'checkbox' ? checked : value
-      }));
+      setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
     }
   };
 
@@ -177,7 +172,6 @@ const ProdutoForm = () => {
     setLoading(true);
 
     try {
-      // Prepara o objeto para envio (Converte strings formatadas de volta para números)
       const payload = {
         ...formData,
         precoCusto: converterParaFloat(formData.precoCusto),
@@ -241,8 +235,6 @@ const ProdutoForm = () => {
                 <div className="form-row">
                   <div className="form-group flex-1">
                     <label><Barcode size={16} /> Código de Barras (EAN)</label>
-
-                    {/* INPUT GROUP COM BOTÃO DE BUSCA */}
                     <div className="input-action-group">
                       <input
                         type="text"
@@ -250,7 +242,6 @@ const ProdutoForm = () => {
                         value={formData.codigoBarras}
                         onChange={handleChange}
                         placeholder="789..."
-                        // Permite buscar ao dar Enter no campo EAN
                         onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleBuscarEan(); } }}
                       />
                       <button
@@ -263,19 +254,10 @@ const ProdutoForm = () => {
                         {searchingEan ? <div className="spinner-small"></div> : <DownloadCloud size={18} />}
                       </button>
                     </div>
-                    {/* ---------------------------------- */}
-
                   </div>
                   <div className="form-group flex-2">
                     <label>Descrição do Produto *</label>
-                    <input
-                      type="text"
-                      name="descricao"
-                      value={formData.descricao}
-                      onChange={handleChange}
-                      required
-                      placeholder="Ex: Creme Hidratante Facial 50g"
-                    />
+                    <input type="text" name="descricao" value={formData.descricao} onChange={handleChange} required placeholder="Ex: Creme..." />
                   </div>
                 </div>
 
@@ -283,14 +265,7 @@ const ProdutoForm = () => {
                    <div className="form-group flex-2">
                     <label><Image size={16} /> URL da Imagem</label>
                     <div className="url-preview-group">
-                        <input
-                        type="text"
-                        name="urlImagem"
-                        value={formData.urlImagem}
-                        onChange={handleChange}
-                        placeholder="https://..."
-                        />
-                        {/* Pequeno preview da imagem se a URL for válida */}
+                        <input type="text" name="urlImagem" value={formData.urlImagem} onChange={handleChange} placeholder="https://..." />
                         {formData.urlImagem && (
                             <div className="mini-preview">
                                 <img src={formData.urlImagem} alt="Preview" onError={(e) => e.target.style.display='none'} />
@@ -300,13 +275,7 @@ const ProdutoForm = () => {
                   </div>
                   <div className="form-group checkbox-group flex-1">
                     <label className="checkbox-label">
-                      <input
-                        type="checkbox"
-                        name="ativo"
-                        checked={formData.ativo}
-                        onChange={handleChange}
-                      />
-                      Produto Ativo
+                      <input type="checkbox" name="ativo" checked={formData.ativo} onChange={handleChange} /> Produto Ativo
                     </label>
                   </div>
                 </div>
@@ -316,91 +285,42 @@ const ProdutoForm = () => {
               <div className="form-section">
                 <h3 className="section-title"><Tag size={20} /> Classificação</h3>
                 <div className="form-row">
-                  <div className="form-group">
-                    <label>Marca</label>
-                    <input
-                      type="text"
-                      name="marca"
-                      value={formData.marca}
-                      onChange={handleChange}
-                      placeholder="Ex: Nivea"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Categoria</label>
-                    <input
-                      type="text"
-                      name="categoria"
-                      value={formData.categoria}
-                      onChange={handleChange}
-                      placeholder="Ex: Skincare"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Subcategoria</label>
-                    <input
-                      type="text"
-                      name="subcategoria"
-                      value={formData.subcategoria}
-                      onChange={handleChange}
-                      placeholder="Ex: Hidratantes"
-                    />
-                  </div>
+                  <div className="form-group"><label>Marca</label><input type="text" name="marca" value={formData.marca} onChange={handleChange} placeholder="Ex: Nivea" /></div>
+                  <div className="form-group"><label>Categoria</label><input type="text" name="categoria" value={formData.categoria} onChange={handleChange} placeholder="Ex: Skincare" /></div>
+                  <div className="form-group"><label>Subcategoria</label><input type="text" name="subcategoria" value={formData.subcategoria} onChange={handleChange} placeholder="Ex: Hidratantes" /></div>
                   <div className="form-group flex-small">
                     <label><Ruler size={16} /> Unidade</label>
                     <select name="unidade" value={formData.unidade} onChange={handleChange}>
-                        <option value="UN">UN</option>
-                        <option value="KG">KG</option>
-                        <option value="LT">LT</option>
-                        <option value="CX">CX</option>
-                        <option value="KIT">KIT</option>
+                        <option value="UN">UN</option><option value="KG">KG</option><option value="LT">LT</option><option value="CX">CX</option><option value="KIT">KIT</option>
                     </select>
                   </div>
                 </div>
               </div>
 
-              {/* --- SEÇÃO 3: FISCAL --- */}
-              <div className="form-section">
-                <h3 className="section-title"><Landmark size={20} /> Dados Fiscais (NFC-e)</h3>
+              {/* --- SEÇÃO 3: FISCAL (ATUALIZADO) --- */}
+              <div className="form-section" style={{borderLeft: '4px solid #f22998'}}>
+                <h3 className="section-title"><Landmark size={20} /> Dados Fiscais (Simples Nacional)</h3>
                 <div className="form-row">
                   <div className="form-group">
-                    <label>NCM</label>
-                    <input
-                      type="text"
-                      name="ncm"
-                      value={formData.ncm}
-                      onChange={handleChange}
-                      placeholder="0000.00.00"
-                      maxLength={10}
-                    />
+                    <label>NCM *</label>
+                    <input type="text" name="ncm" value={formData.ncm} onChange={handleChange} placeholder="0000.00.00" maxLength={10} required />
                   </div>
                   <div className="form-group">
                     <label>CEST</label>
-                    <input
-                      type="text"
-                      name="cest"
-                      value={formData.cest}
-                      onChange={handleChange}
-                      placeholder="00.000.00"
-                    />
+                    <input type="text" name="cest" value={formData.cest} onChange={handleChange} placeholder="00.000.00" />
                   </div>
                   <div className="form-group">
-                    <label>CST/CSOSN</label>
-                    <input
-                      type="text"
-                      name="cst"
-                      value={formData.cst}
-                      onChange={handleChange}
-                      placeholder="Ex: 102"
-                    />
+                    <label title="Código de Situação da Operação no Simples Nacional">CSOSN / CST *</label>
+                    <input type="text" name="cst" value={formData.cst} onChange={handleChange} placeholder="Ex: 102 ou 500" required />
+                    <small style={{color:'gray', fontSize:'0.75rem'}}>102=Tributado, 500=Cobrado Anteriormente</small>
                   </div>
                   <div className="form-group flex-2">
-                    <label>Reforma Tributária</label>
+                    <label>Reforma Tributária (LC 214)</label>
                     <select name="classificacaoReforma" value={formData.classificacaoReforma} onChange={handleChange}>
-                        <option value="PADRAO">Padrão</option>
-                        <option value="CESTA_BASICA">Cesta Básica</option>
+                        <option value="PADRAO">Padrão (Beleza/Luxo)</option>
+                        <option value="CESTA_BASICA">Cesta Básica (0%)</option>
+                        <option value="REDUZIDA_60">Reduzida 60% (Higiene)</option>
                         <option value="REDUZIDA_30">Reduzida 30%</option>
-                        <option value="REDUZIDA_60">Reduzida 60%</option>
                         <option value="IMPOSTO_SELETIVO">Imposto Seletivo</option>
                         <option value="IMUNE">Imune</option>
                     </select>
@@ -408,35 +328,31 @@ const ProdutoForm = () => {
                 </div>
                 <div className="form-row">
                     <div className="form-group checkbox-group">
-                        <label className="checkbox-label" style={{fontSize: '0.9rem'}}>
-                        <input
-                            type="checkbox"
-                            name="monofasico"
-                            checked={formData.monofasico}
-                            onChange={handleChange}
-                        />
-                        Produto Monofásico (PIS/COFINS)
+                        <label className="checkbox-label" style={{fontSize: '0.9rem', fontWeight: '600'}}>
+                        <input type="checkbox" name="monofasico" checked={formData.monofasico} onChange={handleChange} />
+                        Produto Monofásico (PIS/COFINS já pago na indústria)
                         </label>
                     </div>
                 </div>
               </div>
 
-              {/* --- SEÇÃO 4: FINANCEIRO (COM MÁSCARA) --- */}
+              {/* --- SEÇÃO 4: FINANCEIRO (COM PREÇO MÉDIO) --- */}
               <div className="form-section">
                 <h3 className="section-title"><DollarSign size={20} /> Financeiro</h3>
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Preço de Custo</label>
+                    <label>Custo Última Compra (R$)</label>
                     <div className="input-prefix-group">
                         <span className="prefix">R$</span>
-                        {/* Input tipo TEXT para aceitar a formatação */}
-                        <input
-                        type="text"
-                        name="precoCusto"
-                        value={formData.precoCusto}
-                        onChange={handleChange}
-                        placeholder="0,00"
-                        />
+                        <input type="text" name="precoCusto" value={formData.precoCusto} onChange={handleChange} placeholder="0,00" />
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{opacity: 0.85}}>
+                    <label title="Custo Médio Ponderado calculado automaticamente nas entradas">Custo Médio (R$)</label>
+                    <div className="input-prefix-group">
+                        <span className="prefix">R$</span>
+                        <input type="text" disabled value={formData.precoMedio} style={{backgroundColor: '#f1f5f9', fontWeight:'bold'}} />
                     </div>
                   </div>
 
@@ -444,27 +360,13 @@ const ProdutoForm = () => {
                     <label className="label-highlight">Preço de Venda *</label>
                     <div className="input-prefix-group highlight-group">
                         <span className="prefix">R$</span>
-                        {/* Input tipo TEXT para aceitar a formatação */}
-                        <input
-                        type="text"
-                        name="precoVenda"
-                        value={formData.precoVenda}
-                        onChange={handleChange}
-                        required
-                        placeholder="0,00"
-                        className="input-highlight"
-                        />
+                        <input type="text" name="precoVenda" value={formData.precoVenda} onChange={handleChange} required placeholder="0,00" className="input-highlight" />
                     </div>
                   </div>
 
                   <div className="form-group">
                      <label><Percent size={16}/> Margem Estimada</label>
-                     <input
-                        type="text"
-                        disabled
-                        value={`${margem}%`}
-                        style={{backgroundColor: '#f1f5f9', fontWeight: 'bold', color: 'var(--primary)'}}
-                     />
+                     <input type="text" disabled value={`${margem}%`} style={{backgroundColor: '#f1f5f9', fontWeight: 'bold', color: 'var(--primary)'}} />
                   </div>
                 </div>
               </div>
@@ -475,35 +377,18 @@ const ProdutoForm = () => {
                 <div className="form-row">
                   <div className="form-group">
                     <label>Estoque Total (Físico)</label>
-                    <input
-                      type="number"
-                      name="quantidadeEmEstoque"
-                      value={formData.quantidadeEmEstoque}
-                      onChange={handleChange}
-                      disabled={isEditMode}
-                    />
+                    <input type="number" name="quantidadeEmEstoque" value={formData.quantidadeEmEstoque} onChange={handleChange} disabled={isEditMode} />
                     {isEditMode && <small>Ajustes via entrada/saída.</small>}
                   </div>
 
                   <div className="form-group">
                     <label>Estoque Mínimo</label>
-                    <input
-                      type="number"
-                      name="estoqueMinimo"
-                      value={formData.estoqueMinimo}
-                      onChange={handleChange}
-                    />
+                    <input type="number" name="estoqueMinimo" value={formData.estoqueMinimo} onChange={handleChange} />
                   </div>
 
                   <div className="form-group">
                     <label><Truck size={16}/> Dias Reposição</label>
-                    <input
-                      type="number"
-                      name="diasParaReposicao"
-                      value={formData.diasParaReposicao}
-                      onChange={handleChange}
-                      placeholder="Ex: 7"
-                    />
+                    <input type="number" name="diasParaReposicao" value={formData.diasParaReposicao} onChange={handleChange} placeholder="Ex: 7" />
                   </div>
                 </div>
 

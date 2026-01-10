@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Plus, Edit, Trash2, Package,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Wand2 // Importação do ícone Wand2
 } from 'lucide-react';
 import './ProdutoList.css';
 
@@ -15,6 +15,7 @@ const ProdutoList = () => {
   // Estados
   const [produtos, setProdutos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingSaneamento, setLoadingSaneamento] = useState(false); // Estado para o botão de saneamento
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
@@ -59,6 +60,25 @@ const ProdutoList = () => {
     }
   };
 
+  // --- FUNÇÃO DE SANEAMENTO FISCAL ---
+  const handleSaneamento = async () => {
+    if (!window.confirm("ATENÇÃO: Isso irá recalcular automaticamente os impostos (CST, Monofásico, Reforma) de TODOS os produtos com base no NCM cadastrado.\n\nUse isso se a legislação mudar ou para corrigir produtos antigos.\n\nDeseja continuar?")) {
+      return;
+    }
+
+    setLoadingSaneamento(true);
+    try {
+      const msg = await produtoService.saneamentoFiscal();
+      toast.success(msg);
+      carregarProdutos(page, termoBusca); // Recarrega para ver se mudou algo (opcional, mas boa prática)
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro ao executar saneamento fiscal. Verifique se você é ADMIN.");
+    } finally {
+      setLoadingSaneamento(false);
+    }
+  };
+
   // Renderiza o Badge de Status com lógica visual
   const renderStatusBadge = (prod) => {
     if (prod.ativo === false) {
@@ -82,6 +102,18 @@ const ProdutoList = () => {
             <p>Gerencie seu inventário ({totalElements} itens encontrados)</p>
           </div>
           <div className="header-actions">
+
+            {/* BOTÃO DE SANEAMENTO */}
+            <button
+              className="btn-secondary" // Ou crie uma classe btn-warning se quiser destacar
+              onClick={handleSaneamento}
+              disabled={loadingSaneamento}
+              title="Corrigir impostos de todos os produtos automaticamente"
+              style={{marginRight: '10px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #ddd'}}
+            >
+              {loadingSaneamento ? '...' : <><Wand2 size={18} /> Ajuste Fiscal</>}
+            </button>
+
             <button className="action-btn-primary" onClick={() => navigate('/produtos/novo')}>
               <Plus size={18} />
               Novo Produto
@@ -136,19 +168,13 @@ const ProdutoList = () => {
                       <tr key={prod.id}>
                         <td>
                           <div className="product-info-cell">
-                            {/* ATUALIZADO: Lógica de Imagem */}
                             <div className="product-icon-wrapper">
                               {prod.urlImagem ? (
                                 <img
                                   src={prod.urlImagem}
                                   alt={prod.descricao}
                                   className="product-thumb"
-                                  onError={(e) => {
-                                    // Se a imagem falhar, esconde a tag img para mostrar o fundo ou pode-se manipular para mostrar ícone
-                                    e.target.style.display = 'none';
-                                    // Opcional: injetar o ícone via DOM ou estado se necessário,
-                                    // mas apenas esconder evita o ícone de "imagem quebrada"
-                                  }}
+                                  onError={(e) => { e.target.style.display = 'none'; }}
                                 />
                               ) : (
                                 <Package size={20} />
@@ -174,7 +200,6 @@ const ProdutoList = () => {
                         </td>
                         <td>
                           <div className="actions-cell">
-                            {/* Botão de Editar com Tooltip Customizado */}
                             <button
                               className="icon-btn edit"
                               data-tooltip="Editar Produto"
@@ -183,7 +208,6 @@ const ProdutoList = () => {
                               <Edit size={18} />
                             </button>
 
-                            {/* Botão de Inativar com Tooltip Customizado */}
                             <button
                               className="icon-btn delete"
                               data-tooltip="Inativar Produto"

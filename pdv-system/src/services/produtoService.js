@@ -87,7 +87,7 @@ export const produtoService = {
     }
   },
 
-  // --- NOVO MÉTODO: CONSULTA EXTERNA (COSMOS) ---
+  // --- CONSULTA EXTERNA (COSMOS) ---
   consultarEan: async (ean) => {
     try {
       // Chama o endpoint de integração do backend
@@ -95,6 +95,17 @@ export const produtoService = {
       return response.data;
     } catch (error) {
       // Repassa o erro para ser tratado no front (ex: 404 não encontrado)
+      throw error;
+    }
+  },
+
+  // --- NOVO MÉTODO: SANEAMENTO FISCAL EM MASSA ---
+  saneamentoFiscal: async () => {
+    try {
+      const response = await api.post(`${RESOURCE_URL}/saneamento-fiscal`);
+      return response.data; // Retorna a mensagem de sucesso do backend
+    } catch (error) {
+      console.error("Erro ao executar saneamento fiscal:", error);
       throw error;
     }
   }
