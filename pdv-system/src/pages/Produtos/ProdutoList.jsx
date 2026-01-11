@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Plus, Edit, Trash2, Package,
-  ChevronLeft, ChevronRight, Wand2 // Importação do ícone Wand2
+  ChevronLeft, ChevronRight, Wand2, Printer // Importação do ícone Printer
 } from 'lucide-react';
 import './ProdutoList.css';
 
@@ -15,7 +15,8 @@ const ProdutoList = () => {
   // Estados
   const [produtos, setProdutos] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [loadingSaneamento, setLoadingSaneamento] = useState(false); // Estado para o botão de saneamento
+  const [loadingSaneamento, setLoadingSaneamento] = useState(false);
+  const [loadingPrint, setLoadingPrint] = useState(null); // ID do produto sendo impresso
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
@@ -60,6 +61,32 @@ const ProdutoList = () => {
     }
   };
 
+  // --- FUNÇÃO DE IMPRESSÃO DE ETIQUETA ---
+  const handlePrint = async (id) => {
+    setLoadingPrint(id);
+    try {
+      const textoEtiqueta = await produtoService.imprimirEtiqueta(id);
+
+      // Abre uma nova janela para o navegador imprimir o código ZPL ou texto
+      // Em produção real com Zebra Browser Print, a lógica seria diferente.
+      // Aqui simulamos a visualização do código da etiqueta.
+      const printWindow = window.open('', '', 'width=500,height=500');
+      printWindow.document.write('<html><head><title>Etiqueta</title></head><body>');
+      printWindow.document.write('<h3>Código ZPL da Etiqueta:</h3>');
+      printWindow.document.write('<pre>' + textoEtiqueta + '</pre>');
+      printWindow.document.write('<p><em>Envie este código para a impressora.</em></p>');
+      printWindow.document.write('</body></html>');
+      printWindow.document.close();
+
+      toast.success("Etiqueta gerada com sucesso!");
+    } catch (error) {
+      console.error("Erro impressão:", error);
+      toast.error("Erro ao gerar etiqueta.");
+    } finally {
+      setLoadingPrint(null);
+    }
+  };
+
   // --- FUNÇÃO DE SANEAMENTO FISCAL ---
   const handleSaneamento = async () => {
     if (!window.confirm("ATENÇÃO: Isso irá recalcular automaticamente os impostos (CST, Monofásico, Reforma) de TODOS os produtos com base no NCM cadastrado.\n\nUse isso se a legislação mudar ou para corrigir produtos antigos.\n\nDeseja continuar?")) {
@@ -70,7 +97,7 @@ const ProdutoList = () => {
     try {
       const msg = await produtoService.saneamentoFiscal();
       toast.success(msg);
-      carregarProdutos(page, termoBusca); // Recarrega para ver se mudou algo (opcional, mas boa prática)
+      carregarProdutos(page, termoBusca);
     } catch (error) {
       console.error(error);
       toast.error("Erro ao executar saneamento fiscal. Verifique se você é ADMIN.");
@@ -105,7 +132,7 @@ const ProdutoList = () => {
 
             {/* BOTÃO DE SANEAMENTO */}
             <button
-              className="btn-secondary" // Ou crie uma classe btn-warning se quiser destacar
+              className="btn-secondary"
               onClick={handleSaneamento}
               disabled={loadingSaneamento}
               title="Corrigir impostos de todos os produtos automaticamente"
@@ -200,6 +227,17 @@ const ProdutoList = () => {
                         </td>
                         <td>
                           <div className="actions-cell">
+                            {/* BOTÃO DE IMPRESSÃO */}
+                            <button
+                              className="icon-btn print"
+                              data-tooltip="Imprimir Etiqueta"
+                              onClick={() => handlePrint(prod.id)}
+                              disabled={loadingPrint === prod.id}
+                              style={{ marginRight: '5px', color: '#555' }}
+                            >
+                              {loadingPrint === prod.id ? '...' : <Printer size={18} />}
+                            </button>
+
                             <button
                               className="icon-btn edit"
                               data-tooltip="Editar Produto"

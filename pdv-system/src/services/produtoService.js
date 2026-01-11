@@ -16,7 +16,6 @@ export const produtoService = {
       params.append('size', tamanho);
 
       if (filtro) {
-        // O backend espera 'descricao' ou 'termo', ajuste conforme seu Controller
         params.append('descricao', filtro);
       }
 
@@ -37,7 +36,6 @@ export const produtoService = {
 
   /**
    * Busca um único produto pelo ID (Para edição)
-   * Nome ajustado para 'obterPorId' para compatibilidade com o Form
    */
   obterPorId: async (id) => {
     try {
@@ -90,22 +88,31 @@ export const produtoService = {
   // --- CONSULTA EXTERNA (COSMOS) ---
   consultarEan: async (ean) => {
     try {
-      // Chama o endpoint de integração do backend
       const response = await api.get(`${RESOURCE_URL}/consulta-externa/${ean}`);
       return response.data;
     } catch (error) {
-      // Repassa o erro para ser tratado no front (ex: 404 não encontrado)
       throw error;
     }
   },
 
-  // --- NOVO MÉTODO: SANEAMENTO FISCAL EM MASSA ---
+  // --- SANEAMENTO FISCAL EM MASSA ---
   saneamentoFiscal: async () => {
     try {
       const response = await api.post(`${RESOURCE_URL}/saneamento-fiscal`);
-      return response.data; // Retorna a mensagem de sucesso do backend
+      return response.data;
     } catch (error) {
       console.error("Erro ao executar saneamento fiscal:", error);
+      throw error;
+    }
+  },
+
+  // --- [NOVO] IMPRESSÃO DE ETIQUETA ---
+  imprimirEtiqueta: async (id) => {
+    try {
+      const response = await api.get(`${RESOURCE_URL}/${id}/etiqueta`);
+      return response.data; // Retorna a string ZPL
+    } catch (error) {
+      console.error("Erro ao obter etiqueta:", error);
       throw error;
     }
   }
