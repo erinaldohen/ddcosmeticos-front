@@ -8,15 +8,17 @@ export const produtoService = {
 
   /**
    * Lista produtos com paginação e filtro
+   * Agora aceita pagina e tamanho para evitar erro 400
    */
   listar: async (pagina = 0, tamanho = 10, filtro = '') => {
     try {
       const params = new URLSearchParams();
-      params.append('page', pagina);
-      params.append('size', tamanho);
+      // Ajustado para bater com o Controller (pagina/tamanho)
+      params.append('pagina', pagina);
+      params.append('tamanho', tamanho);
 
       if (filtro) {
-        params.append('descricao', filtro);
+        params.append('termo', filtro);
       }
 
       const response = await api.get(RESOURCE_URL, { params });
@@ -74,13 +76,13 @@ export const produtoService = {
   },
 
   /**
-   * Exclui (ou inativa) um produto pelo ID
+   * Exclui (ou inativa) um produto pelo ID/EAN
    */
-  excluir: async (id) => {
+  excluir: async (ean) => {
     try {
-      await api.delete(`${RESOURCE_URL}/${id}`);
+      await api.delete(`${RESOURCE_URL}/${ean}`);
     } catch (error) {
-      console.error(`Erro ao excluir produto ${id}:`, error);
+      console.error(`Erro ao excluir produto ${ean}:`, error);
       throw error;
     }
   },
@@ -134,13 +136,43 @@ export const produtoService = {
     }
   },
 
-  // --- [NOVO] HISTÓRICO DE ALTERAÇÕES (AUDITORIA) ---
+  // --- HISTÓRICO DE ALTERAÇÕES (AUDITORIA) ---
   buscarHistorico: async (id) => {
     try {
       const response = await api.get(`${RESOURCE_URL}/${id}/historico`);
       return response.data; // Retorna lista de HistoricoProdutoDTO
     } catch (error) {
       console.error("Erro ao buscar histórico:", error);
+      throw error;
+    }
+  },
+
+  // --- [NOVO] LIXEIRA ---
+  buscarLixeira: async () => {
+    try {
+      const response = await api.get(`${RESOURCE_URL}/lixeira`);
+      return response.data; // Retorna lista de produtos
+    } catch (error) {
+      console.error("Erro ao buscar lixeira:", error);
+      throw error;
+    }
+  },
+
+  // --- [NOVO] RESTAURAR / REATIVAR (Usa EAN) ---
+  restaurar: async (ean) => {
+    try {
+      await api.patch(`${RESOURCE_URL}/${ean}/reativar`);
+    } catch (error) {
+      console.error("Erro ao restaurar produto:", error);
+      throw error;
+    }
+  },
+
+  // Alias para manter consistência se chamar como 'reativar'
+  reativar: async (ean) => {
+    try {
+      await api.patch(`${RESOURCE_URL}/${ean}/reativar`);
+    } catch (error) {
       throw error;
     }
   }
