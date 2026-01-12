@@ -1,27 +1,25 @@
 import api from './api'; // Usa a instância configurada com o Token
 
 // O baseURL já está configurado no api.js (geralmente http://localhost:8080/api/v1)
-// Então aqui usamos apenas o recurso relativo.
 const RESOURCE_URL = '/produtos';
 
 export const produtoService = {
 
   /**
    * Lista produtos com paginação e filtro
-   * Agora aceita pagina e tamanho para evitar erro 400
+   * CORREÇÃO: Parâmetros ajustados para 'page' e 'size' (Padrão Spring Boot)
    */
   listar: async (pagina = 0, tamanho = 10, filtro = '') => {
     try {
-      const params = new URLSearchParams();
-      // Ajustado para bater com o Controller (pagina/tamanho)
-      params.append('pagina', pagina);
-      params.append('tamanho', tamanho);
+      // Axios serializa automaticamente o objeto 'params' para query string
+      const response = await api.get(RESOURCE_URL, {
+        params: {
+          page: pagina,   // MUDADO DE 'pagina' PARA 'page'
+          size: tamanho,  // MUDADO DE 'tamanho' PARA 'size'
+          termo: filtro || ''
+        }
+      });
 
-      if (filtro) {
-        params.append('termo', filtro);
-      }
-
-      const response = await api.get(RESOURCE_URL, { params });
       const data = response.data;
 
       return {
