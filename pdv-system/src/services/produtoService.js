@@ -106,13 +106,41 @@ export const produtoService = {
     }
   },
 
-  // --- [NOVO] IMPRESSÃO DE ETIQUETA ---
+  // --- IMPRESSÃO DE ETIQUETA ---
   imprimirEtiqueta: async (id) => {
     try {
       const response = await api.get(`${RESOURCE_URL}/${id}/etiqueta`);
       return response.data; // Retorna a string ZPL
     } catch (error) {
       console.error("Erro ao obter etiqueta:", error);
+      throw error;
+    }
+  },
+
+  // --- UPLOAD DE IMAGEM ---
+  uploadImagem: async (id, arquivo) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', arquivo);
+
+      await api.post(`${RESOURCE_URL}/${id}/imagem`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+    } catch (error) {
+      console.error("Erro ao enviar imagem:", error);
+      throw error;
+    }
+  },
+
+  // --- [NOVO] HISTÓRICO DE ALTERAÇÕES (AUDITORIA) ---
+  buscarHistorico: async (id) => {
+    try {
+      const response = await api.get(`${RESOURCE_URL}/${id}/historico`);
+      return response.data; // Retorna lista de HistoricoProdutoDTO
+    } catch (error) {
+      console.error("Erro ao buscar histórico:", error);
       throw error;
     }
   }

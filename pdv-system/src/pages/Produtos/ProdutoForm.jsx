@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import MainLayout from '../../components/Layout/MainLayout';
-import produtoService from '../../services/produtoService';
+import { produtoService } from '../../services/produtoService'; // Importação corrigida
 import { toast } from 'react-toastify';
 import {
   Save, ArrowLeft, Package, Barcode, DollarSign,
-  Layers, Tag, Image, FileText, Ruler, Percent,
-  Landmark, Truck, DownloadCloud, Search
+  Layers, Tag, Image, Ruler, Percent,
+  Landmark, Truck, DownloadCloud, Upload, Image as ImageIcon // Ícones novos
 } from 'lucide-react';
 import './ProdutoForm.css';
 
@@ -16,7 +16,11 @@ const ProdutoForm = () => {
   const isEditMode = !!id;
 
   const [loading, setLoading] = useState(false);
-  const [searchingEan, setSearchingEan] = useState(false); // Estado para o loading da busca
+  const [searchingEan, setSearchingEan] = useState(false);
+
+  // Estados para Upload de Imagem
+  const [arquivoImagem, setArquivoImagem] = useState(null);
+  const [previewImagem, setPreviewImagem] = useState(null);
 
   const [formData, setFormData] = useState({
     descricao: '',
@@ -30,7 +34,7 @@ const ProdutoForm = () => {
     // FISCAL
     ncm: '',
     cest: '',
-    cst: '102', // Padrão seguro para Simples Nacional
+    cst: '102',
     classificacaoReforma: 'PADRAO',
     monofasico: false,
 
@@ -39,7 +43,7 @@ const ProdutoForm = () => {
     // FINANCEIRO
     precoCusto: '',
     precoVenda: '',
-    precoMedio: '0,00', // Campo visual (calculado pelo backend)
+    precoMedio: '0,00',
 
     quantidadeEmEstoque: 0,
     estoqueMinimo: 5,
@@ -48,7 +52,16 @@ const ProdutoForm = () => {
     estoqueNaoFiscal: 0
   });
 
-  // --- FUNÇÕES AUXILIARES DE FORMATAÇÃO ---
+  // --- FUNÇÃO AUXILIAR PARA CORRIGIR URL DA IMAGEM ---
+  const getImageUrl = (url) => {
+    if (!url) return null;
+    // Se for blob (upload local) ou http (link externo), usa como está
+    if (url.startsWith('blob:') || url.startsWith('http')) return url;
+
+    // Se for caminho relativo do backend (/imagens/...), adiciona o host
+    // Ajuste a porta 8080 se necessário
+    return `http://localhost:8080${url}`;
+  };
 
   const formatarValorInicial = (valor) => {
     if (!valor) return '';
@@ -89,25 +102,23 @@ const ProdutoForm = () => {
         categoria: dados.categoria || '',
         subcategoria: dados.subcategoria || '',
         unidade: dados.unidade || 'UN',
-
-        // Fiscal
         ncm: dados.ncm || '',
         cest: dados.cest || '',
         cst: dados.cst || '102',
         classificacaoReforma: dados.classificacaoReforma || 'PADRAO',
         monofasico: dados.monofasico || false,
-
         urlImagem: dados.urlImagem || '',
         precoCusto: formatarValorInicial(dados.precoCusto),
         precoVenda: formatarValorInicial(dados.precoVenda),
-
-        // Exibe o preço médio calculado pelo backend (apenas leitura)
         precoMedio: formatarValor4Casas(dados.precoMedioPonderado),
-
         diasParaReposicao: dados.diasParaReposicao || 0,
         estoqueFiscal: dados.estoqueFiscal || 0,
         estoqueNaoFiscal: dados.estoqueNaoFiscal || 0
       });
+      // Se já tem imagem salva, define no preview
+      if (dados.urlImagem) {
+        setPreviewImagem(dados.urlImagem);
+      }
     } catch (error) {
       toast.error("Erro ao carregar dados do produto.");
       navigate('/produtos');
@@ -116,7 +127,16 @@ const ProdutoForm = () => {
     }
   };
 
-  // --- NOVA FUNÇÃO: BUSCAR DADOS PELO EAN ---
+  // --- MANIPULADOR DE ARQUIVO ---
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setArquivoImagem(file);
+      const previewUrl = URL.createObjectURL(file);
+      setPreviewImagem(previewUrl);
+    }
+  };
+
   const handleBuscarEan = async () => {
     const ean = formData.codigoBarras;
     if (!ean || ean.length < 8) {
@@ -127,16 +147,12 @@ const ProdutoForm = () => {
     setSearchingEan(true);
     try {
       const dadosExternos = await produtoService.consultarEan(ean);
-
-      // Preenche o formulário com o que voltou da API, incluindo inteligência fiscal do Backend
       setFormData(prev => ({
         ...prev,
         descricao: dadosExternos.nome || prev.descricao,
         urlImagem: dadosExternos.urlImagem || prev.urlImagem,
         marca: dadosExternos.marca || prev.marca,
         categoria: dadosExternos.categoria || prev.categoria,
-
-        // Fiscal (Backend já calculou isso baseado no NCM)
         ncm: dadosExternos.ncm || prev.ncm,
         cest: dadosExternos.cest || prev.cest,
         cst: dadosExternos.cst || prev.cst,
@@ -144,12 +160,16 @@ const ProdutoForm = () => {
         classificacaoReforma: dadosExternos.classificacaoReforma || prev.classificacaoReforma
       }));
 
+      // Se a API externa retornou imagem e o usuário não selecionou arquivo manual
+      if (dadosExternos.urlImagem && !arquivoImagem) {
+        setPreviewImagem(dadosExternos.urlImagem);
+      }
+
       if(dadosExternos.ncm) {
           toast.success("Dados encontrados e regras fiscais aplicadas!");
       } else {
           toast.warning("Produto encontrado, mas sem dados fiscais (NCM).");
       }
-
     } catch (error) {
       console.error(error);
       toast.info("Produto não encontrado na base externa. Preencha manualmente.");
@@ -181,13 +201,22 @@ const ProdutoForm = () => {
         quantidadeEmEstoque: Number(formData.quantidadeEmEstoque)
       };
 
+      let produtoSalvo;
       if (isEditMode) {
-        await produtoService.atualizar(id, payload);
+        produtoSalvo = await produtoService.atualizar(id, payload);
         toast.success("Produto atualizado com sucesso!");
       } else {
-        await produtoService.salvar(payload);
+        produtoSalvo = await produtoService.salvar(payload);
         toast.success("Produto cadastrado com sucesso!");
       }
+
+      // --- LÓGICA DE UPLOAD ---
+      if (arquivoImagem) {
+        const idFinal = produtoSalvo.id || id; // Pega o ID do retorno se for novo
+        await produtoService.uploadImagem(idFinal, arquivoImagem);
+        toast.success("Imagem enviada com sucesso!");
+      }
+
       navigate('/produtos');
     } catch (error) {
       console.error(error);
@@ -197,7 +226,6 @@ const ProdutoForm = () => {
     }
   };
 
-  // Cálculo da Margem para exibição
   const custoFloat = converterParaFloat(formData.precoCusto);
   const vendaFloat = converterParaFloat(formData.precoVenda);
   const margem = custoFloat > 0 && vendaFloat > 0
@@ -207,7 +235,6 @@ const ProdutoForm = () => {
   return (
     <MainLayout>
       <div className="container-fluid">
-
         <div className="page-header">
           <div className="page-title">
             <h1>{isEditMode ? 'Editar Produto' : 'Novo Produto'}</h1>
@@ -221,83 +248,83 @@ const ProdutoForm = () => {
         </div>
 
         <div className="form-container">
-          {loading && isEditMode ? (
-            <div className="loading-form">
-                <div className="spinner"></div> Carregando dados...
-            </div>
+          {loading && isEditMode && !formData.descricao ? (
+            <div className="loading-form"><div className="spinner"></div> Carregando dados...</div>
           ) : (
             <form onSubmit={handleSubmit}>
 
-              {/* --- SEÇÃO 1: INFORMAÇÕES GERAIS --- */}
+              {/* SEÇÃO 1: IDENTIFICAÇÃO + IMAGEM */}
               <div className="form-section">
                 <h3 className="section-title"><Package size={20} /> Informações Básicas</h3>
 
-                <div className="form-row">
-                  <div className="form-group flex-1">
-                    <label><Barcode size={16} /> Código de Barras (EAN)</label>
-                    <div className="input-action-group">
-                      <input
-                        type="text"
-                        name="codigoBarras"
-                        value={formData.codigoBarras}
-                        onChange={handleChange}
-                        placeholder="789..."
-                        onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleBuscarEan(); } }}
-                      />
-                      <button
-                        type="button"
-                        className="btn-search-icon"
-                        onClick={handleBuscarEan}
-                        title="Buscar dados na nuvem"
-                        disabled={searchingEan}
-                      >
-                        {searchingEan ? <div className="spinner-small"></div> : <DownloadCloud size={18} />}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="form-group flex-2">
-                    <label>Descrição do Produto *</label>
-                    <input type="text" name="descricao" value={formData.descricao} onChange={handleChange} required placeholder="Ex: Creme..." />
-                  </div>
-                </div>
+                <div style={{ display: 'flex', gap: '30px', flexWrap: 'wrap' }}>
 
-                <div className="form-row">
-                   <div className="form-group flex-2">
-                    <label><Image size={16} /> URL da Imagem</label>
-                    <div className="url-preview-group">
-                        <input type="text" name="urlImagem" value={formData.urlImagem} onChange={handleChange} placeholder="https://..." />
-                        {formData.urlImagem && (
-                            <div className="mini-preview">
-                                <img src={formData.urlImagem} alt="Preview" onError={(e) => e.target.style.display='none'} />
-                            </div>
-                        )}
+                  {/* Lado Esquerdo: Campos */}
+                  <div style={{ flex: 2, minWidth: '300px' }}>
+                    <div className="form-row">
+                      <div className="form-group flex-1">
+                        <label><Barcode size={16} /> Código de Barras (EAN)</label>
+                        <div className="input-action-group">
+                          <input type="text" name="codigoBarras" value={formData.codigoBarras} onChange={handleChange} placeholder="789..." onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleBuscarEan(); } }} />
+                          <button type="button" className="btn-search-icon" onClick={handleBuscarEan} disabled={searchingEan}>
+                            {searchingEan ? <div className="spinner-small"></div> : <DownloadCloud size={18} />}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="form-group flex-2">
+                        <label>Descrição do Produto *</label>
+                        <input type="text" name="descricao" value={formData.descricao} onChange={handleChange} required placeholder="Ex: Creme..." />
+                      </div>
+                    </div>
+
+                    <div className="form-row">
+                      <div className="form-group"><label>Marca</label><input type="text" name="marca" value={formData.marca} onChange={handleChange} /></div>
+                      <div className="form-group"><label>Categoria</label><input type="text" name="categoria" value={formData.categoria} onChange={handleChange} /></div>
+                      <div className="form-group"><label>Subcategoria</label><input type="text" name="subcategoria" value={formData.subcategoria} onChange={handleChange} /></div>
+                      <div className="form-group flex-small">
+                        <label><Ruler size={16} /> Unidade</label>
+                        <select name="unidade" value={formData.unidade} onChange={handleChange}>
+                            <option value="UN">UN</option><option value="KG">KG</option><option value="LT">LT</option><option value="CX">CX</option><option value="KIT">KIT</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
-                  <div className="form-group checkbox-group flex-1">
-                    <label className="checkbox-label">
-                      <input type="checkbox" name="ativo" checked={formData.ativo} onChange={handleChange} /> Produto Ativo
+
+                  {/* Lado Direito: Upload de Imagem */}
+                  <div className="image-upload-area" style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', border: '2px dashed #ddd', padding: '20px', borderRadius: '8px', backgroundColor: '#fafafa', minWidth: '200px' }}>
+                    <div className="image-preview-box" style={{ width: '100%', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', border: '1px solid #eee', borderRadius: '4px', marginBottom: '10px', overflow: 'hidden' }}>
+                      {previewImagem ? (
+                        <img
+                          src={getImageUrl(previewImagem)} // [CORREÇÃO] Aqui usamos a função auxiliar
+                          alt="Preview"
+                          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                          onError={(e) => { e.target.style.display = 'none'; }} // Esconde se der erro
+                        />
+                      ) : (
+                        <ImageIcon size={48} color="#ccc" />
+                      )}
+                    </div>
+
+                    <label htmlFor="file-upload" className="btn-upload" style={{ cursor: 'pointer', color: '#6366f1', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', border: '1px solid #6366f1', borderRadius: '6px' }}>
+                      <Upload size={18} /> Carregar Imagem
                     </label>
+                    <input id="file-upload" type="file" accept="image/*" onChange={handleFileChange} style={{ display: 'none' }} />
+                    <small style={{ color: '#999', marginTop: '8px', fontSize: '0.8rem' }}>Ou cole URL abaixo</small>
+
+                    <input
+                      type="text"
+                      name="urlImagem"
+                      value={formData.urlImagem}
+                      onChange={(e) => { handleChange(e); setPreviewImagem(e.target.value); }}
+                      placeholder="https://..."
+                      style={{ width: '100%', marginTop: '5px', fontSize: '0.8rem', padding: '5px' }}
+                    />
                   </div>
+
                 </div>
               </div>
 
-              {/* --- SEÇÃO 2: CLASSIFICAÇÃO --- */}
-              <div className="form-section">
-                <h3 className="section-title"><Tag size={20} /> Classificação</h3>
-                <div className="form-row">
-                  <div className="form-group"><label>Marca</label><input type="text" name="marca" value={formData.marca} onChange={handleChange} placeholder="Ex: Nivea" /></div>
-                  <div className="form-group"><label>Categoria</label><input type="text" name="categoria" value={formData.categoria} onChange={handleChange} placeholder="Ex: Skincare" /></div>
-                  <div className="form-group"><label>Subcategoria</label><input type="text" name="subcategoria" value={formData.subcategoria} onChange={handleChange} placeholder="Ex: Hidratantes" /></div>
-                  <div className="form-group flex-small">
-                    <label><Ruler size={16} /> Unidade</label>
-                    <select name="unidade" value={formData.unidade} onChange={handleChange}>
-                        <option value="UN">UN</option><option value="KG">KG</option><option value="LT">LT</option><option value="CX">CX</option><option value="KIT">KIT</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* --- SEÇÃO 3: FISCAL (ATUALIZADO) --- */}
+              {/* --- SEÇÃO 3: FISCAL --- */}
               <div className="form-section" style={{borderLeft: '4px solid #f22998'}}>
                 <h3 className="section-title"><Landmark size={20} /> Dados Fiscais (Simples Nacional)</h3>
                 <div className="form-row">
@@ -312,7 +339,6 @@ const ProdutoForm = () => {
                   <div className="form-group">
                     <label title="Código de Situação da Operação no Simples Nacional">CSOSN / CST *</label>
                     <input type="text" name="cst" value={formData.cst} onChange={handleChange} placeholder="Ex: 102 ou 500" required />
-                    <small style={{color:'gray', fontSize:'0.75rem'}}>102=Tributado, 500=Cobrado Anteriormente</small>
                   </div>
                   <div className="form-group flex-2">
                     <label>Reforma Tributária (LC 214)</label>
@@ -333,10 +359,15 @@ const ProdutoForm = () => {
                         Produto Monofásico (PIS/COFINS já pago na indústria)
                         </label>
                     </div>
+                    <div className="form-group checkbox-group">
+                        <label className="checkbox-label">
+                        <input type="checkbox" name="ativo" checked={formData.ativo} onChange={handleChange} /> Produto Ativo no Sistema
+                        </label>
+                    </div>
                 </div>
               </div>
 
-              {/* --- SEÇÃO 4: FINANCEIRO (COM PREÇO MÉDIO) --- */}
+              {/* --- SEÇÃO 4: FINANCEIRO --- */}
               <div className="form-section">
                 <h3 className="section-title"><DollarSign size={20} /> Financeiro</h3>
                 <div className="form-row">
@@ -371,14 +402,14 @@ const ProdutoForm = () => {
                 </div>
               </div>
 
-              {/* --- SEÇÃO 5: ESTOQUE E LOGÍSTICA --- */}
+              {/* --- SEÇÃO 5: ESTOQUE --- */}
               <div className="form-section">
-                <h3 className="section-title"><Layers size={20} /> Estoque e Logística</h3>
+                <h3 className="section-title"><Layers size={20} /> Estoque</h3>
                 <div className="form-row">
                   <div className="form-group">
                     <label>Estoque Total (Físico)</label>
                     <input type="number" name="quantidadeEmEstoque" value={formData.quantidadeEmEstoque} onChange={handleChange} disabled={isEditMode} />
-                    {isEditMode && <small>Ajustes via entrada/saída.</small>}
+                    {isEditMode && <small>Use o menu "Entradas" para ajustar.</small>}
                   </div>
 
                   <div className="form-group">
@@ -390,18 +421,6 @@ const ProdutoForm = () => {
                     <label><Truck size={16}/> Dias Reposição</label>
                     <input type="number" name="diasParaReposicao" value={formData.diasParaReposicao} onChange={handleChange} placeholder="Ex: 7" />
                   </div>
-                </div>
-
-                <div className="form-row" style={{opacity: 0.7}}>
-                    <div className="form-group">
-                        <label>Estoque Fiscal (NF)</label>
-                        <input type="number" disabled value={formData.estoqueFiscal} />
-                    </div>
-                    <div className="form-group">
-                        <label>Estoque Não Fiscal</label>
-                        <input type="number" disabled value={formData.estoqueNaoFiscal} />
-                    </div>
-                    <div className="form-group flex-1"></div>
                 </div>
               </div>
 

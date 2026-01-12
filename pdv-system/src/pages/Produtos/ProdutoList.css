@@ -144,15 +144,26 @@
 }
 
 .product-icon-wrapper {
-  width: 40px;
-  height: 40px;
-  background-color: #f1f5f9;
+  width: 48px; /* Ajustado para melhor visualização */
+  height: 48px; /* Ajustado para melhor visualização */
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-gray);
   flex-shrink: 0;
+  overflow: hidden;
+  padding: 2px; /* Espaço para a imagem não tocar na borda */
+  margin-right: 12px;
+}
+
+.product-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* Ajuste para não cortar a imagem e centralizar */
+  display: block;
 }
 
 .product-name {
@@ -330,25 +341,174 @@
   transform: translateX(-50%) translateY(-2px); /* Encosta no topo do botão */
 }
 
-/* exibir as imagens dos produtos */
+/* --- Novos Estilos: Header e Botões Sofisticados --- */
 
-.product-icon-wrapper {
-  width: 40px;
-  height: 40px;
-  background-color: #f1f5f9;
+.header-actions {
+  display: flex;
+  gap: 12px; /* Espaçamento uniforme entre os botões */
+  align-items: center;
+}
+
+/* Botão Primário (Novo Produto) */
+.btn-modern-primary {
+  background-color: #2563eb; /* Azul moderno */
+  color: white;
+  border: none;
+  padding: 10px 20px;
   border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.btn-modern-primary:hover {
+  background-color: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(37, 99, 235, 0.3);
+}
+
+/* Botão Secundário (Ajuste Fiscal) */
+.btn-modern-secondary {
+  background-color: #ffffff;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-modern-secondary:hover {
+  background-color: #f8fafc;
+  border-color: #94a3b8;
+  color: #1e293b;
+}
+
+.btn-modern-secondary:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* --- MODAL E TIMELINE --- */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-gray);
-  flex-shrink: 0;
-  overflow: hidden; /* IMPORTANTE: Para cortar a imagem nas bordas arredondadas */
-  border: 1px solid var(--border-color); /* Opcional: borda sutil para fotos brancas */
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
 }
 
-.product-thumb {
-  width: 100%;
-  height: 100%;
-  object-fit: cover; /* Garante que a imagem preencha o quadrado sem distorcer */
-  display: block;
+.modal-content {
+  background: white;
+  width: 600px;
+  max-width: 90%;
+  max-height: 80vh;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
+
+.modal-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 { margin: 0; font-size: 1.1rem; color: var(--text-dark); }
+
+.btn-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-gray);
+  padding: 4px;
+  border-radius: 4px;
+}
+.btn-close:hover { background-color: #f1f5f9; color: var(--text-dark); }
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.modal-subtitle { margin-top: 0; color: var(--text-gray); font-size: 0.9rem; margin-bottom: 20px; }
+
+/* Timeline */
+.timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  position: relative;
+  border-left: 2px solid #e2e8f0;
+  margin-left: 10px;
+}
+
+.timeline-item {
+  margin-bottom: 24px;
+  position: relative;
+  padding-left: 24px;
+}
+
+.timeline-marker {
+  position: absolute;
+  left: -6px; /* Centraliza na linha */
+  top: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--primary);
+  border: 2px solid white;
+  box-shadow: 0 0 0 2px #e2e8f0;
+}
+
+.timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.timeline-date { font-size: 0.8rem; color: var(--text-gray); font-weight: 500; }
+
+.badge-tipo {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.badge-tipo.CRIADO { background: #dcfce7; color: #166534; }
+.badge-tipo.ALTERADO { background: #dbeafe; color: #1e40af; }
+.badge-tipo.EXCLUÍDO { background: #fee2e2; color: #991b1b; }
+
+.timeline-details {
+  background: #f8fafc;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #f1f5f9;
+  font-size: 0.85rem;
+}
+.timeline-details p { margin: 4px 0; color: var(--text-dark); }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
