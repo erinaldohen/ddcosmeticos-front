@@ -3,41 +3,32 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// Layout e Segurança
-import PrivateRoute from './components/PrivateRoute'; // <-- ESSENCIAL: Faltava este import
-import MainLayout from './components/Layout/MainLayout';    // <-- Removido o .jsx para evitar erro de resolução do Vite
+// Layout
+import MainLayout from './components/Layout/MainLayout';
 
 // Páginas
-import Login from './pages/Login/Login';
 import Dashboard from './pages/Dashboard/Dashboard';
 import ProdutoList from './pages/Produtos/ProdutoList';
 import ProdutoForm from './pages/Produtos/ProdutoForm';
 import RelatorioImpostos from './pages/Fiscal/RelatorioImpostos';
+import PDV from './pages/PDV/PDV'; // Novo Import
 
-// CSS Global
-import './index.css';
+// Simulação de Autenticação (Ajuste conforme seu backend)
+const PrivateRoute = ({ children }) => {
+  const isAuthenticated = true; // Altere para sua lógica real de login
+  return isAuthenticated ? children : <Navigate to="/login" />;
+};
 
 function App() {
   return (
     <Router>
-      <ToastContainer
-        position="top-right"
-        autoClose={4000}
-        theme="colored"
-      />
+      <ToastContainer position="top-right" autoClose={3000} />
 
       <Routes>
-        {/* ==========================================
-            ROTAS PÚBLICAS
-            ========================================== */}
-        <Route path="/" element={<Login />} />
-        <Route path="/login" element={<Login />} />
+        {/* Rota Raiz Redireciona para Dashboard */}
+        <Route path="/" element={<Navigate to="/dashboard" />} />
 
-        {/* ==========================================
-            ROTAS PROTEGIDAS (Usam MainLayout)
-            ========================================== */}
-
-        {/* Dashboard */}
+        {/* Rotas Protegidas com Layout Principal */}
         <Route
           path="/dashboard"
           element={
@@ -49,7 +40,6 @@ function App() {
           }
         />
 
-        {/* Módulo de Produtos */}
         <Route
           path="/produtos"
           element={
@@ -83,9 +73,8 @@ function App() {
           }
         />
 
-        {/* Módulo Fiscal (Reforma Tributária LC 214) */}
         <Route
-          path="/fiscal/retencao"
+          path="/fiscal"
           element={
             <PrivateRoute>
               <MainLayout>
@@ -95,8 +84,20 @@ function App() {
           }
         />
 
-        {/* Fallback */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        {/* --- NOVA ROTA DO PDV --- */}
+        <Route
+          path="/pdv"
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <PDV />
+              </MainLayout>
+            </PrivateRoute>
+          }
+        />
+
+        {/* Rota 404 */}
+        <Route path="*" element={<Navigate to="/dashboard" />} />
       </Routes>
     </Router>
   );
