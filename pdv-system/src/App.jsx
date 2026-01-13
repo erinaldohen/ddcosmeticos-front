@@ -1,14 +1,18 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// Componentes e Layouts
-import PrivateRoute from './components/PrivateRoute';
+// Layout e Segurança
+import PrivateRoute from './components/PrivateRoute'; // <-- ESSENCIAL: Faltava este import
+import MainLayout from './components/Layout/MainLayout';    // <-- Removido o .jsx para evitar erro de resolução do Vite
+
+// Páginas
 import Login from './pages/Login/Login';
 import Dashboard from './pages/Dashboard/Dashboard';
 import ProdutoList from './pages/Produtos/ProdutoList';
-import ProdutoForm from './pages/Produtos/ProdutoForm'; // <--- IMPORTANTE: Importar o Form
+import ProdutoForm from './pages/Produtos/ProdutoForm';
+import RelatorioImpostos from './pages/Fiscal/RelatorioImpostos';
 
 // CSS Global
 import './index.css';
@@ -23,56 +27,76 @@ function App() {
       />
 
       <Routes>
-        {/* ROTA PÚBLICA */}
+        {/* ==========================================
+            ROTAS PÚBLICAS
+            ========================================== */}
         <Route path="/" element={<Login />} />
         <Route path="/login" element={<Login />} />
 
-        {/* ROTAS PROTEGIDAS */}
+        {/* ==========================================
+            ROTAS PROTEGIDAS (Usam MainLayout)
+            ========================================== */}
 
         {/* Dashboard */}
         <Route
           path="/dashboard"
           element={
             <PrivateRoute>
-              <Dashboard />
+              <MainLayout>
+                <Dashboard />
+              </MainLayout>
             </PrivateRoute>
           }
         />
 
-        {/* --- Rotas de Produtos --- */}
-
-        {/* Listagem */}
+        {/* Módulo de Produtos */}
         <Route
           path="/produtos"
           element={
-             <PrivateRoute>
-                 <ProdutoList />
-             </PrivateRoute>
-            }
+            <PrivateRoute>
+              <MainLayout>
+                <ProdutoList />
+              </MainLayout>
+            </PrivateRoute>
+          }
         />
 
-        {/* Novo Produto */}
         <Route
           path="/produtos/novo"
           element={
-             <PrivateRoute>
-                 <ProdutoForm />
-             </PrivateRoute>
-            }
+            <PrivateRoute>
+              <MainLayout>
+                <ProdutoForm />
+              </MainLayout>
+            </PrivateRoute>
+          }
         />
 
-        {/* Editar Produto (Recebe o ID) */}
         <Route
           path="/produtos/editar/:id"
           element={
-             <PrivateRoute>
-                 <ProdutoForm />
-             </PrivateRoute>
-            }
+            <PrivateRoute>
+              <MainLayout>
+                <ProdutoForm />
+              </MainLayout>
+            </PrivateRoute>
+          }
         />
 
-        {/* Rota Coringa - Redireciona para Login se não achar nada */}
-        <Route path="*" element={<Login />} />
+        {/* Módulo Fiscal (Reforma Tributária LC 214) */}
+        <Route
+          path="/fiscal/retencao"
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <RelatorioImpostos />
+              </MainLayout>
+            </PrivateRoute>
+          }
+        />
+
+        {/* Fallback */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
   );

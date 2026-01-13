@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import MainLayout from '../../components/Layout/MainLayout';
+// import MainLayout removido para eliminar a aba dupla
 import { produtoService } from '../../services/produtoService';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
@@ -270,7 +270,7 @@ const ProdutoList = () => {
 
           setProdutos(dados.itens);
           setTotalPages(dados.totalPaginas);
-          setTotalElements(dados.totalElementos);
+          setTotalElements(dados.totalElements);
 
           // IMPORTANTE: NÃO chamamos setPage(dados.paginaAtual) aqui.
           // Deixamos o estado local controlar a navegação.
@@ -420,7 +420,7 @@ const ProdutoList = () => {
 
   // --- RENDER ---
   return (
-    <MainLayout>
+    <>
       <div className="modern-container">
 
         {/* HEADER DA PÁGINA */}
@@ -589,7 +589,7 @@ const ProdutoList = () => {
         confirmText={confirmModal.confirmText}
         type={confirmModal.type}
       />
-    </MainLayout>
+    </>
   );
 };
 

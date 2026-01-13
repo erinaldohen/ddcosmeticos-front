@@ -6,12 +6,14 @@ const MainLayout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Ícones simples usando emojis para facilitar (depois trocamos por libs)
   const menuItems = [
     { name: 'Visão Geral', path: '/dashboard', icon: '📊' },
     { name: 'Vendas (PDV)', path: '/pdv', icon: '🛒' },
     { name: 'Produtos', path: '/produtos', icon: '📦' },
     { name: 'Clientes', path: '/clientes', icon: '👥' },
+    // --- NOVO ITEM FISCAL ---
+    { name: 'Painel Fiscal', path: '/fiscal/retencao', icon: '⚖️' },
+    // ------------------------
     { name: 'Configurações', path: '/config', icon: '⚙️' },
   ];
 

@@ -7,15 +7,13 @@ export const produtoService = {
 
   /**
    * Lista produtos com paginação e filtro
-   * CORREÇÃO: Parâmetros ajustados para 'page' e 'size' (Padrão Spring Boot)
    */
   listar: async (pagina = 0, tamanho = 10, filtro = '') => {
     try {
-      // Axios serializa automaticamente o objeto 'params' para query string
       const response = await api.get(RESOURCE_URL, {
         params: {
-          page: pagina,   // MUDADO DE 'pagina' PARA 'page'
-          size: tamanho,  // MUDADO DE 'tamanho' PARA 'size'
+          page: pagina,
+          size: tamanho,
           termo: filtro || ''
         }
       });
@@ -85,7 +83,9 @@ export const produtoService = {
     }
   },
 
-  // --- CONSULTA EXTERNA (COSMOS) ---
+  /**
+   * Consulta externa (COSMOS) para preenchimento automático via EAN
+   */
   consultarEan: async (ean) => {
     try {
       const response = await api.get(`${RESOURCE_URL}/consulta-externa/${ean}`);
@@ -95,7 +95,9 @@ export const produtoService = {
     }
   },
 
-  // --- SANEAMENTO FISCAL EM MASSA ---
+  /**
+   * Saneamento fiscal em massa
+   */
   saneamentoFiscal: async () => {
     try {
       const response = await api.post(`${RESOURCE_URL}/saneamento-fiscal`);
@@ -106,18 +108,22 @@ export const produtoService = {
     }
   },
 
-  // --- IMPRESSÃO DE ETIQUETA ---
+  /**
+   * Obtém string ZPL para impressão de etiqueta
+   */
   imprimirEtiqueta: async (id) => {
     try {
       const response = await api.get(`${RESOURCE_URL}/${id}/etiqueta`);
-      return response.data; // Retorna a string ZPL
+      return response.data;
     } catch (error) {
       console.error("Erro ao obter etiqueta:", error);
       throw error;
     }
   },
 
-  // --- UPLOAD DE IMAGEM ---
+  /**
+   * Upload de imagem do produto
+   */
   uploadImagem: async (id, arquivo) => {
     try {
       const formData = new FormData();
@@ -134,29 +140,35 @@ export const produtoService = {
     }
   },
 
-  // --- HISTÓRICO DE ALTERAÇÕES (AUDITORIA) ---
+  /**
+   * Histórico de alterações do produto (Auditoria)
+   */
   buscarHistorico: async (id) => {
     try {
       const response = await api.get(`${RESOURCE_URL}/${id}/historico`);
-      return response.data; // Retorna lista de HistoricoProdutoDTO
+      return response.data;
     } catch (error) {
       console.error("Erro ao buscar histórico:", error);
       throw error;
     }
   },
 
-  // --- [NOVO] LIXEIRA ---
+  /**
+   * Lista produtos na lixeira (Excluídos/Inativos)
+   */
   buscarLixeira: async () => {
     try {
       const response = await api.get(`${RESOURCE_URL}/lixeira`);
-      return response.data; // Retorna lista de produtos
+      return response.data;
     } catch (error) {
       console.error("Erro ao buscar lixeira:", error);
       throw error;
     }
   },
 
-  // --- [NOVO] RESTAURAR / REATIVAR (Usa EAN) ---
+  /**
+   * Restaura um produto da lixeira
+   */
   restaurar: async (ean) => {
     try {
       await api.patch(`${RESOURCE_URL}/${ean}/reativar`);
@@ -166,12 +178,56 @@ export const produtoService = {
     }
   },
 
-  // Alias para manter consistência se chamar como 'reativar'
+  /**
+   * Alias para restaurar
+   */
   reativar: async (ean) => {
     try {
       await api.patch(`${RESOURCE_URL}/${ean}/reativar`);
     } catch (error) {
       throw error;
+    }
+  },
+
+  /**
+   * Busca NCM via BrasilAPI por código ou descrição
+   */
+  buscarNcms: async (termo) => {
+    try {
+      const isNumeric = !isNaN(termo);
+      const url = isNumeric
+        ? `https://brasilapi.com.br/api/ncm/v1?code=${termo}`
+        : `https://brasilapi.com.br/api/ncm/v1?search=${termo}`;
+
+      const response = await fetch(url);
+      if (response.ok) {
+        return await response.json();
+      }
+      return [];
+    } catch (error) {
+      console.error("Erro ao buscar NCM:", error);
+      return [];
+    }
+  },
+
+  /**
+   * Gera um código de barras interno padrão EAN-13
+   */
+  gerarEanInterno: async () => {
+    try {
+      const response = await api.get(`${RESOURCE_URL}/proximo-sequencial`);
+      return response.data.ean;
+    } catch (error) {
+      const prefix = "789";
+      const random = Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
+      const base = prefix + random;
+
+      let sum = 0;
+      for (let i = 0; i < 12; i++) {
+        sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
+      }
+      const checkDigit = (10 - (sum % 10)) % 10;
+      return base + checkDigit;
     }
   }
 };
