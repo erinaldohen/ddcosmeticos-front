@@ -215,7 +215,7 @@ const ProdutoForm = () => {
   };
 
   return (
-    <> {/* Fragment substituindo o MainLayout */}
+    <>
       <div className="container-fluid">
         <div className="page-header">
           <div className="page-title">
@@ -223,7 +223,7 @@ const ProdutoForm = () => {
             <p>Conformidade Fiscal: Modelo Atual & LC 214</p>
           </div>
           <div className="header-actions">
-            <button className="btn-secondary" type="button" onClick={() => navigate('/produtos')}>
+            <button className="btn-secondary" type="button" onClick={() => navigate('/produtos')} data-label="Voltar para a lista">
               <ArrowLeft size={18} /> Voltar
             </button>
           </div>
@@ -234,7 +234,6 @@ const ProdutoForm = () => {
             <div className="loading-form"><div className="spinner"></div> Carregando...</div>
           ) : (
             <form onSubmit={(e) => handleSubmit(e, false)}>
-              {/* --- 1. INFORMAÇÕES BÁSICAS --- */}
               <div className="form-section">
                 <h3 className="section-title"><Package size={20} /> Informações Básicas</h3>
                 <div className="form-row">
@@ -250,8 +249,8 @@ const ProdutoForm = () => {
                                 <label><Barcode size={16} /> EAN / Código de Barras</label>
                                 <div className="input-action-group">
                                     <input ref={eanInputRef} type="text" name="codigoBarras" value={formData.codigoBarras} onChange={handleChange} placeholder="789..." onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleBuscarEan())} />
-                                    <button type="button" className="btn-magic" onClick={handleGerarEanInterno} title="Gerar EAN Interno"><Wand2 size={18} /></button>
-                                    <button type="button" className="btn-search-icon" onClick={handleBuscarEan} disabled={searchingEan} title="Buscar Dados Externos">{searchingEan ? <div className="spinner-small" /> : <DownloadCloud size={16} />}</button>
+                                    <button type="button" className="btn-magic" onClick={handleGerarEanInterno} data-label="Gerar EAN Interno"><Wand2 size={18} /></button>
+                                    <button type="button" className="btn-search-icon" onClick={handleBuscarEan} disabled={searchingEan} data-label="Buscar Dados Externos">{searchingEan ? <div className="spinner-small" /> : <DownloadCloud size={16} />}</button>
                                 </div>
                             </div>
                             <div className="form-group flex-1"><label>Referência / SKU</label><input type="text" placeholder="Cód. Interno" /></div>
@@ -286,7 +285,6 @@ const ProdutoForm = () => {
                 </div>
               </div>
 
-              {/* --- 2. DADOS FISCAIS --- */}
               <div className="form-section" style={{borderLeft: '4px solid #f22998'}}>
                 <h3 className="section-title"><Landmark size={20} /> Dados Fiscais (Regimes Híbridos)</h3>
                 <div className="form-row">
@@ -300,7 +298,7 @@ const ProdutoForm = () => {
                     {sugestoesNcm.length > 0 && (
                       <div className="ncm-dropdown">
                         {sugestoesNcm.map((item, idx) => (
-                          <div key={idx} className="ncm-suggestion-item custom-tooltip-container" onClick={() => selecionarNcm(item)}>
+                          <div key={idx} className="ncm-suggestion-item" onClick={() => selecionarNcm(item)}>
                             <span className="ncm-code">{item.codigo}</span><span className="ncm-desc">{item.descricao}</span>
                             <div className="ncm-tooltip-box"><strong>Descrição Completa:</strong><br/>{item.descricao}</div>
                           </div>
@@ -351,7 +349,6 @@ const ProdutoForm = () => {
                 </div>
               </div>
 
-              {/* --- 3. FINANCEIRO --- */}
               <div className="form-section">
                 <h3 className="section-title"><DollarSign size={20} /> Precificação Inteligente</h3>
                 <div className="form-row" style={{alignItems: 'flex-start'}}>
@@ -362,12 +359,11 @@ const ProdutoForm = () => {
                 </div>
               </div>
 
-              {/* --- 4. ESTOQUE --- */}
               <div className="form-section">
                 <h3 className="section-title"><Layers size={20} /> Controle de Estoque</h3>
                 <div className="form-row" style={{backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px dashed #cbd5e1'}}>
-                    <div className="form-group"><label><Lock size={14}/> Estoque Fiscal</label><input type="text" value={formData.estoqueFiscal} disabled /></div>
-                    <div className="form-group"><label><Lock size={14}/> Estoque S/ Nota</label><input type="text" value={formData.estoqueNaoFiscal} disabled /></div>
+                    <div className="form-group"><label><Lock size={14} data-label="Estoque controlado pelo sistema fiscal" /> Estoque Fiscal</label><input type="text" value={formData.estoqueFiscal} disabled /></div>
+                    <div className="form-group"><label><Lock size={14} data-label="Estoque de vendas sem nota" /> Estoque S/ Nota</label><input type="text" value={formData.estoqueNaoFiscal} disabled /></div>
                     <div className="form-group">
                         <label>Total Disponível</label>
                         <input
@@ -391,8 +387,8 @@ const ProdutoForm = () => {
               </div>
 
               <div className="form-actions">
-                {!isEditMode && <button type="button" className="btn-secondary" onClick={(e) => handleSubmit(e, true)} disabled={loading}><PlusCircle size={18} /> Salvar e Novo</button>}
-                <button id="btn-submit-form" type="submit" className="action-btn-primary" disabled={loading}><Save size={18} />{loading ? 'Salvando...' : 'Salvar (Alt+S)'}</button>
+                {!isEditMode && <button type="button" className="btn-secondary" onClick={(e) => handleSubmit(e, true)} disabled={loading} data-label="Salvar e abrir formulário limpo"><PlusCircle size={18} /> Salvar e Novo</button>}
+                <button id="btn-submit-form" type="submit" className="action-btn-primary" disabled={loading} data-label="Finalizar e voltar"><Save size={18} />{loading ? 'Salvando...' : 'Salvar (Alt+S)'}</button>
               </div>
             </form>
           )}
