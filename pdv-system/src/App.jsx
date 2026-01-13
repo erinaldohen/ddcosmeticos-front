@@ -7,6 +7,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import MainLayout from './components/Layout/MainLayout';
 
 // Páginas
+import Auditoria from './pages/Auditoria/Auditoria';
 import Dashboard from './pages/Dashboard/Dashboard';
 import ProdutoList from './pages/Produtos/ProdutoList';
 import ProdutoForm from './pages/Produtos/ProdutoForm';
@@ -28,7 +29,11 @@ function App() {
         {/* Rota Raiz Redireciona para Dashboard */}
         <Route path="/" element={<Navigate to="/dashboard" />} />
 
+
+
         {/* Rotas Protegidas com Layout Principal */}
+        <Route path="/auditoria" element={<PrivateRoute><MainLayout><Auditoria /></MainLayout></PrivateRoute>} />
+
         <Route
           path="/dashboard"
           element={

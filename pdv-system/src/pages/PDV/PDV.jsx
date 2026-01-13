@@ -2,71 +2,224 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search, Trash2, ShoppingCart, CreditCard, Banknote,
   User, ChevronRight, X, Plus, Minus, PauseCircle,
-  PlayCircle, Receipt, Smartphone, AlertCircle, CheckCircle2,
-  PackageSearch, Wallet
+  PlayCircle, Receipt, Smartphone, AlertCircle,
+  PackageSearch, Wallet, ArrowRight,
+  Info, Percent, MonitorCheck, History, RefreshCw
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
 import './PDV.css';
 
 const PDV = () => {
-  // --- ESTADOS PRINCIPAIS ---
+  // --- ESTADOS ---
   const [carrinho, setCarrinho] = useState([]);
   const [vendasPausadas, setVendasPausadas] = useState([]);
   const [busca, setBusca] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // Loading geral
+  const [calculandoImposto, setCalculandoImposto] = useState(false); // Loading específico fiscal
+  const [ultimoItemAdicionadoId, setUltimoItemAdicionadoId] = useState(null);
 
-  // --- ESTADOS DE PAGAMENTO ---
+  // Dados Fiscais Reais (Vindos do Backend)
+  const [fiscalData, setFiscalData] = useState({
+    valorTotalVenda: 0,
+    totalIbs: 0,
+    totalCbs: 0,
+    totalIs: 0,
+    totalLiquido: 0,
+    aliquotaEfetivaPorcentagem: 0
+  });
+
+  // Sugestões e Pagamento
+  const [sugestoesProdutos, setSugestoesProdutos] = useState([]);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
   const [modalPagamento, setModalPagamento] = useState(false);
   const [pagamentos, setPagamentos] = useState([]);
   const [metodoAtual, setMetodoAtual] = useState('PIX');
-  const [valorInput, setValorInput] = useState('');
+  const [valorInputRaw, setValorInputRaw] = useState('');
+  const [descontoRaw, setDescontoRaw] = useState('');
   const [cliente, setCliente] = useState(null);
   const [buscaCliente, setBuscaCliente] = useState('');
   const [sugestoesClientes, setSugestoesClientes] = useState([]);
 
   const inputBuscaRef = useRef(null);
   const inputValorRef = useRef(null);
+  const dropdownRef = useRef(null);
 
-  // --- CÁLCULOS ---
-  const totalVenda = carrinho.reduce((acc, item) => acc + (item.precoVenda * item.quantidade), 0);
+  // --- CÁLCULOS TOTAIS BÁSICOS ---
+  const totalItens = carrinho.reduce((acc, item) => acc + (item.precoVenda * item.quantidade), 0);
+  const valorDesconto = descontoRaw ? parseInt(descontoRaw, 10) / 100 : 0;
+  const totalComDesconto = Math.max(0, totalItens - valorDesconto);
   const totalPago = pagamentos.reduce((acc, p) => acc + p.valor, 0);
-  const saldoDevedor = Math.max(0, totalVenda - totalPago);
-  const troco = Math.max(0, totalPago - totalVenda);
+  const saldoDevedor = Math.max(0, totalComDesconto - totalPago);
+  const troco = Math.max(0, totalPago - totalComDesconto);
 
-  // --- ATALHOS DE TECLADO ---
-  const handleKeyDown = useCallback((e) => {
+  // --- INTEGRAÇÃO FISCAL (CÉREBRO NO BACKEND) ---
+  useEffect(() => {
+    // Se carrinho vazio, reseta
+    if (carrinho.length === 0) {
+      setFiscalData({
+        valorTotalVenda: 0, totalIbs: 0, totalCbs: 0, totalIs: 0, totalLiquido: 0, aliquotaEfetivaPorcentagem: 0
+      });
+      return;
+    }
+
+    // Debounce para não chamar a API a cada clique frenético no "+"
+    const timer = setTimeout(async () => {
+      setCalculandoImposto(true);
+      try {
+        // Mapeia para o formato que o TributacaoController espera (Lista de ItemSplitRequest ou similar)
+        const payload = carrinho.map(item => ({
+          idProduto: item.id,
+          quantidade: item.quantidade
+        }));
+
+        const res = await api.post('/v1/tributacao/simular-carrinho', payload);
+        setFiscalData(res.data);
+      } catch (error) {
+        console.error("Erro ao calcular impostos reais:", error);
+        // Fallback silencioso ou aviso sutil
+      } finally {
+        setCalculandoImposto(false);
+      }
+    }, 600); // 600ms de espera
+
+    return () => clearTimeout(timer);
+  }, [carrinho]);
+
+  // Valores para o Gráfico (Convertendo do DTO do Backend para o Visual)
+  const valFed = fiscalData.totalCbs + fiscalData.totalIs; // Federal = CBS + Seletivo
+  const valEst = fiscalData.totalIbs; // Estadual/Municipal = IBS (Simplificado na visualização)
+  const valLiq = fiscalData.totalLiquido;
+
+  // Percentuais para a barra (Evita divisão por zero)
+  const totalFiscal = fiscalData.valorTotalVenda || 1;
+  const pctFed = (valFed / totalFiscal) * 100;
+  const pctEst = (valEst / totalFiscal) * 100;
+  const pctLiq = (valLiq / totalFiscal) * 100;
+
+  // --- EFEITOS DE UI ---
+  useEffect(() => {
+    const manterFoco = setInterval(() => {
+       if (!modalPagamento && document.activeElement !== inputBuscaRef.current && !buscaCliente && sugestoesProdutos.length === 0) {
+           inputBuscaRef.current?.focus();
+       }
+    }, 3000);
+    return () => clearInterval(manterFoco);
+  }, [modalPagamento, buscaCliente, sugestoesProdutos]);
+
+  // --- ATALHOS GLOBAIS ---
+  const handleKeyDownGlobal = useCallback((e) => {
     if (e.key === 'F1') { e.preventDefault(); inputBuscaRef.current?.focus(); }
     if (e.key === 'F2') { e.preventDefault(); pausarVenda(); }
     if (e.key === 'F5') { e.preventDefault(); if(carrinho.length > 0) setModalPagamento(true); }
-    if (e.key === 'Escape') { setModalPagamento(false); setSugestoesClientes([]); }
+    if (e.key === 'Escape') {
+      setModalPagamento(false);
+      setSugestoesClientes([]);
+      setSugestoesProdutos([]);
+      setSelectedIndex(-1);
+    }
   }, [carrinho]);
 
   useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
+    window.addEventListener('keydown', handleKeyDownGlobal);
+    return () => window.removeEventListener('keydown', handleKeyDownGlobal);
+  }, [handleKeyDownGlobal]);
 
   // --- LÓGICA DE PRODUTOS ---
-  const adicionarProduto = async (e) => {
+  const handleSearchKeyDown = (e) => {
+    if (sugestoesProdutos.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex(prev => (prev + 1) % sugestoesProdutos.length);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex(prev => (prev - 1 + sugestoesProdutos.length) % sugestoesProdutos.length);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (selectedIndex >= 0) adicionarProdutoPorObjeto(sugestoesProdutos[selectedIndex]);
+        else processarBuscaManual();
+      }
+    } else if (e.key === 'Enter') {
+        processarBuscaManual(e);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedIndex >= 0 && dropdownRef.current) {
+      const activeItem = dropdownRef.current.children[selectedIndex];
+      if (activeItem) activeItem.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedIndex]);
+
+  const handleBuscaChange = async (e) => {
+    const termo = e.target.value;
+    setBusca(termo);
+    setSelectedIndex(-1);
+
+    if (/^\d{7,14}$/.test(termo)) {
+      setSugestoesProdutos([]);
+      return;
+    }
+
+    if (termo.length > 2) {
+      try {
+        const res = await api.get(`/produtos`, { params: { termo, size: 6 } });
+        setSugestoesProdutos(res.data.content || []);
+      } catch (err) { console.error(err); }
+    } else {
+      setSugestoesProdutos([]);
+    }
+  };
+
+  const adicionarProdutoPorObjeto = (prod) => {
+    const itemExistente = carrinho.find(i => i.id === prod.id);
+    const qtdFutura = (itemExistente ? itemExistente.quantidade : 0) + 1;
+
+    if (qtdFutura > prod.quantidadeEmEstoque) {
+      toast.warn(`Estoque Baixo: ${prod.quantidadeEmEstoque} un.`);
+      // Chama auditoria no backend (POST criado anteriormente)
+      api.post('/auditoria', {
+        acao: 'VENDA_SEM_ESTOQUE',
+        detalhes: `ID ${prod.id} - ${prod.descricao}`,
+        usuario: 'Operador Caixa',
+        dataHora: new Date()
+      }).catch(err => console.log("Falha ao auditar", err));
+    }
+
+    setCarrinho(prev => {
+      if (itemExistente) return prev.map(item => item.id === prod.id ? { ...item, quantidade: item.quantidade + 1 } : item);
+      return [...prev, { ...prod, quantidade: 1 }];
+    });
+
+    setUltimoItemAdicionadoId(prod.id);
+    setTimeout(() => setUltimoItemAdicionadoId(null), 800);
+    setBusca('');
+    setSugestoesProdutos([]);
+    setSelectedIndex(-1);
+    inputBuscaRef.current?.focus();
+  };
+
+  const processarBuscaManual = async (e) => {
     if (e) e.preventDefault();
     if (!busca) return;
+
+    if (sugestoesProdutos.length > 0 && selectedIndex === -1) {
+        adicionarProdutoPorObjeto(sugestoesProdutos[0]);
+        return;
+    }
+
     try {
       setLoading(true);
-      const res = await api.get(`/produtos/busca?termo=${busca}`);
-      const prod = res.data;
+      const res = await api.get(`/produtos`, { params: { termo: busca, size: 1 } });
+      const prod = res.data.content?.[0];
 
-      setCarrinho(prev => {
-        const existe = prev.find(item => item.id === prod.id);
-        if (existe) {
-          return prev.map(item => item.id === prod.id ? { ...item, quantidade: item.quantidade + 1 } : item);
-        }
-        return [...prev, { ...prod, quantidade: 1 }];
-      });
-      setBusca('');
-      toast.success(`${prod.descricao} adicionado`, { autoClose: 800, hideProgressBar: true });
+      if (!prod) {
+        toast.warning("Produto não encontrado!");
+        return;
+      }
+      adicionarProdutoPorObjeto(prod);
     } catch (err) {
-      toast.error("Produto não encontrado");
+      toast.error("Erro ao buscar");
     } finally { setLoading(false); }
   };
 
@@ -76,65 +229,153 @@ const PDV = () => {
     ));
   };
 
-  // --- LÓGICA DE VENDAS PAUSADAS ---
-  const pausarVenda = () => {
-    if (carrinho.length === 0) return;
-    const novaPausa = { id: Date.now(), itens: carrinho, total: totalVenda, hora: new Date().toLocaleTimeString() };
-    setVendasPausadas([...vendasPausadas, novaPausa]);
-    setCarrinho([]);
-    toast.info("Venda pausada e salva temporariamente");
+  const removerItem = (id) => {
+    setCarrinho(prev => prev.filter(item => item.id !== id));
   };
+
+  const pausarVenda = async () => {
+    if (carrinho.length === 0) return;
+    try {
+        const payload = {
+            itens: carrinho.map(i => ({ produtoId: i.id, quantidade: i.quantidade, precoUnitario: i.precoVenda })),
+            ehOrcamento: true,
+            descontoTotal: 0
+        };
+        await api.post('/vendas/suspender', payload);
+        toast.info("Venda pausada!");
+        setCarrinho([]);
+        carregarVendasSuspensas();
+    } catch (error) { toast.error("Erro ao pausar"); }
+  };
+
+  const carregarVendasSuspensas = async () => {
+      try {
+          const res = await api.get('/vendas/suspensas');
+          setVendasPausadas(res.data);
+      } catch (error) {}
+  };
+
+  useEffect(() => { carregarVendasSuspensas(); }, []);
 
   const retomarVenda = (venda) => {
-    if (carrinho.length > 0) return toast.warning("Conclua ou pause a venda atual primeiro");
-    setCarrinho(venda.itens);
-    setVendasPausadas(vendasPausadas.filter(v => v.id !== venda.id));
+    if (carrinho.length > 0) return toast.warning("Finalize a venda atual.");
+    const itensRec = venda.itens.map(i => ({
+        id: i.produtoId || i.id,
+        descricao: i.produtoNome || "Item Recuperado",
+        precoVenda: i.precoUnitario,
+        quantidade: i.quantidade,
+        codigoBarras: i.codigoBarras || ''
+    }));
+    setCarrinho(itensRec);
+    setVendasPausadas(prev => prev.filter(v => v.idVenda !== venda.idVenda));
   };
 
-  // --- LÓGICA DE PAGAMENTO ---
+  // --- PAGAMENTO ---
+  const formatCurrencyInput = (value) => value.replace(/\D/g, "");
+
+  const getValorFormatado = (raw) => {
+    if (!raw) return "";
+    return (parseInt(raw, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  };
+
   const handleAdicionarPagamento = () => {
-    const valor = parseFloat(valorInput.replace(',', '.'));
-    if (!valor || valor <= 0) return toast.error("Informe um valor válido");
-    if (metodoAtual === 'CREDIARIO' && !cliente) return toast.warning("Selecione um cliente para o crediário");
+    const valor = parseInt(valorInputRaw || '0', 10) / 100;
+    if (valor <= 0) return toast.error("Valor inválido");
+
+    if (metodoAtual === 'CREDIARIO') {
+        if (!cliente) return toast.warning("Identifique o cliente!");
+        if (valor > (cliente.limiteCredito || 0)) return toast.error("Limite excedido!");
+    }
 
     setPagamentos([...pagamentos, { id: Date.now(), tipo: metodoAtual, valor, clienteNome: cliente?.nome }]);
-    setValorInput('');
+    setValorInputRaw('');
+    setTimeout(() => inputValorRef.current?.focus(), 50);
+  };
+
+  const finalizarVenda = async () => {
+      if (saldoDevedor > 0.01) return toast.error("Falta receber!");
+
+      try {
+          const metodoPrinc = pagamentos.sort((a,b) => b.valor - a.valor)[0]?.tipo || 'DINHEIRO';
+          let docLimpo = null;
+          if (cliente && (cliente.cpf || cliente.cnpj)) {
+             docLimpo = (cliente.cpf || cliente.cnpj).replace(/\D/g, '');
+          }
+
+          const payload = {
+              clienteDocumento: docLimpo,
+              clienteNome: cliente?.nome || "Consumidor Final",
+              formaDePagamento: metodoPrinc,
+              pagamentosDetalhados: pagamentos.map(p => ({ tipo: p.tipo, valor: p.valor })),
+              itens: carrinho.map(i => ({ produtoId: i.id, quantidade: i.quantidade, precoUnitario: i.precoVenda })),
+              descontoTotal: valorDesconto,
+              ehOrcamento: false,
+              quantidadeParcelas: 1
+          };
+
+          const res = await api.post('/vendas', payload);
+          toast.success(`Venda #${res.data.idVenda || ''} OK!`);
+          setCarrinho([]); setPagamentos([]); setCliente(null); setDescontoRaw(''); setModalPagamento(false);
+          // Limpa dados fiscais
+          setFiscalData({ valorTotalVenda: 0, totalIbs: 0, totalCbs: 0, totalIs: 0, totalLiquido: 0, aliquotaEfetivaPorcentagem: 0 });
+      } catch (error) {
+          toast.error("Erro: " + (error.response?.data?.message || "Falha"));
+      }
   };
 
   const buscarClientes = async (val) => {
     setBuscaCliente(val);
     if (val.length > 2) {
       try {
-        const res = await api.get(`/clientes/busca?termo=${val}`);
-        setSugestoesClientes(res.data);
-      } catch (err) { console.error(err); }
+        const res = await api.get(`/clientes`, { params: { termo: val } });
+        setSugestoesClientes(res.data.content || []);
+      } catch (err) {}
     } else setSugestoesClientes([]);
   };
 
   return (
     <div className="pdv-container fade-in">
-      {/* --- COLUNA ESQUERDA: OPERAÇÃO --- */}
       <div className="pdv-left">
         <header className="pdv-header-main">
-          <div className="search-wrapper">
-            <Search size={22} className="icon-search" />
-            <form onSubmit={adicionarProduto}>
-              <input
-                ref={inputBuscaRef}
-                type="text"
-                placeholder="Escaneie o código ou digite o nome (F1)"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-              />
-            </form>
-          </div>
+
+          <form className="search-wrapper" onSubmit={processarBuscaManual}>
+            <div className="icon-box-left"><Search size={20} /></div>
+            <input
+              ref={inputBuscaRef}
+              type="text"
+              placeholder="Digite o nome ou bipe o código (F1)"
+              value={busca}
+              onChange={handleBuscaChange}
+              onKeyDown={handleSearchKeyDown}
+              autoFocus
+              autoComplete="off"
+            />
+            <button type="submit" className="btn-search-go" data-label="Adicionar (Enter)">
+               <ArrowRight size={20} strokeWidth={3} />
+            </button>
+
+            {sugestoesProdutos.length > 0 && (
+              <div className="pdv-dropdown-products" ref={dropdownRef}>
+                {sugestoesProdutos.map((prod, idx) => (
+                  <div key={prod.id} className={`dropdown-item ${idx === selectedIndex ? 'active' : ''}`} onClick={() => adicionarProdutoPorObjeto(prod)}>
+                    <div className="dd-info">
+                      <span className="dd-name">{prod.descricao}</span>
+                      <small className="dd-meta">{prod.codigoBarras || 'S/GTIN'} | Estoque: {prod.quantidadeEmEstoque}</small>
+                    </div>
+                    <strong className="dd-price">R$ {prod.precoVenda.toFixed(2)}</strong>
+                  </div>
+                ))}
+              </div>
+            )}
+          </form>
+
           <div className="header-actions">
-             <button className="btn-action-soft" onClick={pausarVenda} data-label="Pausar Venda (F2)">
-               <PauseCircle size={24} />
+             <button type="button" className="btn-action-soft" onClick={pausarVenda} data-label="Pausar Venda (F2)">
+               <PauseCircle size={26} color="#475569" strokeWidth={2} />
              </button>
              {vendasPausadas.length > 0 && (
-               <div className="paused-vendas-pill">
-                  <AlertCircle size={16} /> {vendasPausadas.length} em espera
+               <div className="paused-vendas-pill pulse-animation">
+                  <AlertCircle size={16} /> {vendasPausadas.length}
                </div>
              )}
           </div>
@@ -144,33 +385,33 @@ const PDV = () => {
           <table className="cart-table">
             <thead>
               <tr>
-                <th width="50%">Descrição do Produto</th>
-                <th>Preço Un.</th>
+                <th width="50%">Produto</th>
+                <th>Preço</th>
                 <th>Qtd.</th>
-                <th className="text-right">Subtotal</th>
+                <th className="text-right">Total</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {carrinho.map(item => (
-                <tr key={item.id} className="row-item">
+                <tr key={item.id} className={`row-item ${ultimoItemAdicionadoId === item.id ? 'flash-highlight' : ''}`}>
                   <td>
                     <div className="prod-name-box">
                       <span className="prod-name">{item.descricao}</span>
-                      <small className="prod-ean">{item.codigoBarras}</small>
+                      <small className="prod-ean">{item.codigoBarras || 'S/GTIN'}</small>
                     </div>
                   </td>
                   <td className="font-mono">R$ {item.precoVenda.toFixed(2)}</td>
                   <td>
                     <div className="qty-control">
-                      <button onClick={() => atualizarQtd(item.id, -1)}><Minus size={14}/></button>
+                      <button onClick={() => atualizarQtd(item.id, -1)} tabIndex="-1"><Minus size={14}/></button>
                       <span className="qty-val">{item.quantidade}</span>
-                      <button onClick={() => atualizarQtd(item.id, 1)}><Plus size={14}/></button>
+                      <button onClick={() => atualizarQtd(item.id, 1)} tabIndex="-1"><Plus size={14}/></button>
                     </div>
                   </td>
                   <td className="text-right font-bold">R$ {(item.precoVenda * item.quantidade).toFixed(2)}</td>
                   <td className="text-right">
-                    <button className="btn-del" onClick={() => setCarrinho(carrinho.filter(i => i.id !== item.id))}>
+                    <button className="btn-del" onClick={() => removerItem(item.id)} tabIndex="-1">
                       <Trash2 size={18} />
                     </button>
                   </td>
@@ -178,18 +419,28 @@ const PDV = () => {
               ))}
             </tbody>
           </table>
+
           {carrinho.length === 0 && (
-            <div className="empty-state-pdv">
-              <PackageSearch size={80} strokeWidth={1} />
-              <h3>Caixa Livre</h3>
-              <p>Pronto para uma nova venda...</p>
+            <div className="empty-state-modern">
+              <div className="hero-icon">
+                <MonitorCheck size={64} strokeWidth={1} />
+              </div>
+              <h2>Caixa Aberto</h2>
+              <p>Terminal pronto para operação.</p>
+
+              <div className="shortcuts-hint">
+                <div className="hint-item"><kbd>F1</kbd> Buscar</div>
+                <div className="hint-item"><kbd>F2</kbd> Pausar</div>
+                <div className="hint-item"><kbd>F5</kbd> Pagar</div>
+              </div>
 
               {vendasPausadas.length > 0 && (
-                <div className="paused-list">
+                <div className="paused-list-modern">
+                   <h4><History size={16}/> Vendas em Espera</h4>
                    {vendasPausadas.map(v => (
-                     <div key={v.id} className="paused-card" onClick={() => retomarVenda(v)}>
+                     <div key={v.id || Math.random()} className="paused-card" onClick={() => retomarVenda(v)}>
                         <PlayCircle size={18} />
-                        <span>{v.hora} - R$ {v.total.toFixed(2)}</span>
+                        <span>R$ {v.total?.toFixed(2)} <small>• {v.hora}</small></span>
                      </div>
                    ))}
                 </div>
@@ -199,151 +450,184 @@ const PDV = () => {
         </main>
       </div>
 
-      {/* --- COLUNA DIREITA: FINANCEIRO --- */}
       <aside className="pdv-right">
         <div className="summary-box">
-          <div className="summary-item">
-            <label>Itens no Carrinho</label>
-            <span>{carrinho.reduce((a, b) => a + b.quantidade, 0)} un</span>
+          <div className="summary-item large-qty">
+            <label>ITENS</label>
+            <span>{carrinho.reduce((a, b) => a + b.quantidade, 0)}</span>
           </div>
+          <div className="summary-divider"></div>
           <div className="summary-total">
-            <label>Total a Pagar</label>
-            <h1>R$ {totalVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h1>
+            <label>TOTAL A PAGAR</label>
+            <h1>R$ {totalItens.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h1>
           </div>
         </div>
 
+        {/* COMPONENTE FISCAL CONECTADO AO BACKEND */}
         <div className="fiscal-info-pdv">
-           <div className="fiscal-row">
-             <span>IBS/CBS Est. (Split LC 214)</span>
-             <strong>R$ {(totalVenda * 0.26).toFixed(2)}</strong>
+           <div className="fiscal-header">
+             <Info size={14} />
+             {calculandoImposto ? 'Calculando Tributos...' : 'Carga Tributária (LC 214)'}
+             {calculandoImposto && <RefreshCw className="spin" size={12}/>}
            </div>
-           <p className="fiscal-notice">Operação em conformidade com a Reforma Tributária</p>
+
+           <div className="fiscal-bar-wrapper">
+              <div
+                className="fiscal-segment fed"
+                style={{width: `${pctFed}%`}}
+                data-label={`Federal (CBS+IS): R$ ${valFed.toFixed(2)} (${pctFed.toFixed(1)}%)`}
+              ></div>
+              <div
+                className="fiscal-segment est"
+                style={{width: `${pctEst}%`}}
+                data-label={`Estadual (IBS): R$ ${valEst.toFixed(2)} (${pctEst.toFixed(1)}%)`}
+              ></div>
+              <div
+                className="fiscal-segment liq"
+                style={{width: `${pctLiq}%`}}
+                data-label={`Receita Líquida: R$ ${valLiq.toFixed(2)} (${pctLiq.toFixed(1)}%)`}
+              ></div>
+           </div>
+
+           <div className="fiscal-legend-grid">
+              <div className="legend-item"><span className="dot fed"></span> CBS+IS: {pctFed.toFixed(1)}%</div>
+              <div className="legend-item"><span className="dot est"></span> IBS: {pctEst.toFixed(1)}%</div>
+              <div className="legend-item"><span className="dot liq"></span> Liq: {pctLiq.toFixed(1)}%</div>
+           </div>
         </div>
 
         <button
           className="btn-checkout"
           disabled={carrinho.length === 0}
           onClick={() => setModalPagamento(true)}
+          data-label="Pagamento (F5)"
         >
           <Wallet size={24} />
-          <span>FECHAR VENDA (F5)</span>
+          <span>FECHAR VENDA</span>
           <ChevronRight size={24} />
         </button>
       </aside>
 
-      {/* --- MODAL DE PAGAMENTO --- */}
+      {/* MODAL PAGAMENTO (Mantido igual) */}
       {modalPagamento && (
         <div className="payment-overlay">
-          <div className="payment-modal">
-            <header className="payment-header">
-              <h2><Receipt /> Finalização de Venda</h2>
-              <button className="close-modal" onClick={() => setModalPagamento(false)}><X /></button>
-            </header>
+          <div className="payment-modal modern">
+            <div className="payment-modal-body">
 
-            <div className="payment-content">
-              <div className="metodos-grid">
-                {[
-                  { id: 'PIX', icon: <Smartphone />, label: 'Pix' },
-                  { id: 'DINHEIRO', icon: <Banknote />, label: 'Dinheiro' },
-                  { id: 'CREDITO', icon: <CreditCard />, label: 'Crédito' },
-                  { id: 'DEBITO', icon: <CreditCard />, label: 'Débito' },
-                  { id: 'CREDIARIO', icon: <User />, label: 'Crediário' }
-                ].map(m => (
-                  <button
-                    key={m.id}
-                    className={`method-btn ${metodoAtual === m.id ? 'active' : ''}`}
-                    onClick={() => setMetodoAtual(m.id)}
-                  >
-                    {m.icon}
-                    <span>{m.label}</span>
-                  </button>
-                ))}
+              <div className="pm-methods">
+                <h3>Método</h3>
+                <div className="pm-grid">
+                  {['PIX', 'DINHEIRO', 'CREDITO', 'DEBITO', 'CREDIARIO'].map(m => (
+                    <button
+                      key={m}
+                      className={`pm-card ${metodoAtual === m ? 'active' : ''}`}
+                      onClick={() => { setMetodoAtual(m); setTimeout(()=>inputValorRef.current?.focus(), 50); }}
+                    >
+                      {m === 'PIX' && <Smartphone size={20}/>}
+                      {m === 'DINHEIRO' && <Banknote size={20}/>}
+                      {(m === 'CREDITO' || m === 'DEBITO') && <CreditCard size={20}/>}
+                      {m === 'CREDIARIO' && <User size={20}/>}
+                      <span>{m}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="payment-inputs">
-                {metodoAtual === 'CREDIARIO' && (
-                  <div className="crediario-area">
-                    <div className="client-search">
-                      <input
-                        type="text"
-                        placeholder="Nome ou CPF do Cliente..."
-                        value={buscaCliente}
-                        onChange={(e) => buscarClientes(e.target.value)}
-                      />
-                      {sugestoesClientes.length > 0 && (
-                        <div className="client-dropdown">
-                          {sugestoesClientes.map(c => (
-                            <div key={c.id} className="client-item" onClick={() => { setCliente(c); setSugestoesClientes([]); setBuscaCliente(''); }}>
-                              <span>{c.nome}</span>
-                              <small>{c.cpf}</small>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {cliente && (
-                      <div className="client-card-premium">
-                        <div className="card-chip"></div>
-                        <span className="card-holder">{cliente.nome}</span>
-                        <div className="card-limit">
-                          <label>Crédito Disponível</label>
-                          <span>R$ {(cliente.limiteCredito - (cliente.saldoDevedor || 0)).toFixed(2)}</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+              <div className="pm-inputs">
+                <h3>Valores</h3>
 
-                <div className="input-valor-group">
-                  <label>Valor a Receber</label>
-                  <div className="input-currency">
-                    <span>R$</span>
+                <div className="input-group-modern">
+                  <label>Desconto (R$)</label>
+                  <div className="input-with-icon discount">
+                    <Percent size={18} />
+                    <input
+                      type="text"
+                      placeholder="0,00"
+                      value={getValorFormatado(descontoRaw)}
+                      onChange={(e) => setDescontoRaw(formatCurrencyInput(e.target.value))}
+                    />
+                  </div>
+                </div>
+
+                <div className="input-group-modern">
+                  <label>Valor Recebido (R$)</label>
+                  <div className="input-with-icon primary">
+                    <Plus size={20} />
                     <input
                       ref={inputValorRef}
                       type="text"
                       placeholder="0,00"
-                      value={valorInput}
-                      onChange={(e) => setValorInput(e.target.value)}
+                      value={getValorFormatado(valorInputRaw)}
+                      onChange={(e) => setValorInputRaw(formatCurrencyInput(e.target.value))}
                       onKeyDown={(e) => e.key === 'Enter' && handleAdicionarPagamento()}
                       autoFocus
                     />
-                    <button className="btn-add-pay" onClick={handleAdicionarPagamento}>OK</button>
                   </div>
+                  <button className="btn-add-modern" onClick={handleAdicionarPagamento}>
+                    LANÇAR
+                  </button>
                 </div>
 
-                <div className="payments-list">
+                <div className="pm-log">
                   {pagamentos.map(p => (
-                    <div key={p.id} className="pay-row">
-                      <span className="pay-type">{p.tipo} {p.clienteNome && `(${p.clienteNome})`}</span>
-                      <span className="pay-val">R$ {p.valor.toFixed(2)}</span>
+                    <div key={p.id} className="log-row">
+                      <span>{p.tipo}</span>
+                      <strong>R$ {p.valor.toFixed(2)}</strong>
                       <button onClick={() => setPagamentos(pagamentos.filter(i => i.id !== p.id))}><X size={14}/></button>
                     </div>
                   ))}
                 </div>
               </div>
-            </div>
 
-            <footer className="payment-footer">
-               <div className="totals-pay">
-                  <div className="total-pay-item">
-                    <label>Faltando</label>
-                    <span className={saldoDevedor > 0 ? 'text-red' : ''}>R$ {saldoDevedor.toFixed(2)}</span>
-                  </div>
-                  {troco > 0 && (
-                    <div className="total-pay-item">
-                      <label>Troco</label>
-                      <span className="text-green">R$ {troco.toFixed(2)}</span>
-                    </div>
-                  )}
-               </div>
-               <button
-                className="btn-confirm-sale"
-                disabled={saldoDevedor > 0}
-                onClick={() => { toast.success("Venda finalizada!"); window.location.reload(); }}
-               >
-                 CONCLUIR E IMPRIMIR CUPOM
-               </button>
-            </footer>
+              <div className="pm-summary dark-theme">
+                 <button className="close-btn-absolute" onClick={() => setModalPagamento(false)}><X /></button>
+
+                 <div className="summary-rows">
+                   <div className="s-row sub">
+                      <span>Subtotal</span>
+                      <span>R$ {totalItens.toFixed(2)}</span>
+                   </div>
+                   {valorDesconto > 0 && (
+                     <div className="s-row discount">
+                        <span>Desconto</span>
+                        <span>- R$ {valorDesconto.toFixed(2)}</span>
+                     </div>
+                   )}
+                   <div className="s-row total">
+                      <span>Total Final</span>
+                      <h1>R$ {totalComDesconto.toFixed(2)}</h1>
+                   </div>
+
+                   <div className="divider-dark"></div>
+
+                   <div className="s-row paid">
+                      <span>Pago</span>
+                      <span>R$ {totalPago.toFixed(2)}</span>
+                   </div>
+
+                   {saldoDevedor > 0.01 ? (
+                     <div className="s-status pending">
+                        <small>FALTA PAGAR</small>
+                        <strong>R$ {saldoDevedor.toFixed(2)}</strong>
+                     </div>
+                   ) : (
+                     <div className="s-status change">
+                        <small>TROCO</small>
+                        <strong>R$ {troco.toFixed(2)}</strong>
+                     </div>
+                   )}
+                 </div>
+
+                 <button
+                  className="btn-finish-modern"
+                  disabled={saldoDevedor > 0.01}
+                  onClick={finalizarVenda}
+                 >
+                   CONCLUIR VENDA
+                 </button>
+              </div>
+
+            </div>
           </div>
         </div>
       )}
