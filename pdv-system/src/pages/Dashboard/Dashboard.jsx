@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DollarSign, ShoppingBag, Smartphone, CreditCard, TrendingUp, ArrowRight } from 'lucide-react';
+import { DollarSign, ShoppingBag, Smartphone, CreditCard, TrendingUp } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import api from '../../services/api';
-import AlertasAuditoria from '../../components/Dashboard/AlertasAuditoria'; // <--- O componente que criamos antes
+import AlertasAuditoria from '../../components/Dashboard/AlertasAuditoria';
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  // Estado para controlar o momento exato de exibir o gráfico
+  const [isReady, setIsReady] = useState(false);
+
   const [resumo, setResumo] = useState({
     faturamentoTotal: 0,
     vendasDinheiro: 0,
@@ -17,13 +20,17 @@ const Dashboard = () => {
 
   useEffect(() => {
     carregarDadosDashboard();
+
+    // Espera 100ms para o CSS Grid se ajustar antes de tentar desenhar o gráfico
+    // Isso resolve o erro "width(-1)"
+    const timer = setTimeout(() => setIsReady(true), 100);
+    return () => clearTimeout(timer);
   }, []);
 
   const carregarDadosDashboard = async () => {
     try {
       const res = await api.get('/caixa/status');
-
-      if (res.status === 200 && res.data) {
+      if (res.data) {
         const c = res.data;
         setResumo({
           faturamentoTotal: (c.totalVendasDinheiro || 0) + (c.totalVendasPix || 0) + (c.totalVendasCartao || 0),
@@ -32,18 +39,15 @@ const Dashboard = () => {
           vendasCartao: c.totalVendasCartao || 0,
           caixaStatus: 'ABERTO'
         });
-      } else {
-        setResumo(prev => ({ ...prev, caixaStatus: 'FECHADO' }));
       }
     } catch (error) {
-      // Falha silenciosa ou caixa fechado (404/204)
-      setResumo(prev => ({ ...prev, caixaStatus: 'FECHADO' }));
+      // Loga o erro mas não quebra a tela
+      console.warn("Dashboard offline:", error.response?.status);
     }
   };
 
   const format = (val) => (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-  // Dados formatados para o gráfico (Recharts)
   const dadosGrafico = [
     { name: 'Dinheiro', valor: resumo.vendasDinheiro, color: '#10b981' },
     { name: 'PIX', valor: resumo.vendasPix, color: '#06b6d4' },
@@ -52,6 +56,7 @@ const Dashboard = () => {
 
   return (
     <div className="dashboard-container fade-in">
+      {/* HEADER E KPIS MANTIDOS IGUAIS ... */}
       <header className="page-header" style={{ marginBottom: '25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1>Resumo do Dia</h1>
@@ -64,110 +69,70 @@ const Dashboard = () => {
         </div>
       </header>
 
-      {/* 1. GRID DE KPIs (Indicadores) */}
+      {/* KPI GRID */}
       <div className="kpi-grid">
         <div className="kpi-card highlight">
-          <div className="kpi-header">
-            <label>Faturamento Total</label>
-            <ShoppingBag size={24} color="#2563eb" />
-          </div>
+          <div className="kpi-header"><label>Faturamento Total</label><ShoppingBag size={24} color="#2563eb" /></div>
           <strong>{format(resumo.faturamentoTotal)}</strong>
-          <small className="text-muted">Vendas consolidadas hoje</small>
         </div>
-
         <div className="kpi-card">
-          <div className="kpi-header">
-            <label>Dinheiro</label>
-            <DollarSign size={24} color="#10b981" />
-          </div>
+          <div className="kpi-header"><label>Dinheiro</label><DollarSign size={24} color="#10b981" /></div>
           <strong>{format(resumo.vendasDinheiro)}</strong>
-          <small className="text-success">Na gaveta</small>
         </div>
-
         <div className="kpi-card">
-          <div className="kpi-header">
-            <label>PIX</label>
-            <Smartphone size={24} color="#06b6d4" />
-          </div>
+          <div className="kpi-header"><label>PIX</label><Smartphone size={24} color="#06b6d4" /></div>
           <strong>{format(resumo.vendasPix)}</strong>
-          <small className="text-info">Conta Digital</small>
         </div>
-
         <div className="kpi-card">
-          <div className="kpi-header">
-            <label>Cartões</label>
-            <CreditCard size={24} color="#f59e0b" />
-          </div>
+          <div className="kpi-header"><label>Cartões</label><CreditCard size={24} color="#f59e0b" /></div>
           <strong>{format(resumo.vendasCartao)}</strong>
-          <small className="text-warning">A receber</small>
         </div>
       </div>
 
-
-
-      {/* 2. ÁREA PRINCIPAL (Gráfico + Alertas) */}
       <div className="dashboard-grid" style={{ marginTop: '25px', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
 
-        {/* COLUNA ESQUERDA: Gráfico e Ações */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-
-          {/* Gráfico de Composição */}
-          <div className="chart-card" style={{ height: '300px', padding: '20px' }}>
+          <div className="chart-card" style={{ padding: '20px' }}>
             <h3 style={{ marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <TrendingUp size={18} /> Composição da Receita
             </h3>
-            <ResponsiveContainer width="100%" height="85%">
-              <BarChart data={dadosGrafico} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" width={70} />
-                <Tooltip
-                   formatter={(value) => format(value)}
-                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                />
-                <Bar dataKey="valor" radius={[0, 4, 4, 0]} barSize={30}>
-                  {dadosGrafico.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+
+            {/* CORREÇÃO DO WIDTH/HEIGHT: Só renderiza quando isReady for true */}
+            <div style={{ width: '99%', height: '300px' }}>
+              {isReady && (
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dadosGrafico} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" hide />
+                    <YAxis dataKey="name" type="category" width={70} tick={{fontSize: 12}} />
+                    <Tooltip formatter={(value) => format(value)} cursor={{ fill: 'transparent' }} />
+                    <Bar dataKey="valor" radius={[0, 4, 4, 0]} barSize={30}>
+                        {dadosGrafico.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                    </Bar>
+                    </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
           </div>
 
-          {/* Atalhos Rápidos */}
           <div className="chart-card" style={{ padding: '20px' }}>
              <h3 style={{ marginBottom: '15px' }}>Acesso Rápido</h3>
-             <div style={{ display: 'flex', gap: '15px' }}>
-               <button
-                  className="btn-confirm success"
-                  onClick={() => navigate('/pdv')}
-                  style={{ flex: 1, justifyContent: 'center', padding: '12px' }}
-               >
-                 <ShoppingBag size={18} /> Ir para o PDV
+             <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+               <button className="btn-confirm success" onClick={() => navigate('/pdv')} style={{ flex: 1 }}>
+                 <ShoppingBag size={18} /> PDV
                </button>
-               <button
-                  className="btn-confirm"
-                  onClick={() => navigate('/caixa')}
-                  style={{ flex: 1, justifyContent: 'center', padding: '12px', background: '#2563eb' }}
-               >
-                 <DollarSign size={18} /> Gerir Caixa
-               </button>
-               <button
-                  className="btn-cancel"
-                  onClick={() => navigate('/produtos')}
-                  style={{ flex: 1, justifyContent: 'center', padding: '12px' }}
-               >
-                 <ArrowRight size={18} /> Ver Produtos
+               <button className="btn-confirm" onClick={() => navigate('/caixa')} style={{ flex: 1, background: '#2563eb' }}>
+                 <DollarSign size={18} /> Caixa
                </button>
              </div>
           </div>
         </div>
 
-        {/* COLUNA DIREITA: Alertas de Auditoria */}
-        <div>
+        <div style={{ minWidth: 0 }}>
           <AlertasAuditoria />
         </div>
-
       </div>
     </div>
   );
