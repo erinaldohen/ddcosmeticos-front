@@ -1,107 +1,92 @@
-/* src/components/Layout/MainLayout.css */
-
+/* Container que segura tudo */
 .layout-container {
   display: flex;
   height: 100vh;
   width: 100vw;
-  background-color: #F0F2F5; /* O mesmo cinza do Login */
-  font-family: 'Inter', sans-serif;
-  overflow: hidden;
+  background-color: #f8f9fa; /* Fundo claro padrão */
 }
 
-/* --- SIDEBAR (BRANCO SÓLIDO) --- */
-.sidebar {
-  width: 270px;
-  background-color: #FFFFFF;
-  border-right: 1px solid #E0E0E0; /* Separação sutil */
+/* Barra Lateral */
+.layout-sidebar {
+  width: 250px;
+  background-color: #fff;
+  border-right: 1px solid #ddd;
   display: flex;
   flex-direction: column;
-  padding: 24px;
-  z-index: 50;
-  transition: all 0.3s ease;
-}
-
-.brand-area {
-  margin-bottom: 40px;
-  padding: 0 10px;
-  text-align: center;
+  flex-shrink: 0;
 }
 
 .sidebar-logo {
-  width: 120px; /* Tamanho elegante */
-  height: auto;
-}
-
-/* MENU DE NAVEGAÇÃO */
-.nav-menu {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.nav-item {
+  height: 60px;
   display: flex;
   align-items: center;
-  padding: 14px 16px;
-  color: #666666; /* Cinza médio para itens normais */
-  font-weight: 500;
-  border-radius: 8px;
-  cursor: pointer;
+  padding-left: 20px;
+  font-weight: bold;
+  font-size: 1.2rem;
+  color: #333;
+  border-bottom: 1px solid #eee;
+}
+
+/* Menu Navegação */
+.sidebar-menu {
+  flex: 1;
+  padding: 20px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  overflow-y: auto;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 15px;
   text-decoration: none;
-  transition: all 0.2s;
-  font-size: 0.95rem;
+  color: #555;
+  border-radius: 6px;
+  transition: background 0.2s;
 }
 
-/* HOVER (Passar o mouse) */
-.nav-item:hover {
-  background-color: #FAFAFA;
-  color: #1A1A1A;
+.menu-item:hover {
+  background-color: #f0f0f0;
+  color: #000;
 }
 
-/* ATIVO (Onde o usuário está) */
-.nav-item.active {
-  background-color: #FEF2F8; /* Rosa bem clarinho de fundo */
-  color: #F22998; /* O Rosa da Marca no texto */
+.menu-item.active {
+  background-color: #e6f7ff; /* Azul bem claro */
+  color: #007bff; /* Azul padrão */
   font-weight: 600;
 }
 
-.nav-icon {
-  margin-right: 12px;
-  font-size: 1.1rem;
+/* Rodapé do Menu (Botão Sair) */
+.sidebar-footer {
+  padding: 15px;
+  border-top: 1px solid #eee;
+}
+
+.btn-logout {
+  width: 100%;
+  border: none;
+  background-color: transparent;
+  color: #dc3545; /* Vermelho */
+  padding: 10px;
   display: flex;
   align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  border-radius: 6px;
+  font-weight: bold;
 }
 
-/* BOTÃO DE SAIR (No final) */
-.nav-item.logout {
-  margin-top: auto; /* Empurra para o final da tela */
-  color: #DC2626; /* Vermelho suave */
-}
-.nav-item.logout:hover {
-  background-color: #FEF2F2;
+.btn-logout:hover {
+  background-color: #ffe6e6;
 }
 
-/* --- ÁREA PRINCIPAL --- */
-.main-content {
-  flex: 1; /* Ocupa o resto da tela */
-  padding: 32px 40px;
-  overflow-y: auto; /* Permite rolar se tiver muita coisa */
-}
-
-/* Responsividade para celular */
-@media (max-width: 768px) {
-  .sidebar {
-    position: fixed;
-    bottom: 0;
-    width: 100%;
-    height: 70px;
-    flex-direction: row;
-    justify-content: space-around;
-    padding: 10px;
-    border-right: none;
-    border-top: 1px solid #E0E0E0;
-  }
-  .brand-area { display: none; }
-  .nav-item span { display: none; } /* Só ícones */
-  .nav-item.logout { margin-top: 0; }
+/* Área Principal onde as páginas renderizam */
+.layout-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto; /* Permite scroll no conteúdo */
 }

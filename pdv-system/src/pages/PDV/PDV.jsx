@@ -3,30 +3,29 @@ import {
   Search, Trash2, ShoppingCart, CreditCard, Banknote,
   User, ChevronRight, X, Plus, Minus, PauseCircle,
   PlayCircle, Receipt, Smartphone, AlertCircle,
-  PackageSearch, Wallet, ArrowRight,
-  Info, Percent, MonitorCheck, History, RefreshCw
+  PackageSearch, Wallet, ArrowRight, ArrowLeft, // <--- Importado corretamente
+  Info, Percent, MonitorCheck, History, RefreshCw, UserCheck
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import caixaService from '../../services/caixaService';
 import './PDV.css';
 
 const PDV = () => {
+  const navigate = useNavigate();
+
   // --- ESTADOS ---
   const [carrinho, setCarrinho] = useState([]);
   const [vendasPausadas, setVendasPausadas] = useState([]);
   const [busca, setBusca] = useState('');
-  const [loading, setLoading] = useState(false); // Loading geral (usado para travar o botão de finalizar)
-  const [calculandoImposto, setCalculandoImposto] = useState(false); // Loading específico fiscal
+  const [loading, setLoading] = useState(false);
+  const [calculandoImposto, setCalculandoImposto] = useState(false);
   const [ultimoItemAdicionadoId, setUltimoItemAdicionadoId] = useState(null);
 
-  // Dados Fiscais Reais (Vindos do Backend)
+  // Dados Fiscais
   const [fiscalData, setFiscalData] = useState({
-    valorTotalVenda: 0,
-    totalIbs: 0,
-    totalCbs: 0,
-    totalIs: 0,
-    totalLiquido: 0,
-    aliquotaEfetivaPorcentagem: 0
+    valorTotalVenda: 0, totalIbs: 0, totalCbs: 0, totalIs: 0, totalLiquido: 0, aliquotaEfetivaPorcentagem: 0
   });
 
   // Sugestões e Pagamento
@@ -37,6 +36,8 @@ const PDV = () => {
   const [metodoAtual, setMetodoAtual] = useState('PIX');
   const [valorInputRaw, setValorInputRaw] = useState('');
   const [descontoRaw, setDescontoRaw] = useState('');
+
+  // Cliente
   const [cliente, setCliente] = useState(null);
   const [buscaCliente, setBuscaCliente] = useState('');
   const [sugestoesClientes, setSugestoesClientes] = useState([]);
@@ -44,6 +45,34 @@ const PDV = () => {
   const inputBuscaRef = useRef(null);
   const inputValorRef = useRef(null);
   const dropdownRef = useRef(null);
+
+  // --- 1. VERIFICAÇÃO DE STATUS DO CAIXA ---
+  useEffect(() => {
+    const verificarCaixa = async () => {
+      try {
+        const res = await caixaService.verificarStatus();
+
+        // Se retornar 204 (No Content) ou null, o caixa está fechado
+        if (res.status === 204 || !res.data) {
+          toast.warning("O Caixa está FECHADO. Abra o caixa para iniciar.");
+          navigate('/caixa');
+        }
+      } catch (error) {
+        console.error("Erro ao verificar caixa", error);
+
+        // Se der 401 (Unauthorized), sessão expirou
+        if (error.response?.status === 401) {
+            toast.error("Sessão expirada. Faça login novamente.");
+            localStorage.clear();
+            navigate('/login');
+        } else {
+            toast.error("Erro ao conectar com o caixa. Verifique se há um caixa aberto.");
+            navigate('/dashboard'); // Manda pro dashboard para evitar tela travada
+        }
+      }
+    };
+    verificarCaixa();
+  }, [navigate]);
 
   // --- CÁLCULOS TOTAIS BÁSICOS ---
   const totalItens = carrinho.reduce((acc, item) => acc + (item.precoVenda * item.quantidade), 0);
@@ -55,7 +84,6 @@ const PDV = () => {
 
   // --- INTEGRAÇÃO FISCAL (CÉREBRO NO BACKEND) ---
   useEffect(() => {
-    // Se carrinho vazio, reseta
     if (carrinho.length === 0) {
       setFiscalData({
         valorTotalVenda: 0, totalIbs: 0, totalCbs: 0, totalIs: 0, totalLiquido: 0, aliquotaEfetivaPorcentagem: 0
@@ -63,35 +91,29 @@ const PDV = () => {
       return;
     }
 
-    // Debounce para não chamar a API a cada clique frenético no "+"
     const timer = setTimeout(async () => {
       setCalculandoImposto(true);
       try {
-        // Mapeia para o formato que o TributacaoController espera (Lista de ItemSplitRequest ou similar)
         const payload = carrinho.map(item => ({
           idProduto: item.id,
           quantidade: item.quantidade
         }));
-
-        // CORREÇÃO: Removido o "/v1" hardcoded. O axios já tem a baseURL configurada.
         const res = await api.post('/tributacao/simular-carrinho', payload);
         setFiscalData(res.data);
       } catch (error) {
-        console.error("Erro ao calcular impostos reais:", error);
+        console.error("Erro ao calcular impostos:", error);
       } finally {
         setCalculandoImposto(false);
       }
-    }, 600); // 600ms de espera
+    }, 600);
 
     return () => clearTimeout(timer);
   }, [carrinho]);
 
-  // Valores para o Gráfico (Convertendo do DTO do Backend para o Visual)
-  const valFed = fiscalData.totalCbs + fiscalData.totalIs; // Federal = CBS + Seletivo
-  const valEst = fiscalData.totalIbs; // Estadual/Municipal = IBS (Simplificado na visualização)
+  // Valores para o Gráfico
+  const valFed = fiscalData.totalCbs + fiscalData.totalIs;
+  const valEst = fiscalData.totalIbs;
   const valLiq = fiscalData.totalLiquido;
-
-  // Percentuais para a barra (Evita divisão por zero)
   const totalFiscal = fiscalData.valorTotalVenda || 1;
   const pctFed = (valFed / totalFiscal) * 100;
   const pctEst = (valEst / totalFiscal) * 100;
@@ -165,7 +187,7 @@ const PDV = () => {
       try {
         const res = await api.get(`/produtos`, { params: { termo, size: 6 } });
         setSugestoesProdutos(res.data.content || []);
-      } catch (err) { console.error(err); }
+      } catch (err) { }
     } else {
       setSugestoesProdutos([]);
     }
@@ -177,13 +199,6 @@ const PDV = () => {
 
     if (qtdFutura > prod.quantidadeEmEstoque) {
       toast.warn(`Estoque Baixo: ${prod.quantidadeEmEstoque} un.`);
-      // Chama auditoria no backend
-      api.post('/auditoria', {
-        acao: 'VENDA_SEM_ESTOQUE',
-        detalhes: `ID ${prod.id} - ${prod.descricao}`,
-        usuario: 'Operador Caixa',
-        dataHora: new Date()
-      }).catch(err => console.log("Falha ao auditar", err));
     }
 
     setCarrinho(prev => {
@@ -270,6 +285,23 @@ const PDV = () => {
     setVendasPausadas(prev => prev.filter(v => v.idVenda !== venda.idVenda));
   };
 
+  // --- CLIENTES ---
+  const buscarClientes = async (val) => {
+    setBuscaCliente(val);
+    if (val.length > 2) {
+      try {
+        const res = await api.get(`/clientes`, { params: { termo: val } });
+        setSugestoesClientes(res.data.content || []);
+      } catch (err) {}
+    } else setSugestoesClientes([]);
+  };
+
+  const selecionarCliente = (cli) => {
+      setCliente(cli);
+      setBuscaCliente('');
+      setSugestoesClientes([]);
+  };
+
   // --- PAGAMENTO ---
   const formatCurrencyInput = (value) => value.replace(/\D/g, "");
 
@@ -294,8 +326,6 @@ const PDV = () => {
 
   const finalizarVenda = async () => {
       if (saldoDevedor > 0.01) return toast.error("Falta receber!");
-
-      // CORREÇÃO: Bloqueio contra duplo clique para evitar Erro 409
       if (loading) return;
       setLoading(true);
 
@@ -320,7 +350,6 @@ const PDV = () => {
           const res = await api.post('/vendas', payload);
           toast.success(`Venda #${res.data.idVenda || ''} OK!`);
 
-          // Limpeza apenas após sucesso
           setCarrinho([]);
           setPagamentos([]);
           setCliente(null);
@@ -329,41 +358,28 @@ const PDV = () => {
           setFiscalData({ valorTotalVenda: 0, totalIbs: 0, totalCbs: 0, totalIs: 0, totalLiquido: 0, aliquotaEfetivaPorcentagem: 0 });
 
       } catch (error) {
-                console.error("Erro detalhado:", error);
-
-                let msg = "Falha ao finalizar venda.";
-
-                // Tenta pegar a mensagem do Backend (GlobalExceptionHandler)
-                if (error.response?.data?.message) {
-                   msg = error.response.data.message;
-                }
-                // Se for erro de validação de campos (@Valid), pode vir um objeto
-                else if (error.response?.data && typeof error.response.data === 'object') {
-                   // Pega o primeiro valor do objeto de erro (ex: itens: "A quantidade deve ser maior que zero")
-                   const values = Object.values(error.response.data);
-                   if (values.length > 0) msg = values[0];
-                }
-
-                toast.error(msg);
-            } finally {
-                setLoading(false);
-            }
-  };
-
-  const buscarClientes = async (val) => {
-    setBuscaCliente(val);
-    if (val.length > 2) {
-      try {
-        const res = await api.get(`/clientes`, { params: { termo: val } });
-        setSugestoesClientes(res.data.content || []);
-      } catch (err) {}
-    } else setSugestoesClientes([]);
+           let msg = "Falha ao finalizar venda.";
+           if (error.response?.data?.message) msg = error.response.data.message;
+           toast.error(msg);
+      } finally {
+           setLoading(false);
+      }
   };
 
   return (
     <div className="pdv-container fade-in">
       <div className="pdv-left">
         <header className="pdv-header-main">
+
+          {/* BOTÃO VOLTAR */}
+          <button
+            className="btn-action-soft"
+            onClick={() => navigate('/dashboard')}
+            title="Voltar ao Menu"
+            style={{ marginRight: '10px' }}
+          >
+            <ArrowLeft size={24} />
+          </button>
 
           <form className="search-wrapper" onSubmit={processarBuscaManual}>
             <div className="icon-box-left"><Search size={20} /></div>
@@ -377,9 +393,7 @@ const PDV = () => {
               autoFocus
               autoComplete="off"
             />
-            <button type="submit" className="btn-search-go" data-label="Adicionar (Enter)">
-               <ArrowRight size={20} strokeWidth={3} />
-            </button>
+            <button type="submit" className="btn-search-go"><ArrowRight size={20} strokeWidth={3} /></button>
 
             {sugestoesProdutos.length > 0 && (
               <div className="pdv-dropdown-products" ref={dropdownRef}>
@@ -397,8 +411,8 @@ const PDV = () => {
           </form>
 
           <div className="header-actions">
-             <button type="button" className="btn-action-soft" onClick={pausarVenda} data-label="Pausar Venda (F2)">
-               <PauseCircle size={26} color="#475569" strokeWidth={2} />
+             <button type="button" className="btn-action-soft" onClick={pausarVenda} title="Pausar (F2)">
+               <PauseCircle size={26} color="#475569" />
              </button>
              {vendasPausadas.length > 0 && (
                <div className="paused-vendas-pill pulse-animation">
@@ -490,7 +504,7 @@ const PDV = () => {
           </div>
         </div>
 
-        {/* COMPONENTE FISCAL CONECTADO AO BACKEND */}
+        {/* --- LEGENDA FISCAL RESTAURADA --- */}
         <div className="fiscal-info-pdv">
            <div className="fiscal-header">
              <Info size={14} />
@@ -502,17 +516,17 @@ const PDV = () => {
               <div
                 className="fiscal-segment fed"
                 style={{width: `${pctFed}%`}}
-                data-label={`Federal (CBS+IS): R$ ${valFed.toFixed(2)} (${pctFed.toFixed(1)}%)`}
+                title={`Federal: R$ ${valFed.toFixed(2)}`}
               ></div>
               <div
                 className="fiscal-segment est"
                 style={{width: `${pctEst}%`}}
-                data-label={`Estadual (IBS): R$ ${valEst.toFixed(2)} (${pctEst.toFixed(1)}%)`}
+                title={`Estadual: R$ ${valEst.toFixed(2)}`}
               ></div>
               <div
                 className="fiscal-segment liq"
                 style={{width: `${pctLiq}%`}}
-                data-label={`Receita Líquida: R$ ${valLiq.toFixed(2)} (${pctLiq.toFixed(1)}%)`}
+                title={`Líquido: R$ ${valLiq.toFixed(2)}`}
               ></div>
            </div>
 
@@ -522,12 +536,13 @@ const PDV = () => {
               <div className="legend-item"><span className="dot liq"></span> Liq: {pctLiq.toFixed(1)}%</div>
            </div>
         </div>
+        {/* ----------------------------------- */}
 
         <button
           className="btn-checkout"
           disabled={carrinho.length === 0}
           onClick={() => setModalPagamento(true)}
-          data-label="Pagamento (F5)"
+          title="F5 para fechar"
         >
           <Wallet size={24} />
           <span>FECHAR VENDA</span>
@@ -535,7 +550,7 @@ const PDV = () => {
         </button>
       </aside>
 
-      {/* MODAL PAGAMENTO (Mantido igual) */}
+      {/* MODAL PAGAMENTO */}
       {modalPagamento && (
         <div className="payment-overlay">
           <div className="payment-modal modern">
@@ -562,6 +577,37 @@ const PDV = () => {
 
               <div className="pm-inputs">
                 <h3>Valores</h3>
+
+                {/* CAMPO DE CLIENTE (COM BUSCA) */}
+                <div className="input-group-modern">
+                    <label>Cliente (Opcional)</label>
+                    <div className="input-with-icon discount">
+                        <UserCheck size={18} />
+                        {cliente ? (
+                             <div className="cliente-selected" style={{display:'flex', justifyContent:'space-between', width:'100%', alignItems:'center'}}>
+                                 <span>{cliente.nome}</span>
+                                 <button onClick={() => setCliente(null)} style={{background:'none', border:'none', cursor:'pointer'}}><X size={14}/></button>
+                             </div>
+                        ) : (
+                            <input
+                                type="text"
+                                placeholder="Buscar Cliente..."
+                                value={buscaCliente}
+                                onChange={(e) => buscarClientes(e.target.value)}
+                            />
+                        )}
+                    </div>
+                    {/* LISTA SUSPENSA CLIENTES */}
+                    {sugestoesClientes.length > 0 && !cliente && (
+                        <div className="pdv-dropdown-products" style={{maxHeight: '150px', position:'relative'}}>
+                            {sugestoesClientes.map(c => (
+                                <div key={c.id} className="dropdown-item" onClick={() => selecionarCliente(c)}>
+                                    <div className="dd-info">{c.nome} <small>CPF: {c.cpf || c.cnpj}</small></div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
 
                 <div className="input-group-modern">
                   <label>Desconto (R$)</label>
@@ -647,7 +693,7 @@ const PDV = () => {
 
                  <button
                   className="btn-finish-modern"
-                  disabled={saldoDevedor > 0.01 || loading} // Desabilita se falta pagar OU se está processando
+                  disabled={saldoDevedor > 0.01 || loading}
                   onClick={finalizarVenda}
                  >
                    {loading ? 'PROCESSANDO...' : 'CONCLUIR VENDA'}

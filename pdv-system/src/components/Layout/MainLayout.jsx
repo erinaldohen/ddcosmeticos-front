@@ -1,61 +1,68 @@
 import React from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
-  Activity,
-  LayoutDashboard,
-  ShoppingCart,
-  Package,
-  Users,
-  Scale,
-  Settings,
-  LogOut
+  LayoutDashboard, ShoppingCart, DollarSign, Package,
+  FileText, ShieldCheck, LogOut, Menu
 } from 'lucide-react';
-import { useNavigate, useLocation } from 'react-router-dom';
 import './MainLayout.css';
 
 const MainLayout = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // --- FUNÇÃO DE LOGOUT ROBUSTA ---
+  const handleLogout = () => {
+    // 1. Limpa o armazenamento
+    localStorage.removeItem('token');
+    localStorage.removeItem('usuario');
+    localStorage.clear();
+
+    // 2. Força o recarregamento da página indo para o login
+    // Usar window.location.href é mais seguro que navigate() para logout
+    // pois limpa todos os estados de memória do React.
+    window.location.href = '/login';
+  };
+
   const menuItems = [
-    { name: 'Auditoria', path: '/auditoria', icon: <Activity size={20} /> },
-    { name: 'Visão Geral', path: '/dashboard', icon: <LayoutDashboard size={20} /> },
-    { name: 'Vendas (PDV)', path: '/pdv', icon: <ShoppingCart size={20} /> },
-    { name: 'Produtos', path: '/produtos', icon: <Package size={20} /> },
-    { name: 'Clientes', path: '/clientes', icon: <Users size={20} /> },
-    // --- NOVO ITEM FISCAL ---
-    { name: 'Painel Fiscal', path: '/fiscal/retencao', icon: <Scale size={20} /> },
-    // ------------------------
-    { name: 'Configurações', path: '/config', icon: <Settings size={20} /> },
+    { label: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard size={20} /> },
+    { label: 'PDV', path: '/pdv', icon: <ShoppingCart size={20} /> },
+    { label: 'Caixa', path: '/caixa', icon: <DollarSign size={20} /> },
+    { label: 'Produtos', path: '/produtos', icon: <Package size={20} /> },
+    { label: 'Fiscal', path: '/fiscal', icon: <FileText size={20} /> },
+    { label: 'Auditoria', path: '/auditoria', icon: <ShieldCheck size={20} /> },
   ];
 
   return (
     <div className="layout-container">
-      <aside className="sidebar">
-        <div className="brand-area">
-          <img src="/logo.png" alt="DD Logo" className="sidebar-logo" />
+      {/* MENU LATERAL */}
+      <aside className="layout-sidebar">
+        <div className="sidebar-logo">
+          <h3>DD Cosméticos</h3>
         </div>
 
-        <nav className="nav-menu" style={{height: '100%'}}>
+        <nav className="sidebar-menu">
           {menuItems.map((item) => (
-            <div
+            <Link
               key={item.path}
-              className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
-              onClick={() => navigate(item.path)}
+              to={item.path}
+              className={`menu-item ${location.pathname.startsWith(item.path) ? 'active' : ''}`}
             >
-              <span className="nav-icon">{item.icon}</span>
-              <span>{item.name}</span>
-            </div>
+              {item.icon}
+              <span className="menu-label">{item.label}</span>
+            </Link>
           ))}
-
-          {/* Botão Sair separado */}
-          <div className="nav-item logout" onClick={() => navigate('/')}>
-             <span className="nav-icon"><LogOut size={20} /></span>
-             <span>Sair do Sistema</span>
-          </div>
         </nav>
+
+        <div className="sidebar-footer">
+          <button onClick={handleLogout} className="btn-logout">
+            <LogOut size={20} />
+            <span>Sair</span>
+          </button>
+        </div>
       </aside>
 
-      <main className="main-content">
+      {/* ÁREA DE CONTEÚDO */}
+      <main className="layout-content">
         {children}
       </main>
     </div>

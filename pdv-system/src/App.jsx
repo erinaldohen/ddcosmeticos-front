@@ -7,17 +7,20 @@ import 'react-toastify/dist/ReactToastify.css';
 import MainLayout from './components/Layout/MainLayout';
 
 // Páginas
+import Login from './pages/Login/Login'; // <--- CERTIFIQUE-SE DE IMPORTAR O LOGIN AQUI
 import Auditoria from './pages/Auditoria/Auditoria';
 import Dashboard from './pages/Dashboard/Dashboard';
 import ProdutoList from './pages/Produtos/ProdutoList';
 import ProdutoForm from './pages/Produtos/ProdutoForm';
 import RelatorioImpostos from './pages/Fiscal/RelatorioImpostos';
-import PDV from './pages/PDV/PDV'; // Novo Import
+import PDV from './pages/PDV/PDV';
+import GerenciamentoCaixa from './pages/Caixa/GerenciamentoCaixa';
 
-// Simulação de Autenticação (Ajuste conforme seu backend)
+// Lógica de Proteção de Rota
 const PrivateRoute = ({ children }) => {
-  const isAuthenticated = true; // Altere para sua lógica real de login
-  return isAuthenticated ? children : <Navigate to="/login" />;
+  const token = localStorage.getItem('token');
+  // Se não tiver token, manda para Login. Se tiver, renderiza o componente.
+  return token ? children : <Navigate to="/login" replace />;
 };
 
 function App() {
@@ -26,20 +29,41 @@ function App() {
       <ToastContainer position="top-right" autoClose={3000} />
 
       <Routes>
-        {/* Rota Raiz Redireciona para Dashboard */}
-        <Route path="/" element={<Navigate to="/dashboard" />} />
+        {/* --- ROTA PÚBLICA (ESSENCIAL PARA NÃO DAR LOOP) --- */}
+        <Route path="/login" element={<Login />} />
 
+        {/* Rota Raiz: Se tiver logado vai pro dashboard, senão pro login */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-
-        {/* Rotas Protegidas com Layout Principal */}
-        <Route path="/auditoria" element={<PrivateRoute><MainLayout><Auditoria /></MainLayout></PrivateRoute>} />
-
+        {/* --- ROTAS PROTEGIDAS --- */}
         <Route
           path="/dashboard"
           element={
             <PrivateRoute>
               <MainLayout>
                 <Dashboard />
+              </MainLayout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/caixa"
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <GerenciamentoCaixa />
+              </MainLayout>
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/pdv"
+          element={
+            <PrivateRoute>
+              <MainLayout>
+                <PDV />
               </MainLayout>
             </PrivateRoute>
           }
@@ -89,20 +113,21 @@ function App() {
           }
         />
 
-        {/* --- NOVA ROTA DO PDV --- */}
         <Route
-          path="/pdv"
+          path="/auditoria"
           element={
             <PrivateRoute>
               <MainLayout>
-                <PDV />
+                <Auditoria />
               </MainLayout>
             </PrivateRoute>
           }
         />
 
-        {/* Rota 404 */}
-        <Route path="*" element={<Navigate to="/dashboard" />} />
+        {/* --- ROTA 404 (CORINGA) --- */}
+        {/* Se a página não existe, manda para o Login para quebrar o loop */}
+        <Route path="*" element={<Navigate to="/login" replace />} />
+
       </Routes>
     </Router>
   );
