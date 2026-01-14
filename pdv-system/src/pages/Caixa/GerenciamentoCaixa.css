@@ -230,3 +230,61 @@
 
   .btn-confirm.danger { background: #ef4444; }
   .btn-confirm.danger:hover { background: #dc2626; }
+
+  .modern-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+  .modern-table th { background: #f8fafc; padding: 15px; text-align: left; font-size: 0.85rem; color: #64748b; }
+  .modern-table td { padding: 15px; border-top: 1px solid #f1f5f9; font-size: 0.9rem; }
+  .badge { padding: 4px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: bold; }
+  .badge.success { background: #dcfce7; color: #166534; }
+  .badge.neutral { background: #f1f5f9; color: #475569; }
+
+  /* ... seu CSS existente ... */
+
+  /* Alerta de Diferença Crítica */
+  .alerta-critico-banner {
+      background: #fff1f2;
+      border: 2px solid #f43f5e;
+      color: #9f1239;
+      padding: 15px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 20px;
+  }
+
+  /* Conferencia Final no Resumo */
+  .conferencia-final {
+      display: flex;
+      justify-content: space-around;
+      background: #1e293b;
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-top: 20px;
+  }
+  .conf-item { text-align: center; }
+  .conf-item label { display: block; font-size: 0.75rem; color: #94a3b8; }
+  .conf-item strong { font-size: 1.25rem; }
+  .conferencia-final.negative { border-left: 5px solid #ef4444; }
+  .conferencia-final.positive { border-left: 5px solid #10b981; }
+
+  .resumo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 20px 0; }
+  .resumo-row { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 5px; }
+  .resumo-row.total { border-top: 1px solid #e2e8f0; padding-top: 5px; margin-top: 10px; }
+
+  /* REGRAS DE IMPRESSÃO */
+  @media print {
+      body * { visibility: hidden; }
+      .resumo-fechamento, .resumo-fechamento * { visibility: visible; }
+      .resumo-fechamento { position: absolute; left: 0; top: 0; width: 100%; border: none; }
+      .modal-actions, .btn-close-modal, .alerta-critico-banner { display: none !important; }
+      .conferencia-final { color: black !important; background: #eee !important; border: 1px solid #ccc; }
+  }

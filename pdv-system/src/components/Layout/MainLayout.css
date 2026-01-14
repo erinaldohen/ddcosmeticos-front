@@ -3,37 +3,56 @@
   display: flex;
   height: 100vh;
   width: 100vw;
-  background-color: #f8f9fa; /* Fundo claro padrão */
+  background-color: #f1f5f9; /* Fundo levemente azulado para reduzir fadiga visual */
 }
 
-/* Barra Lateral */
+/* Barra Lateral - Tema Dark */
 .layout-sidebar {
-  width: 250px;
-  background-color: #fff;
-  border-right: 1px solid #ddd;
+  width: 260px;
+  background-color: #1e293b; /* Azul ardósia escuro */
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 10;
 }
 
 .sidebar-logo {
-  height: 60px;
+  height: 70px;
   display: flex;
   align-items: center;
-  padding-left: 20px;
-  font-weight: bold;
-  font-size: 1.2rem;
-  color: #333;
-  border-bottom: 1px solid #eee;
+  padding: 0 20px;
+  gap: 12px;
+  border-bottom: 1px solid #334155;
+}
+
+.logo-icon {
+  background: #2563eb;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 0.8rem;
+}
+
+.sidebar-logo h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #f8fafc;
+  letter-spacing: 0.5px;
 }
 
 /* Menu Navegação */
 .sidebar-menu {
   flex: 1;
-  padding: 20px 10px;
+  padding: 20px 12px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   overflow-y: auto;
 }
 
@@ -41,52 +60,126 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 15px;
+  padding: 12px 16px;
   text-decoration: none;
-  color: #555;
-  border-radius: 6px;
-  transition: background 0.2s;
+  color: #94a3b8; /* Cinza suave para itens inativos */
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  font-size: 0.95rem;
+}
+
+.menu-item svg {
+  color: #64748b;
+  transition: color 0.2s;
 }
 
 .menu-item:hover {
-  background-color: #f0f0f0;
-  color: #000;
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #f8fafc;
+}
+
+.menu-item:hover svg {
+  color: #3b82f6;
 }
 
 .menu-item.active {
-  background-color: #e6f7ff; /* Azul bem claro */
-  color: #007bff; /* Azul padrão */
-  font-weight: 600;
+  background-color: #2563eb;
+  color: #ffffff;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
 }
 
-/* Rodapé do Menu (Botão Sair) */
+.menu-item.active svg {
+  color: #ffffff;
+}
+
+/* Rodapé do Menu e Info de Usuário */
 .sidebar-footer {
-  padding: 15px;
-  border-top: 1px solid #eee;
+  padding: 20px 15px;
+  border-top: 1px solid #334155;
+  background-color: #0f172a; /* Tom ainda mais escuro para o rodapé */
+}
+
+.user-info-sidebar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  margin-bottom: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.user-avatar {
+  background: #334155;
+  color: #94a3b8;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.user-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-role {
+  font-size: 0.7rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .btn-logout {
   width: 100%;
-  border: none;
-  background-color: transparent;
-  color: #dc3545; /* Vermelho */
+  border: 1px solid rgba(220, 38, 38, 0.2);
+  background-color: rgba(220, 38, 38, 0.05);
+  color: #f87171;
   padding: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
-  border-radius: 6px;
-  font-weight: bold;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.2s;
 }
 
 .btn-logout:hover {
-  background-color: #ffe6e6;
+  background-color: #dc2626;
+  color: #ffffff;
+  border-color: #dc2626;
 }
 
-/* Área Principal onde as páginas renderizam */
+/* Área Principal */
 .layout-content {
   flex: 1;
-  padding: 20px;
-  overflow-y: auto; /* Permite scroll no conteúdo */
+  padding: 30px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+/* Scrollbar Personalizada para a Sidebar */
+.sidebar-menu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-menu::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 10px;
 }

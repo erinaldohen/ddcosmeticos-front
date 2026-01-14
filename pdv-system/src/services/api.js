@@ -1,66 +1,75 @@
 import axios from 'axios';
+import { toast } from 'react-toastify';
 
-// --- CONFIGURAÇÃO ---
-// Quando tiver o backend real, mude para false e coloque sua URL
-const USE_MOCK = false;
-const API_URL = 'http://localhost:8080/api/v1';
+// Tenta pegar a URL do arquivo .env (padrão Vite ou CRA), senão usa localhost
+const API_URL = import.meta.env?.VITE_API_URL || 'http://localhost:8080/api/v1';
 
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 10000,
+  timeout: 15000, // Aumentei para 15s (relatórios pesados podem demorar)
+  headers: {
+    'Content-Type': 'application/json'
+  }
 });
 
-// --- SIMULADOR DE BACKEND (Para testarmos UX agora) ---
-// Isso simula o atraso da internet e respostas do servidor
-api.interceptors.request.use(async (config) => {
-  if (USE_MOCK) {
-    await new Promise(resolve => setTimeout(resolve, 1500)); // Simula 1.5s de loading
+// --- INTERCEPTOR DE REQUISIÇÃO ---
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
 
-    // Simulação de Rota de Login
-    if (config.url === '/auth/login' && config.method === 'post') {
-      const { email, password } = JSON.parse(config.data);
-
-      // Regra de Negócio Simulada:
-      if (password === '123456') {
-        return Promise.resolve({
-          data: {
-            token: 'fake-jwt-token-123',
-            user: { name: 'Gerente DD', email }
-          },
-          status: 200,
-          statusText: 'OK',
-          headers: {},
-          config,
-        });
-      } else {
-        return Promise.reject({
-          response: { status: 401, data: { message: 'Senha incorreta ou usuário não encontrado.' } }
-        });
-      }
-    }
+  if (token) {
+    // Remove aspas duplas extras que às vezes ficam salvas no localStorage
+    const cleanToken = token.replace(/"/g, '');
+    config.headers.Authorization = `Bearer ${cleanToken}`;
   }
+
   return config;
 }, error => Promise.reject(error));
 
-// --- INTERCEPTOR DE RESPOSTA (Tratamento Global de Erros) ---
+// --- INTERCEPTOR DE RESPOSTA ---
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Se o token expirou (Erro 401), podemos deslogar o usuário automaticamente aqui
-    if (error.response && error.response.status === 401) {
-      console.warn("Sessão expirada ou credenciais inválidas");
-      // Aqui poderíamos limpar o localStorage e redirecionar para login
+
+    // CASO 1: Erro de Conexão (Servidor fora do ar ou internet caiu)
+    if (!error.response) {
+      toast.error("Erro de conexão. Verifique sua internet ou contate o suporte.");
+      return Promise.reject(error);
     }
+
+    const status = error.response.status;
+    const mensagemBackend = error.response.data?.message || "Ocorreu um erro inesperado.";
+
+    // CASO 2: Token Expirado ou Inválido (401)
+    if (status === 401) {
+      // Evita loops se já estivermos na tela de login
+      if (!window.location.pathname.includes('/login')) {
+        toast.warning("Sua sessão expirou. Faça login novamente.");
+        localStorage.removeItem('token');
+        localStorage.removeItem('usuario');
+        setTimeout(() => window.location.href = '/login', 2000);
+      }
+    }
+
+    // CASO 3: Sem Permissão (403) - Ex: Caixa tentando acessar Auditoria
+    else if (status === 403) {
+      toast.error("Acesso Negado: Você não tem permissão para realizar esta ação.");
+    }
+
+    // CASO 4: Erro do Servidor (500) - Bug no backend
+    else if (status === 500) {
+      console.error("Erro Crítico no Backend:", error.response.data);
+      toast.error("Erro interno do servidor. Tente novamente mais tarde.");
+    }
+
+    // CASO 5: Erros de Validação (400) ou Regra de Negócio
+    // Geralmente deixamos o componente tratar, mas podemos logar aqui
+    else if (status === 400 || status === 422) {
+      // Opcional: Se quiser mostrar toast automático para validações:
+      // toast.warn(mensagemBackend);
+    }
+
     return Promise.reject(error);
   }
 );
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
 
 export default api;

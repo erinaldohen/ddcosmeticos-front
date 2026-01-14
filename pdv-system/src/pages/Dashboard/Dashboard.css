@@ -109,3 +109,29 @@
 
 .trend-up { color: #10B981; font-weight: 600; }
 .trend-down { color: #EF4444; font-weight: 600; }
+
+.kpi-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.kpi-card.highlight {
+  border-left: 4px solid #2563eb;
+  background: linear-gradient(to right, #ffffff, #f8faff);
+}
+
+.trendUp {
+  color: #10b981;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+  margin-top: 5px;
+}
+
+.kpi-card strong {
+  font-size: 2rem !important; /* Destaque para o valor principal */
+}
