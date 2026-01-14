@@ -15,7 +15,7 @@ const PDV = () => {
   const [carrinho, setCarrinho] = useState([]);
   const [vendasPausadas, setVendasPausadas] = useState([]);
   const [busca, setBusca] = useState('');
-  const [loading, setLoading] = useState(false); // Loading geral
+  const [loading, setLoading] = useState(false); // Loading geral (usado para travar o botão de finalizar)
   const [calculandoImposto, setCalculandoImposto] = useState(false); // Loading específico fiscal
   const [ultimoItemAdicionadoId, setUltimoItemAdicionadoId] = useState(null);
 
@@ -73,11 +73,11 @@ const PDV = () => {
           quantidade: item.quantidade
         }));
 
-        const res = await api.post('/v1/tributacao/simular-carrinho', payload);
+        // CORREÇÃO: Removido o "/v1" hardcoded. O axios já tem a baseURL configurada.
+        const res = await api.post('/tributacao/simular-carrinho', payload);
         setFiscalData(res.data);
       } catch (error) {
         console.error("Erro ao calcular impostos reais:", error);
-        // Fallback silencioso ou aviso sutil
       } finally {
         setCalculandoImposto(false);
       }
@@ -177,7 +177,7 @@ const PDV = () => {
 
     if (qtdFutura > prod.quantidadeEmEstoque) {
       toast.warn(`Estoque Baixo: ${prod.quantidadeEmEstoque} un.`);
-      // Chama auditoria no backend (POST criado anteriormente)
+      // Chama auditoria no backend
       api.post('/auditoria', {
         acao: 'VENDA_SEM_ESTOQUE',
         detalhes: `ID ${prod.id} - ${prod.descricao}`,
@@ -295,6 +295,10 @@ const PDV = () => {
   const finalizarVenda = async () => {
       if (saldoDevedor > 0.01) return toast.error("Falta receber!");
 
+      // CORREÇÃO: Bloqueio contra duplo clique para evitar Erro 409
+      if (loading) return;
+      setLoading(true);
+
       try {
           const metodoPrinc = pagamentos.sort((a,b) => b.valor - a.valor)[0]?.tipo || 'DINHEIRO';
           let docLimpo = null;
@@ -315,12 +319,35 @@ const PDV = () => {
 
           const res = await api.post('/vendas', payload);
           toast.success(`Venda #${res.data.idVenda || ''} OK!`);
-          setCarrinho([]); setPagamentos([]); setCliente(null); setDescontoRaw(''); setModalPagamento(false);
-          // Limpa dados fiscais
+
+          // Limpeza apenas após sucesso
+          setCarrinho([]);
+          setPagamentos([]);
+          setCliente(null);
+          setDescontoRaw('');
+          setModalPagamento(false);
           setFiscalData({ valorTotalVenda: 0, totalIbs: 0, totalCbs: 0, totalIs: 0, totalLiquido: 0, aliquotaEfetivaPorcentagem: 0 });
+
       } catch (error) {
-          toast.error("Erro: " + (error.response?.data?.message || "Falha"));
-      }
+                console.error("Erro detalhado:", error);
+
+                let msg = "Falha ao finalizar venda.";
+
+                // Tenta pegar a mensagem do Backend (GlobalExceptionHandler)
+                if (error.response?.data?.message) {
+                   msg = error.response.data.message;
+                }
+                // Se for erro de validação de campos (@Valid), pode vir um objeto
+                else if (error.response?.data && typeof error.response.data === 'object') {
+                   // Pega o primeiro valor do objeto de erro (ex: itens: "A quantidade deve ser maior que zero")
+                   const values = Object.values(error.response.data);
+                   if (values.length > 0) msg = values[0];
+                }
+
+                toast.error(msg);
+            } finally {
+                setLoading(false);
+            }
   };
 
   const buscarClientes = async (val) => {
@@ -620,10 +647,10 @@ const PDV = () => {
 
                  <button
                   className="btn-finish-modern"
-                  disabled={saldoDevedor > 0.01}
+                  disabled={saldoDevedor > 0.01 || loading} // Desabilita se falta pagar OU se está processando
                   onClick={finalizarVenda}
                  >
-                   CONCLUIR VENDA
+                   {loading ? 'PROCESSANDO...' : 'CONCLUIR VENDA'}
                  </button>
               </div>
 
