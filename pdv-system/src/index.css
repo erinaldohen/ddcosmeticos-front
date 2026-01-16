@@ -311,3 +311,16 @@ button { cursor: pointer; border: none; font-family: inherit; transition: all 0.
     grid-template-columns: 1fr !important;
   }
 }
+
+/* Correção para erro do Recharts (width -1) */
+.recharts-responsive-container {
+  min-height: 300px; /* Garante altura mínima antes do render */
+  min-width: 100%;
+}
+
+/* Se você tiver containers específicos no Dashboard */
+.chart-wrapper, .dashboard-card-body {
+  height: 300px; /* Altura fixa para o container do gráfico */
+  width: 100%;
+  position: relative;
+}
