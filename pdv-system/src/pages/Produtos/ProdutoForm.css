@@ -301,7 +301,8 @@ body {
   flex: 1;
 }
 
-/* --- PRECIFICAÇÃO E HIGHLIGHTS --- */
+/* --- PRECIFICAÇÃO E HIGHLIGHTS (CORRIGIDO) --- */
+
 .input-prefix-group {
   position: relative;
   display: flex;
@@ -309,15 +310,41 @@ body {
   width: 100%;
 }
 
+/* O símbolo R$ */
 .input-prefix-group .prefix {
   position: absolute;
   left: 12px;
   color: var(--text-muted);
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  pointer-events: none; /* Permite clicar através do ícone */
+  z-index: 10;
 }
 
-.input-prefix-group input { padding-left: 36px; }
+/* O símbolo % (Markup/Margem) */
+.input-prefix-group .suffix {
+  position: absolute;
+  right: 12px;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.95rem;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* O Campo de Texto (Input) - CORREÇÃO DE ESPAÇAMENTO */
+.input-prefix-group input {
+  width: 100%;
+  /* Aumentado para 45px para o número não ficar em cima do R$ */
+  padding-left: 45px !important;
+  padding-right: 12px;
+}
+
+/* Se o input tiver um sufixo (como o Markup %), dá espaço na direita */
+.input-prefix-group input:not(:last-child) {
+    /* Garante espaço para o % na direita */
+    padding-right: 35px !important;
+}
 
 .input-highlight {
   background-color: #eff6ff !important;
