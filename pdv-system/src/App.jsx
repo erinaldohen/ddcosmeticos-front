@@ -12,6 +12,7 @@ import Dashboard from './pages/Dashboard/Dashboard';
 import PDV from './pages/PDV/PDV';
 import ProdutoList from './pages/Produtos/ProdutoList';
 import ProdutoForm from './pages/Produtos/ProdutoForm';
+import EntradaEstoque from './pages/Estoque/EntradaEstoque'; // <--- NOVO IMPORT
 import GerenciamentoCaixa from './pages/Caixa/GerenciamentoCaixa';
 import HistoricoCaixa from './pages/Caixa/HistoricoCaixa';
 import RelatorioImpostos from './pages/Fiscal/RelatorioImpostos';
@@ -34,8 +35,6 @@ const AdminRoute = ({ children }) => {
 
   if (!token) return <Navigate to="/login" replace />;
 
-  // Se não for ADMIN, manda para o PDV (que é a tela liberada para operadores)
-  // Ou manda para /caixa, dependendo da sua preferência
   if (usuario.perfil !== 'ROLE_ADMIN') {
     return <Navigate to="/pdv" replace />;
   }
@@ -52,29 +51,22 @@ function App() {
       <Routes>
         {/* PÚBLICO */}
         <Route path="/login" element={<Login />} />
-
-        {/* Redireciona raiz para Dashboard (se for admin) ou PDV (se for operador) */}
         <Route path="/" element={<Navigate to="/login" replace />} />
 
-        {/* --- ROTAS PARA OPERADORES E ADMINS (O que sobrou) --- */}
-
-        {/* PDV (Vendas) - Liberado para todos */}
+        {/* --- ROTAS GERAIS (Operadores e Admins) --- */}
         <Route path="/pdv" element={
           <PrivateRoute>
             <MainLayout><PDV /></MainLayout>
           </PrivateRoute>
         } />
 
-        {/* Gestão do Caixa (Abrir/Fechar) - Liberado para todos */}
         <Route path="/caixa" element={
           <PrivateRoute>
             <MainLayout><GerenciamentoCaixa /></MainLayout>
           </PrivateRoute>
         } />
 
-
         {/* --- ROTAS RESTRITAS A ADMIN (ROLE_ADMIN) --- */}
-        {/* Dashboard, Produtos, Histórico, Fiscal, Auditoria */}
 
         <Route path="/dashboard" element={
           <AdminRoute>
@@ -103,6 +95,13 @@ function App() {
         <Route path="/produtos/editar/:id" element={
           <AdminRoute>
             <MainLayout><ProdutoForm /></MainLayout>
+          </AdminRoute>
+        } />
+
+        {/* --- NOVA ROTA DE ESTOQUE --- */}
+        <Route path="/estoque/entrada" element={
+          <AdminRoute>
+            <MainLayout><EntradaEstoque /></MainLayout>
           </AdminRoute>
         } />
 

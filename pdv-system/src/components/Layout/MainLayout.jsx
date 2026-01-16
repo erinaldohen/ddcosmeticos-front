@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingCart, DollarSign, Package,
-  FileText, ShieldCheck, LogOut, History, User, Menu, X
+  FileText, ShieldCheck, LogOut, History, User, Menu, X,
+  Truck // <--- NOVO IMPORT DO ÍCONE
 } from 'lucide-react';
 import './MainLayout.css';
 
 const MainLayout = ({ children }) => {
   const location = useLocation();
-  const [menuAberto, setMenuAberto] = useState(false); // Estado para Mobile
+  const [menuAberto, setMenuAberto] = useState(false);
 
   // Recupera dados do usuário
   const usuarioJson = localStorage.getItem('usuario');
@@ -22,12 +23,17 @@ const MainLayout = ({ children }) => {
   const toggleMenu = () => setMenuAberto(!menuAberto);
   const fecharMenu = () => setMenuAberto(false);
 
+  // Lista de Menus
   const menuItems = [
     { label: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard size={20} /> },
     { label: 'PDV (Frente)', path: '/pdv', icon: <ShoppingCart size={20} /> },
     { label: 'Gerir Caixa', path: '/caixa', icon: <DollarSign size={20} /> },
     { label: 'Histórico Caixas', path: '/historico-caixa', icon: <History size={20} /> },
+
+    // Agrupamento lógico de Produtos e Estoque
     { label: 'Produtos', path: '/produtos', icon: <Package size={20} /> },
+    { label: 'Entrada Estoque', path: '/estoque/entrada', icon: <Truck size={20} /> }, // <--- NOVO MENU
+
     { label: 'Fiscal', path: '/fiscal', icon: <FileText size={20} /> },
     { label: 'Auditoria', path: '/auditoria', icon: <ShieldCheck size={20} /> },
   ];
@@ -35,15 +41,14 @@ const MainLayout = ({ children }) => {
   return (
     <div className="layout-container">
 
-      {/* 1. OVERLAY (Fundo escuro no mobile quando menu abre) */}
+      {/* 1. OVERLAY (Mobile) */}
       {menuAberto && (
         <div className="mobile-overlay" onClick={fecharMenu}></div>
       )}
 
-      {/* 2. SIDEBAR (Menu Lateral) */}
+      {/* 2. SIDEBAR */}
       <aside className={`layout-sidebar ${menuAberto ? 'mobile-open' : ''}`}>
         <div className="sidebar-header-mobile">
-            {/* Botão X só aparece no mobile */}
             <div className="logo-icon">DD</div>
             <button className="btn-close-menu" onClick={fecharMenu}>
               <X size={24} color="#64748b" />
@@ -60,7 +65,7 @@ const MainLayout = ({ children }) => {
             <Link
               key={item.path}
               to={item.path}
-              onClick={fecharMenu} // Fecha o menu ao clicar no link (UX Mobile)
+              onClick={fecharMenu}
               className={`menu-item ${location.pathname === item.path ? 'active' : ''}`}
             >
               {item.icon}
@@ -75,7 +80,6 @@ const MainLayout = ({ children }) => {
               <User size={16} />
             </div>
             <div className="user-details">
-              {/* Proteção contra nomes nulos */}
               <span className="user-name">{(usuario.nome || 'User').split(' ')[0]}</span>
               <span className="user-role">{usuario.role || usuario.perfil || 'Operador'}</span>
             </div>
@@ -90,14 +94,12 @@ const MainLayout = ({ children }) => {
 
       {/* 3. CONTEÚDO PRINCIPAL */}
       <main className="layout-content">
-
-        {/* HEADER MOBILE (Hambúrguer) - Só aparece em telas pequenas */}
         <header className="mobile-top-bar">
           <button onClick={toggleMenu} className="btn-hamburger">
             <Menu size={24} color="#334155" />
           </button>
           <span className="mobile-title">DD Cosméticos</span>
-          <div style={{width: 24}}></div> {/* Espaçador para centralizar */}
+          <div style={{width: 24}}></div>
         </header>
 
         <div className="content-wrapper">
