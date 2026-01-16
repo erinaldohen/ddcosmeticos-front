@@ -3,9 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import {
-  Truck, FileText, Plus, Save,
-  Search, Trash2, ArrowLeft, User, Barcode,
-  UploadCloud, X, Package
+  Truck, Save, Plus, Search, Trash2, ArrowLeft, User, Barcode,
+  UploadCloud, X, Package, Check, AlertTriangle, Link as LinkIcon
 } from 'lucide-react';
 import './EntradaEstoque.css';
 
@@ -124,7 +123,7 @@ const EntradaEstoque = () => {
     setTimeout(() => qtdInputRef.current?.focus(), 100);
   };
 
-  // --- IMPORTAÇÃO XML (ATUALIZADA PARA MAPEAR NOVOS CAMPOS) ---
+  // --- IMPORTAÇÃO XML INTELIGENTE ---
   const handleImportarXmlClick = () => fileInputRef.current.click();
 
   const handleFileChange = async (e) => {
@@ -133,7 +132,7 @@ const EntradaEstoque = () => {
     const formData = new FormData();
     formData.append("arquivo", file);
     setLoading(true);
-    const toastId = toast.loading("Processando XML...");
+    const toastId = toast.loading("Analisando XML e buscando vínculos...");
 
     try {
        const res = await api.post('/estoque/importar-xml', formData, {
@@ -148,22 +147,27 @@ const EntradaEstoque = () => {
          tipoEntrada: 'NOTA_FISCAL'
        }));
 
-       // ATUALIZAÇÃO IMPORTANTE: Mapear NCM e Unidade
+       // MAPEAMENTO COMPLETO DA INTELIGÊNCIA
        const itensMapeados = itensXml.map(item => ({
-           idProduto: item.idProduto,
+           idProduto: item.idProduto, // Pode vir preenchido se achou match
            codigoBarras: item.codigoBarras,
-           descricao: item.descricao,
+           descricao: item.descricao, // Descrição do XML
            quantidade: item.quantidade,
            precoCusto: item.precoCusto,
            total: item.total,
-           // Novos campos essenciais para Auto-Cadastro
+
+           // Novos campos de Inteligência
            ncm: item.ncm,
            unidade: item.unidade,
-           novoProduto: item.novoProduto
+           statusMatch: item.statusMatch, // MATCH_EXATO, SUGESTAO_FORTE, NOVO_PRODUTO
+           motivoMatch: item.motivoMatch,
+           nomeProdutoSugerido: item.nomeProdutoSugerido, // Nome no nosso banco
+           alertaDivergencia: item.alertaDivergencia,
+           codigoNoFornecedor: item.codigoNoFornecedor // Para criar vínculo futuro
        }));
 
        setItens(prev => [...prev, ...itensMapeados]);
-       toast.update(toastId, { render: "XML Importado!", type: "success", isLoading: false, autoClose: 3000 });
+       toast.update(toastId, { render: "Análise concluída!", type: "success", isLoading: false, autoClose: 3000 });
     } catch (error) {
        console.error(error);
        toast.update(toastId, { render: "Erro ao ler XML", type: "error", isLoading: false, autoClose: 3000 });
@@ -173,23 +177,37 @@ const EntradaEstoque = () => {
     }
   };
 
-  // --- CRUD ITENS (ATUALIZADO PARA INCLUIR DADOS DO PRODUTO SELECIONADO) ---
+  // --- AÇÃO: ACEITAR SUGESTÃO (Converter Amarelo em Verde) ---
+  const aceitarSugestao = (index) => {
+    const novaLista = [...itens];
+    const item = novaLista[index];
+
+    // Atualiza status localmente para Verde
+    item.statusMatch = 'MATCH_EXATO';
+    // O idProduto já veio do backend, então ao salvar, o sistema criará o vínculo
+
+    setItens(novaLista);
+    toast.success("Vínculo confirmado! Será salvo ao finalizar.");
+  };
+
+  // --- CRUD ITENS MANUAL ---
   const adicionarItem = () => {
     if (!produtoSelecionado) return;
     const custoFloat = parseMoeda(custoItem);
-    if (custoFloat <= 0) return toast.warning("Custo deve ser maior que zero.");
 
     setItens([...itens, {
       idProduto: produtoSelecionado.id,
       codigoBarras: produtoSelecionado.codigoBarras,
       descricao: produtoSelecionado.descricao,
-      // Se estamos adicionando manual, pegamos os dados do produto selecionado
       ncm: produtoSelecionado.ncm,
       unidade: produtoSelecionado.unidade,
-
       quantidade: Number(qtdItem),
       precoCusto: custoFloat,
-      total: Number(qtdItem) * custoFloat
+      total: Number(qtdItem) * custoFloat,
+
+      // Item manual é sempre um Match Exato pois o usuário escolheu
+      statusMatch: 'MATCH_EXATO',
+      nomeProdutoSugerido: produtoSelecionado.descricao
     }]);
 
     setProdutoSelecionado(null);
@@ -200,7 +218,7 @@ const EntradaEstoque = () => {
 
   const removerItem = (idx) => setItens(prev => prev.filter((_, i) => i !== idx));
 
-  // --- FINALIZAR ENTRADA (ATUALIZADO PARA ENVIAR DADOS COMPLETOS) ---
+  // --- FINALIZAR ENTRADA ---
   const finalizarEntrada = async () => {
     if (!cabecalho.fornecedorId) return toast.warning("Selecione o Fornecedor.");
     if (itens.length === 0) return toast.warning("Adicione produtos.");
@@ -209,24 +227,30 @@ const EntradaEstoque = () => {
     try {
       for (const item of itens) {
         await api.post('/estoque/entrada', {
+          // Identificação
+          idProduto: item.idProduto, // Se tiver ID, o backend vincula/atualiza. Se null, cria.
           codigoBarras: item.codigoBarras,
+
+          // Dados da Transação
           quantidade: item.quantidade,
           precoCusto: item.precoCusto,
 
-          // DADOS PARA AUTO-CADASTRO (Se não existirem, o backend cria)
+          // Dados para Aprendizado e Auto-Cadastro
           descricao: item.descricao,
           ncm: item.ncm,
           unidade: item.unidade,
+          codigoNoFornecedor: item.codigoNoFornecedor, // Envia para o backend aprender o vínculo
 
+          // Cabeçalho
           numeroNotaFiscal: cabecalho.tipoEntrada === 'NOTA_FISCAL' ? cabecalho.numeroDocumento : null,
           fornecedorId: cabecalho.fornecedorId,
           observacao: `Entrada Manual: ${cabecalho.observacao}`
         });
       }
-      toast.success("Entrada realizada e Produtos Atualizados!");
+      toast.success("Estoque atualizado e Vínculos aprendidos!");
       navigate('/produtos');
     } catch (e) {
-        toast.error("Erro ao processar.");
+        toast.error("Erro ao processar entrada.");
         console.error(e);
     }
     finally { setLoading(false); }
@@ -239,12 +263,13 @@ const EntradaEstoque = () => {
       <div className="page-header">
         <div className="page-title">
           <h1>Entrada de Mercadoria</h1>
-          <p>Manual ou Importação via XML (NFe)</p>
+          <p>Conciliação de NFe Inteligente e Entrada Manual</p>
         </div>
         <button className="btn-secondary" onClick={() => navigate('/produtos')}><ArrowLeft size={18}/> Voltar</button>
       </div>
 
       <div className="entrada-layout">
+        {/* LADO ESQUERDO: FORMULÁRIOS */}
         <div className="painel-principal">
           <div className="card-entrada">
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '1px solid #f1f5f9', paddingBottom: 15}}>
@@ -269,7 +294,7 @@ const EntradaEstoque = () => {
           </div>
 
           <div className="card-entrada destaque" style={{overflow: 'visible'}}>
-            <h3 className="card-title"><Barcode size={18}/> Incluir Itens</h3>
+            <h3 className="card-title"><Barcode size={18}/> Incluir Manualmente</h3>
 
             {!produtoSelecionado && (
               <div className="search-box-container" style={{position: 'relative', zIndex: 100}}>
@@ -277,35 +302,16 @@ const EntradaEstoque = () => {
                     <input ref={searchInputRef} type="text" placeholder="Digite EAN ou Nome..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} onKeyDown={handleKeyDownBusca} autoFocus autoComplete="off" />
                     <button className="btn-search-icon"><Search size={18}/></button>
                 </div>
-
-                {/* LISTA FLUTUANTE ELEGANTE (DESIGN NOVO) */}
                 {mostrarSugestoes && sugestoes.length > 0 && (
                     <div className="dropdown-sugestoes" ref={listaSugestoesRef}>
                         {sugestoes.map((prod, index) => (
-                            <div
-                                key={prod.id}
-                                className={`sugestao-item ${index === indiceAtivo ? 'ativo' : ''}`}
-                                onClick={() => selecionarProduto(prod)}
-                                onMouseEnter={() => setIndiceAtivo(index)}
-                            >
-                                {/* Ícone Ilustrativo */}
-                                <div className="sugestao-icon-wrapper">
-                                    <Package size={20} strokeWidth={1.5} />
-                                </div>
-
-                                {/* Texto */}
+                            <div key={prod.id} className={`sugestao-item ${index === indiceAtivo ? 'ativo' : ''}`} onClick={() => selecionarProduto(prod)} onMouseEnter={() => setIndiceAtivo(index)}>
+                                <div className="sugestao-icon-wrapper"><Package size={20} strokeWidth={1.5} /></div>
                                 <div className="sugestao-conteudo">
                                     <span className="sugestao-nome">{prod.descricao}</span>
-                                    <div className="sugestao-sublinha">
-                                        <Barcode size={14} style={{marginRight: 4}}/>
-                                        <span className="sugestao-ean">{prod.codigoBarras}</span>
-                                    </div>
+                                    <div className="sugestao-sublinha"><Barcode size={14} style={{marginRight: 4}}/><span className="sugestao-ean">{prod.codigoBarras}</span></div>
                                 </div>
-
-                                {/* Dica Visual de Enter */}
-                                {index === indiceAtivo && (
-                                    <div className="sugestao-enter-hint">↵</div>
-                                )}
+                                {index === indiceAtivo && <div className="sugestao-enter-hint">↵</div>}
                             </div>
                         ))}
                     </div>
@@ -322,7 +328,6 @@ const EntradaEstoque = () => {
                 <div className="inputs-valores-row">
                   <div className="form-group"><label>Qtd.</label><input ref={qtdInputRef} type="number" min="1" value={qtdItem} onChange={(e) => setQtdItem(e.target.value)} onKeyDown={(e)=>e.key==='Enter' && document.getElementById('input-custo').focus()}/></div>
                   <div className="form-group"><label>Custo (R$)</label><input id="input-custo" type="text" value={custoItem} onChange={(e) => setCustoItem(aplicarMascara(e.target.value))} onKeyDown={(e)=>e.key==='Enter' && adicionarItem()}/></div>
-                  <div className="form-group"><label>Total</label><input type="text" disabled value={formatarMoeda(qtdItem * parseMoeda(custoItem))} style={{backgroundColor: '#e0e7ff', fontWeight: 'bold'}}/></div>
                   <div className="actions-row"><button className="btn-add-item" onClick={adicionarItem}><Plus size={18}/> Inserir</button></div>
                 </div>
               </div>
@@ -330,27 +335,95 @@ const EntradaEstoque = () => {
           </div>
         </div>
 
+        {/* LADO DIREITO: LISTA INTELIGENTE (SEMÁFORO) */}
         <div className="painel-resumo">
           <div className="lista-itens">
-            <h3>Itens ({itens.length})</h3>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 15}}>
+                <h3>Itens ({itens.length})</h3>
+                {itens.length > 0 && (
+                    <div style={{display:'flex', gap:6}}>
+                        <span className="badge-status badge-verde">Match</span>
+                        <span className="badge-status badge-amarelo">Sugerido</span>
+                        <span className="badge-status badge-azul">Novo</span>
+                    </div>
+                )}
+            </div>
+
             <ul className="itens-scroll">
-              {itens.map((item, idx) => (
-                <li key={idx} className="item-row">
-                  <div className="item-desc">
-                      <strong>{item.descricao}</strong>
-                      <small>{item.quantidade} x R$ {formatarMoeda(item.precoCusto)}</small>
-                      {/* Indicador visual se for produto novo (opcional) */}
-                      {item.novoProduto && <span style={{fontSize: '0.7rem', color: '#059669', fontWeight:'bold'}}>✨ Novo Cadastro</span>}
-                  </div>
-                  <div className="item-total"><strong>R$ {formatarMoeda(item.total)}</strong><button className="btn-trash" onClick={() => removerItem(idx)}><Trash2 size={16}/></button></div>
-                </li>
-              ))}
+              {itens.map((item, idx) => {
+                // LÓGICA DO SEMÁFORO
+                let rowClass = '';
+
+                if (item.alertaDivergencia) rowClass = 'match-alerta';
+                else if (item.statusMatch === 'MATCH_EXATO') rowClass = 'match-verde';
+                else if (item.statusMatch === 'SUGESTAO_FORTE') rowClass = 'match-amarelo';
+                else rowClass = 'match-novo';
+
+                return (
+                  <li key={idx} className={`item-row ${rowClass}`}>
+
+                    {/* ÍCONE DE STATUS */}
+                    <div style={{marginRight: 12}}>
+                        {item.statusMatch === 'MATCH_EXATO' ? <Check size={20} color="#10b981"/> :
+                         item.statusMatch === 'SUGESTAO_FORTE' ? <AlertTriangle size={20} color="#f59e0b"/> :
+                         <Plus size={20} color="#3b82f6"/>}
+                    </div>
+
+                    {/* CONTEÚDO */}
+                    <div className="item-info-col">
+                      <span className="xml-desc">{item.descricao}</span>
+
+                      <div className="system-desc">
+                        {item.statusMatch === 'MATCH_EXATO' ? (
+                            <>
+                                <LinkIcon size={12}/>
+                                <span>Vinculado a: <strong>{item.nomeProdutoSugerido || item.descricao}</strong></span>
+                            </>
+                        ) : item.statusMatch === 'SUGESTAO_FORTE' ? (
+                            <>
+                                <AlertTriangle size={12}/>
+                                <span>Sugerido: <strong>{item.nomeProdutoSugerido}</strong>?</span>
+                            </>
+                        ) : (
+                            <span>{item.ncm ? `NCM: ${item.ncm}` : 'Sem NCM'} • Cadastro Novo</span>
+                        )}
+                      </div>
+
+                      {item.alertaDivergencia && (
+                          <div className="divergencia-box">
+                              {/* CORREÇÃO AQUI: Usando &gt; ao invés de > */}
+                              <AlertTriangle size={12}/> Preço diverge &gt; 50%
+                          </div>
+                      )}
+
+                      <small style={{color: '#64748b', marginTop: 2}}>
+                        {item.quantidade} {item.unidade} x R$ {formatarMoeda(item.precoCusto)}
+                      </small>
+                    </div>
+
+                    {/* AÇÕES E TOTAIS */}
+                    <div className="item-total">
+                      <strong>R$ {formatarMoeda(item.total)}</strong>
+
+                      {item.statusMatch === 'SUGESTAO_FORTE' && (
+                          <button className="btn-action-sm btn-accept" onClick={() => aceitarSugestao(idx)} title="Confirmar Vínculo">
+                              <LinkIcon size={14}/> Vincular
+                          </button>
+                      )}
+
+                      <button className="btn-trash" onClick={() => removerItem(idx)}>
+                        <Trash2 size={16}/>
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </div>
           <div className="resumo-footer">
             <div className="audit-info"><User size={14}/><span>Resp: <strong>{usuario.nome}</strong></span></div>
             <div className="total-block"><span>Total Nota</span><h2>R$ {formatarMoeda(totalGeral)}</h2></div>
-            <button className="btn-finalizar" onClick={finalizarEntrada} disabled={loading}>{loading ? '...' : <><Save size={20}/> Confirmar</>}</button>
+            <button className="btn-finalizar" onClick={finalizarEntrada} disabled={loading}>{loading ? '...' : <><Save size={20}/> Confirmar Entrada</>}</button>
           </div>
         </div>
       </div>
