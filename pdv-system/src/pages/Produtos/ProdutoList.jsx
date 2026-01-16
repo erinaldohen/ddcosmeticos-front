@@ -247,40 +247,42 @@ const ProdutoList = () => {
   };
 
   // --- BUSCA DE DADOS ---
-  const carregarProdutos = useCallback(async (pagina, termo) => {
-      // DEBUG: Verifique no console se os números mudam ao clicar (0, 1, 2...)
-      console.log(`📡 Buscando página: ${pagina}, Termo: "${termo}"`);
+    const carregarProdutos = useCallback(async (pagina, termo) => {
+        console.log(`📡 Buscando página: ${pagina}, Termo: "${termo}"`);
 
-      setLoading(true);
-      try {
-        if (modoLixeira) {
-          const listaInativos = await produtoService.buscarLixeira();
-          const filtrados = termo
-            ? listaInativos.filter(p => p.descricao.toLowerCase().includes(termo.toLowerCase()) || p.codigoBarras.includes(termo))
-            : listaInativos;
-          setProdutos(filtrados);
-          setTotalPages(1);
-          setTotalElements(filtrados.length);
-          // Na lixeira não paginamos no backend neste exemplo, então resetamos para 0 visualmente
-          // Se sua lixeira tiver paginação no backend, altere aqui.
-          if(page !== 0) setPage(0);
-        } else {
-          // Modo Normal
-          const dados = await produtoService.listar(pagina, 10, termo);
+        setLoading(true);
+        try {
+          if (modoLixeira) {
+            const listaInativos = await produtoService.buscarLixeira();
+            const filtrados = termo
+              ? listaInativos.filter(p => p.descricao.toLowerCase().includes(termo.toLowerCase()) || p.codigoBarras.includes(termo))
+              : listaInativos;
+            setProdutos(filtrados);
+            setTotalPages(1);
+            setTotalElements(filtrados.length);
+            if(page !== 0) setPage(0);
+          } else {
+            // Modo Normal
+            const dados = await produtoService.listar(pagina, 10, termo);
 
-          setProdutos(dados.itens);
-          setTotalPages(dados.totalPaginas);
-          setTotalElements(dados.totalElements);
+            // --- CORREÇÃO AQUI ---
+            // O Spring retorna 'content' para a lista e 'totalPages' para o número de páginas
+            // Verificamos se 'dados.content' existe, senão usamos 'dados' (caso o service já tenha tratado)
+            const lista = dados.content || dados.itens || [];
+            const paginas = dados.totalPages || dados.totalPaginas || 0;
+            const total = dados.totalElements || 0;
 
-          // IMPORTANTE: NÃO chamamos setPage(dados.paginaAtual) aqui.
-          // Deixamos o estado local controlar a navegação.
+            setProdutos(lista);
+            setTotalPages(paginas);
+            setTotalElements(total);
+          }
+        } catch (error) {
+          console.error(error); // Bom para debugar
+          toast.error("Erro ao sincronizar dados.");
+        } finally {
+          setLoading(false);
         }
-      } catch (error) {
-        toast.error("Erro ao sincronizar dados.");
-      } finally {
-        setLoading(false);
-      }
-    }, [modoLixeira]); // Removido 'page' da dependência para evitar loop, embora useCallback lide bem
+      }, [modoLixeira]); // Removido 'page' da dependência para evitar loop, embora useCallback lide bem
 
   // Efeitos
   useEffect(() => {

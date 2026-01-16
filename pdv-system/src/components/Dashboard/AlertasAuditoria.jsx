@@ -10,18 +10,19 @@ const AlertasAuditoria = () => {
     useEffect(() => {
         const fetchAlertas = async () => {
             try {
-                // Busca os últimos eventos
                 const res = await api.get('/auditoria/eventos');
 
-                // Filtra apenas o que é crítico para o Dashboard (Estoque Negativo e Cancelamentos)
+                // Filtra e pega os top 5
                 const criticos = res.data.filter(a =>
                     a.tipoEvento === 'ESTOQUE_NEGATIVO' ||
                     a.tipoEvento === 'CANCELAMENTO_VENDA'
-                ).slice(0, 5); // Pega apenas os top 5 recentes
+                ).slice(0, 5);
 
                 setAlertas(criticos);
+                setErro(false);
             } catch (error) {
-                console.error("Falha ao buscar alertas", error);
+                // Silencia o erro no console para não assustar o usuário
+                // console.error("Falha ao buscar alertas", error);
                 setErro(true);
             } finally {
                 setLoading(false);
@@ -30,7 +31,17 @@ const AlertasAuditoria = () => {
         fetchAlertas();
     }, []);
 
-    if (erro) return null; // Se der erro, não exibe nada para não quebrar o layout
+    if (erro) {
+        // Fallback elegante em vez de retornar null
+        return (
+            <div className="chart-card" style={{ height: '100%', minHeight: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{textAlign: 'center', color: '#94a3b8'}}>
+                    <ShieldAlert size={40} style={{marginBottom: '10px', opacity: 0.5}} />
+                    <p>Auditoria indisponível</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="chart-card" style={{ height: '100%', minHeight: '300px' }}>

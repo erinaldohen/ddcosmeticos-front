@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 
 const Login = () => {
   const navigate = useNavigate();
+  // Mantive 'login' no estado para compatibilidade, mas representa o Email
   const [credentials, setCredentials] = useState({ login: '', senha: '' });
   const [loading, setLoading] = useState(false);
 
@@ -21,39 +22,44 @@ const Login = () => {
       setLoading(true);
 
       try {
-        // AJUSTE CRÍTICO: Mapeando os nomes dos campos para o Backend
-        // Se o seu Java AuthenticationDTO espera "matricula", mudamos aqui:
+        // AJUSTE CRÍTICO 2.0: Adaptação para o novo sistema de Login por EMAIL
+        // O Backend agora espera um LoginRequestDTO(String email, String senha)
+
         const payload = {
-          matricula: credentials.login, // Frontend usa 'login', Backend recebe 'matricula'
+          email: credentials.login, // Mapeamos o campo 'login' do form para 'email' do DTO
           senha: credentials.senha
         };
 
-        // Se o backend esperar 'login', mude 'matricula' para 'login' abaixo
         const response = await api.post('/auth/login', payload);
 
-        const { token, nome, perfil, matricula } = response.data;
+        // O novo LoginResponseDTO retorna: { token, nome, perfil }
+        const { token, nome, perfil } = response.data;
 
         if (token) {
           localStorage.setItem('token', token);
-          localStorage.setItem('usuario', JSON.stringify({ nome, perfil, matricula }));
+          // Salvamos o objeto completo para uso no menu/cabeçalho
+          localStorage.setItem('usuario', JSON.stringify({
+            nome,
+            perfil,
+            email: credentials.login // Guardamos o email para referência local
+          }));
 
-          toast.success(`Bem-vindo(a), ${nome.split(' ')[0]}!`);
+          toast.success(`Bem-vindo(a), ${nome ? nome.split(' ')[0] : 'Usuário'}!`);
           navigate('/dashboard');
         } else {
-          toast.error("Erro: Token não recebido.");
+          toast.error("Erro: Token de acesso não recebido.");
         }
 
       } catch (error) {
         console.error("Erro Login:", error);
 
-        // Feedback detalhado para você corrigir rápido
         if (error.response?.status === 400) {
-          console.log("ERRO 400 - RESPOSTA DO SERVER:", error.response.data);
-          toast.error("Erro de Validação. Verifique o console (F12).");
+          // Erro de validação (ex: email inválido)
+          toast.warning("Verifique o e-mail e a senha informados.");
         } else if (error.response?.status === 401 || error.response?.status === 403) {
-          toast.error("Usuário ou senha incorretos.");
+          toast.error("Credenciais inválidas. Tente novamente.");
         } else {
-          toast.error("Erro ao conectar ao servidor.");
+          toast.error("Servidor indisponível no momento.");
         }
       } finally {
         setLoading(false);
@@ -61,16 +67,16 @@ const Login = () => {
 };
 
   return (
-    // <main>: Conteúdo principal da página
+    // <main>: Conteúdo principal da página (LAYOUT INTACTO)
     <main style={{
       display: 'flex', justifyContent: 'center', alignItems: 'center',
       minHeight: '100vh', background: '#F0F2F5', padding: '20px'
     }}>
 
-      {/* <section>: Uma seção temática independente (o card de login) */}
+      {/* <section>: Card de login */}
       <section className="chart-card" style={{ width: '100%', maxWidth: '420px', padding: '40px 30px', borderRadius: '16px' }} aria-labelledby="login-header">
 
-        {/* <header>: Cabeçalho da seção, contendo a identidade (logo/título) */}
+        {/* <header>: Identidade visual */}
         <header style={{ textAlign: 'center', marginBottom: '35px' }}>
           <img
             src={logoUrl}
@@ -89,7 +95,6 @@ const Login = () => {
             DD Cosméticos
           </h1>
 
-          {/* id="login-header" conecta com aria-labelledby da section */}
           <p id="login-header" className="text-muted" style={{ fontSize: '0.95rem' }}>
             Faça login para acessar o sistema
           </p>
@@ -97,21 +102,20 @@ const Login = () => {
 
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: '20px' }}>
-            {/* htmlFor conecta a label ao input pelo ID */}
             <label htmlFor="login" style={{ display: 'block', marginBottom: '8px', color: '#334155', fontWeight: '500' }}>
-              Matrícula / Login
+              E-mail Corporativo
             </label>
             <div className="input-group" style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '12px', background: '#f8fafc' }}>
               <User size={20} color="#F22998" style={{ marginRight: '12px' }} aria-hidden="true" />
               <input
                 id="login"
-                type="text"
+                type="email" // Alterado para email para ativar validação do navegador
                 name="login"
                 required
                 value={credentials.login}
                 onChange={handleChange}
-                placeholder="Digite sua matrícula"
-                autoComplete="username"
+                placeholder="email@ddcosmeticos.com.br" // Placeholder atualizado
+                autoComplete="email"
                 style={{ border: 'none', outline: 'none', width: '100%', fontSize: '1rem', background: 'transparent', color: '#1e293b' }}
               />
             </div>
