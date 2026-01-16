@@ -3,149 +3,233 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import {
-  Truck, FileText, Calendar, Plus, Save,
+  Truck, FileText, Plus, Save,
   Search, Trash2, ArrowLeft, User, Barcode,
-  AlertCircle, DollarSign
+  UploadCloud, X, Package
 } from 'lucide-react';
-import './EntradaEstoque.css'; // Vamos criar o CSS abaixo
+import './EntradaEstoque.css';
 
 const EntradaEstoque = () => {
   const navigate = useNavigate();
   const searchInputRef = useRef(null);
+  const qtdInputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const listaSugestoesRef = useRef(null);
 
-  // --- ESTADOS DO CABEÇALHO (AUDITORIA) ---
+  const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
+
+  const [loading, setLoading] = useState(false);
   const [cabecalho, setCabecalho] = useState({
     fornecedorId: '',
-    tipoEntrada: 'NOTA_FISCAL', // NOTA_FISCAL ou RECIBO
+    tipoEntrada: 'NOTA_FISCAL',
     numeroDocumento: '',
     dataEmissao: new Date().toISOString().split('T')[0],
     observacao: ''
   });
 
   const [fornecedores, setFornecedores] = useState([]);
-
-  // --- ESTADOS DOS ITENS ---
   const [itens, setItens] = useState([]);
-  const [termoBusca, setTermoBusca] = useState('');
-  const [produtoSelecionado, setProdutoSelecionado] = useState(null);
 
-  // Dados temporários do item sendo adicionado
+  // --- ESTADOS DA BUSCA INTELIGENTE ---
+  const [termoBusca, setTermoBusca] = useState('');
+  const [sugestoes, setSugestoes] = useState([]);
+  const [indiceAtivo, setIndiceAtivo] = useState(-1);
+  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
+
+  const [produtoSelecionado, setProdutoSelecionado] = useState(null);
   const [qtdItem, setQtdItem] = useState(1);
   const [custoItem, setCustoItem] = useState('');
 
-  // Carrega fornecedores ao abrir
   useEffect(() => {
     carregarFornecedores();
   }, []);
 
   const carregarFornecedores = async () => {
     try {
-      const res = await api.get('/fornecedores'); // Certifique-se de ter esse endpoint
-      setFornecedores(res.data.content || res.data);
-    } catch (e) {
-      // Mock para teste visual caso não tenha backend de fornecedores ainda
-      setFornecedores([
-        { id: 1, razaoSocial: 'Natura Cosméticos S.A.' },
-        { id: 2, razaoSocial: 'Distribuidora Beleza Total' },
-        { id: 3, razaoSocial: 'Avon Brasil' }
-      ]);
-    }
+      const res = await api.get('/fornecedores');
+      setFornecedores(res.data || []);
+    } catch (e) { toast.error("Erro ao carregar fornecedores."); }
   };
 
-  const handleBuscaProduto = async (e) => {
-    if (e.key === 'Enter') {
-      try {
-        // Busca por EAN ou Nome
-        const res = await api.get(`/produtos?termo=${termoBusca}`);
-        const lista = res.data.content || [];
+  // --- HELPERS ---
+  const parseMoeda = (v) => v ? parseFloat(v.toString().replace(/\./g, '').replace(',', '.')) : 0;
+  const formatarMoeda = (v) => v ? Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '';
+  const aplicarMascara = (v) => {
+    const n = v.replace(/\D/g, "");
+    return n ? (Number(n) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : "";
+  };
 
-        if (lista.length === 1) {
-          selecionarProduto(lista[0]);
-        } else if (lista.length > 1) {
-          toast.info("Vários produtos encontrados. Refine a busca.");
-        } else {
-          toast.warning("Produto não encontrado.");
-        }
-      } catch (err) { toast.error("Erro ao buscar produto."); }
+  // --- BUSCA COM DEBOUNCE ---
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(async () => {
+      if (termoBusca.length >= 2 && !produtoSelecionado) {
+        try {
+          const res = await api.get(`/produtos?termo=${termoBusca}`);
+          const lista = res.data.content || [];
+          setSugestoes(lista);
+          setMostrarSugestoes(true);
+          setIndiceAtivo(0);
+        } catch (err) { console.error(err); }
+      } else {
+        setSugestoes([]);
+        setMostrarSugestoes(false);
+        setIndiceAtivo(-1);
+      }
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
+  }, [termoBusca, produtoSelecionado]);
+
+  // --- AUTO-SCROLL DA LISTA ---
+  useEffect(() => {
+    if (mostrarSugestoes && listaSugestoesRef.current && indiceAtivo >= 0) {
+      const itemAtivo = listaSugestoesRef.current.children[indiceAtivo];
+      if (itemAtivo) {
+        itemAtivo.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+        });
+      }
+    }
+  }, [indiceAtivo, mostrarSugestoes]);
+
+  // --- NAVEGAÇÃO POR TECLADO ---
+  const handleKeyDownBusca = (e) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setIndiceAtivo(prev => (prev < sugestoes.length - 1 ? prev + 1 : prev));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setIndiceAtivo(prev => (prev > 0 ? prev - 1 : 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (mostrarSugestoes && sugestoes.length > 0 && indiceAtivo >= 0) {
+        selecionarProduto(sugestoes[indiceAtivo]);
+      }
+    } else if (e.key === 'Escape') {
+      setMostrarSugestoes(false);
     }
   };
 
   const selecionarProduto = (prod) => {
+    if (!prod) return;
     setProdutoSelecionado(prod);
-    setCustoItem(formatarMoeda(prod.precoCusto)); // Sugere o último custo
+    setCustoItem(formatarMoeda(prod.precoCusto));
     setQtdItem(1);
-    // Foca no campo de quantidade
-    setTimeout(() => document.getElementById('input-qtd').focus(), 100);
+
+    setTermoBusca('');
+    setMostrarSugestoes(false);
+    setSugestoes([]);
+    setIndiceAtivo(-1);
+
+    setTimeout(() => qtdInputRef.current?.focus(), 100);
   };
 
+  // --- IMPORTAÇÃO XML (ATUALIZADA PARA MAPEAR NOVOS CAMPOS) ---
+  const handleImportarXmlClick = () => fileInputRef.current.click();
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append("arquivo", file);
+    setLoading(true);
+    const toastId = toast.loading("Processando XML...");
+
+    try {
+       const res = await api.post('/estoque/importar-xml', formData, {
+         headers: { 'Content-Type': 'multipart/form-data' }
+       });
+       const { fornecedorId, numeroNota, itensXml } = res.data;
+
+       setCabecalho(prev => ({
+         ...prev,
+         fornecedorId: fornecedorId || prev.fornecedorId,
+         numeroDocumento: numeroNota || prev.numeroDocumento,
+         tipoEntrada: 'NOTA_FISCAL'
+       }));
+
+       // ATUALIZAÇÃO IMPORTANTE: Mapear NCM e Unidade
+       const itensMapeados = itensXml.map(item => ({
+           idProduto: item.idProduto,
+           codigoBarras: item.codigoBarras,
+           descricao: item.descricao,
+           quantidade: item.quantidade,
+           precoCusto: item.precoCusto,
+           total: item.total,
+           // Novos campos essenciais para Auto-Cadastro
+           ncm: item.ncm,
+           unidade: item.unidade,
+           novoProduto: item.novoProduto
+       }));
+
+       setItens(prev => [...prev, ...itensMapeados]);
+       toast.update(toastId, { render: "XML Importado!", type: "success", isLoading: false, autoClose: 3000 });
+    } catch (error) {
+       console.error(error);
+       toast.update(toastId, { render: "Erro ao ler XML", type: "error", isLoading: false, autoClose: 3000 });
+    } finally {
+      setLoading(false);
+      e.target.value = null;
+    }
+  };
+
+  // --- CRUD ITENS (ATUALIZADO PARA INCLUIR DADOS DO PRODUTO SELECIONADO) ---
   const adicionarItem = () => {
     if (!produtoSelecionado) return;
-
     const custoFloat = parseMoeda(custoItem);
-    if (custoFloat <= 0) {
-      return toast.warning("Informe o custo unitário (Valor da Nota).");
-    }
+    if (custoFloat <= 0) return toast.warning("Custo deve ser maior que zero.");
 
-    const novoItem = {
+    setItens([...itens, {
       idProduto: produtoSelecionado.id,
       codigoBarras: produtoSelecionado.codigoBarras,
       descricao: produtoSelecionado.descricao,
+      // Se estamos adicionando manual, pegamos os dados do produto selecionado
+      ncm: produtoSelecionado.ncm,
+      unidade: produtoSelecionado.unidade,
+
       quantidade: Number(qtdItem),
       precoCusto: custoFloat,
       total: Number(qtdItem) * custoFloat
-    };
+    }]);
 
-    setItens([...itens, novoItem]);
-
-    // Limpa seleção para próximo item
     setProdutoSelecionado(null);
-    setTermoBusca('');
     setQtdItem(1);
     setCustoItem('');
-    searchInputRef.current.focus();
+    setTimeout(() => searchInputRef.current?.focus(), 100);
   };
 
-  const removerItem = (index) => {
-    const novaLista = [...itens];
-    novaLista.splice(index, 1);
-    setItens(novaLista);
-  };
+  const removerItem = (idx) => setItens(prev => prev.filter((_, i) => i !== idx));
 
+  // --- FINALIZAR ENTRADA (ATUALIZADO PARA ENVIAR DADOS COMPLETOS) ---
   const finalizarEntrada = async () => {
     if (!cabecalho.fornecedorId) return toast.warning("Selecione o Fornecedor.");
-    if (itens.length === 0) return toast.warning("Adicione pelo menos um produto.");
+    if (itens.length === 0) return toast.warning("Adicione produtos.");
 
+    setLoading(true);
     try {
-      // Envia item a item (ou em lote, dependendo do seu Backend)
-      // Aqui vamos simular o envio em lote para o EstoqueService
       for (const item of itens) {
-        const payload = {
+        await api.post('/estoque/entrada', {
           codigoBarras: item.codigoBarras,
           quantidade: item.quantidade,
           precoCusto: item.precoCusto,
+
+          // DADOS PARA AUTO-CADASTRO (Se não existirem, o backend cria)
+          descricao: item.descricao,
+          ncm: item.ncm,
+          unidade: item.unidade,
+
           numeroNotaFiscal: cabecalho.tipoEntrada === 'NOTA_FISCAL' ? cabecalho.numeroDocumento : null,
-          fornecedorId: cabecalho.fornecedorId, // Envia ID do fornecedor para auditoria
-          observacao: cabecalho.observacao || `Entrada Manual (${cabecalho.tipoEntrada})`,
-          tipoDocumento: cabecalho.tipoEntrada // Passa se é Recibo ou Nota
-        };
-
-        await api.post('/produtos/estoque', null, { params: payload });
+          fornecedorId: cabecalho.fornecedorId,
+          observacao: `Entrada Manual: ${cabecalho.observacao}`
+        });
       }
-
-      toast.success("Estoque atualizado com sucesso!");
+      toast.success("Entrada realizada e Produtos Atualizados!");
       navigate('/produtos');
     } catch (e) {
-      toast.error("Erro ao processar entrada.");
-      console.error(e);
+        toast.error("Erro ao processar.");
+        console.error(e);
     }
-  };
-
-  // Helpers de Moeda (Iguais ao Form)
-  const parseMoeda = (v) => v ? parseFloat(v.toString().replace(/\./g, '').replace(',', '.')) : 0;
-  const formatarMoeda = (v) => v ? Number(v).toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '';
-  const mascaraMoeda = (v) => {
-    const n = v.replace(/\D/g, "");
-    return n ? (Number(n)/100).toLocaleString('pt-BR', {minimumFractionDigits: 2}) : "";
+    finally { setLoading(false); }
   };
 
   const totalGeral = itens.reduce((acc, item) => acc + item.total, 0);
@@ -154,186 +238,123 @@ const EntradaEstoque = () => {
     <div className="container-fluid">
       <div className="page-header">
         <div className="page-title">
-          <h1>Nova Entrada de Mercadoria</h1>
-          <p>Registro auditável de compras e ajustes de estoque</p>
+          <h1>Entrada de Mercadoria</h1>
+          <p>Manual ou Importação via XML (NFe)</p>
         </div>
-        <button className="btn-secondary" onClick={() => navigate('/produtos')}>
-          <ArrowLeft size={18} /> Voltar
-        </button>
+        <button className="btn-secondary" onClick={() => navigate('/produtos')}><ArrowLeft size={18}/> Voltar</button>
       </div>
 
       <div className="entrada-layout">
-
-        {/* PAINEL ESQUERDO: CABEÇALHO E PRODUTOS */}
         <div className="painel-principal">
-
-          {/* 1. DADOS DA ORIGEM (AUDITORIA) */}
           <div className="card-entrada">
-            <h3 className="card-title"><FileText size={18}/> Dados do Documento</h3>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '1px solid #f1f5f9', paddingBottom: 15}}>
+                <h3 className="card-title" style={{margin:0, border:0, padding:0}}><Truck size={18}/> Origem</h3>
+                <div style={{display: 'flex', gap: 10}}>
+                    <input type="file" accept=".xml" ref={fileInputRef} style={{display: 'none'}} onChange={handleFileChange} />
+                    <button className="btn-xml" onClick={handleImportarXmlClick} data-label="Importar Nota Fiscal (XML)">
+                        <UploadCloud size={16}/> Importar XML
+                    </button>
+                </div>
+            </div>
             <div className="form-row">
               <div className="form-group flex-2">
                 <label>Fornecedor *</label>
-                <select
-                  value={cabecalho.fornecedorId}
-                  onChange={(e) => setCabecalho({...cabecalho, fornecedorId: e.target.value})}
-                  className={!cabecalho.fornecedorId ? 'input-warning' : ''}
-                >
-                  <option value="">Selecione o Fornecedor...</option>
-                  {fornecedores.map(f => (
-                    <option key={f.id} value={f.id}>{f.razaoSocial}</option>
-                  ))}
+                <select value={cabecalho.fornecedorId} onChange={(e) => setCabecalho({...cabecalho, fornecedorId: e.target.value})} className={!cabecalho.fornecedorId ? 'input-warning' : ''}>
+                  <option value="">Selecione...</option>
+                  {fornecedores.map(f => <option key={f.id} value={f.id}>{f.razaoSocial || f.nomeFantasia}</option>)}
                 </select>
               </div>
-              <div className="form-group">
-                <label>Tipo Doc.</label>
-                <select
-                  value={cabecalho.tipoEntrada}
-                  onChange={(e) => setCabecalho({...cabecalho, tipoEntrada: e.target.value})}
-                >
-                  <option value="NOTA_FISCAL">Nota Fiscal (NF-e)</option>
-                  <option value="RECIBO">Recibo / Pedido</option>
-                  <option value="AJUSTE">Ajuste Manual</option>
-                </select>
-              </div>
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Nº Documento</label>
-                <input
-                  type="text"
-                  placeholder={cabecalho.tipoEntrada === 'NOTA_FISCAL' ? "Ex: 12345" : "Opcional"}
-                  value={cabecalho.numeroDocumento}
-                  onChange={(e) => setCabecalho({...cabecalho, numeroDocumento: e.target.value})}
-                />
-              </div>
-              <div className="form-group">
-                <label>Data Emissão</label>
-                <input
-                  type="date"
-                  value={cabecalho.dataEmissao}
-                  onChange={(e) => setCabecalho({...cabecalho, dataEmissao: e.target.value})}
-                />
-              </div>
+              <div className="form-group"><label>Nº Doc</label><input value={cabecalho.numeroDocumento} onChange={(e) => setCabecalho({...cabecalho, numeroDocumento: e.target.value})} placeholder="Ex: 12345" /></div>
             </div>
           </div>
 
-          {/* 2. INSERÇÃO DE ITENS */}
-          <div className="card-entrada destaque">
-            <h3 className="card-title"><Barcode size={18}/> Adicionar Produtos</h3>
+          <div className="card-entrada destaque" style={{overflow: 'visible'}}>
+            <h3 className="card-title"><Barcode size={18}/> Incluir Itens</h3>
 
-            <div className="search-box-entrada">
-              <input
-                ref={searchInputRef}
-                type="text"
-                placeholder="Bipe o código de barras ou digite o nome e tecle Enter..."
-                value={termoBusca}
-                onChange={(e) => setTermoBusca(e.target.value)}
-                onKeyDown={handleBuscaProduto}
-                disabled={!!produtoSelecionado}
-              />
-              <button className="btn-search-icon"><Search size={18}/></button>
-            </div>
+            {!produtoSelecionado && (
+              <div className="search-box-container" style={{position: 'relative', zIndex: 100}}>
+                <div className="search-box-entrada">
+                    <input ref={searchInputRef} type="text" placeholder="Digite EAN ou Nome..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} onKeyDown={handleKeyDownBusca} autoFocus autoComplete="off" />
+                    <button className="btn-search-icon"><Search size={18}/></button>
+                </div>
+
+                {/* LISTA FLUTUANTE ELEGANTE (DESIGN NOVO) */}
+                {mostrarSugestoes && sugestoes.length > 0 && (
+                    <div className="dropdown-sugestoes" ref={listaSugestoesRef}>
+                        {sugestoes.map((prod, index) => (
+                            <div
+                                key={prod.id}
+                                className={`sugestao-item ${index === indiceAtivo ? 'ativo' : ''}`}
+                                onClick={() => selecionarProduto(prod)}
+                                onMouseEnter={() => setIndiceAtivo(index)}
+                            >
+                                {/* Ícone Ilustrativo */}
+                                <div className="sugestao-icon-wrapper">
+                                    <Package size={20} strokeWidth={1.5} />
+                                </div>
+
+                                {/* Texto */}
+                                <div className="sugestao-conteudo">
+                                    <span className="sugestao-nome">{prod.descricao}</span>
+                                    <div className="sugestao-sublinha">
+                                        <Barcode size={14} style={{marginRight: 4}}/>
+                                        <span className="sugestao-ean">{prod.codigoBarras}</span>
+                                    </div>
+                                </div>
+
+                                {/* Dica Visual de Enter */}
+                                {index === indiceAtivo && (
+                                    <div className="sugestao-enter-hint">↵</div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+              </div>
+            )}
 
             {produtoSelecionado && (
               <div className="item-editor">
-                <div className="produto-info">
-                  <span className="prod-nome">{produtoSelecionado.descricao}</span>
-                  <span className="prod-ean">{produtoSelecionado.codigoBarras}</span>
+                <div className="produto-header" style={{display: 'flex', justifyContent: 'space-between'}}>
+                  <div><span className="prod-nome">{produtoSelecionado.descricao}</span><span className="prod-ean">{produtoSelecionado.codigoBarras}</span></div>
+                  <button onClick={() => { setProdutoSelecionado(null); setTimeout(()=>searchInputRef.current?.focus(), 100)}} style={{background:'none', border:'none', cursor:'pointer'}}><X size={18} color="#ef4444"/></button>
                 </div>
-
-                <div className="inputs-valores">
-                  <div className="form-group">
-                    <label>Quantidade</label>
-                    <input
-                      id="input-qtd"
-                      type="number"
-                      min="1"
-                      value={qtdItem}
-                      onChange={(e) => setQtdItem(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Custo Unit. (R$)</label>
-                    <input
-                      type="text"
-                      value={custoItem}
-                      onChange={(e) => setCustoItem(mascaraMoeda(e.target.value))}
-                      placeholder="0,00"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Total Item</label>
-                    <input
-                      type="text"
-                      disabled
-                      value={formatarMoeda(qtdItem * parseMoeda(custoItem))}
-                      style={{backgroundColor: '#e0e7ff', fontWeight: 'bold'}}
-                    />
-                  </div>
-                  <button className="btn-add-item" onClick={adicionarItem}>
-                    <Plus size={18}/> Adicionar
-                  </button>
-                  <button className="btn-cancel-item" onClick={() => {
-                    setProdutoSelecionado(null);
-                    setTermoBusca('');
-                  }}>Cancelar</button>
+                <div className="inputs-valores-row">
+                  <div className="form-group"><label>Qtd.</label><input ref={qtdInputRef} type="number" min="1" value={qtdItem} onChange={(e) => setQtdItem(e.target.value)} onKeyDown={(e)=>e.key==='Enter' && document.getElementById('input-custo').focus()}/></div>
+                  <div className="form-group"><label>Custo (R$)</label><input id="input-custo" type="text" value={custoItem} onChange={(e) => setCustoItem(aplicarMascara(e.target.value))} onKeyDown={(e)=>e.key==='Enter' && adicionarItem()}/></div>
+                  <div className="form-group"><label>Total</label><input type="text" disabled value={formatarMoeda(qtdItem * parseMoeda(custoItem))} style={{backgroundColor: '#e0e7ff', fontWeight: 'bold'}}/></div>
+                  <div className="actions-row"><button className="btn-add-item" onClick={adicionarItem}><Plus size={18}/> Inserir</button></div>
                 </div>
               </div>
             )}
           </div>
-
         </div>
 
-        {/* PAINEL DIREITO: LISTA E TOTAIS */}
         <div className="painel-resumo">
           <div className="lista-itens">
-            <h3>Itens Lançados ({itens.length})</h3>
-            {itens.length === 0 ? (
-              <div className="empty-state">
-                <Truck size={40} color="#cbd5e1"/>
-                <p>Nenhum item adicionado.</p>
-              </div>
-            ) : (
-              <ul>
-                {itens.map((item, idx) => (
-                  <li key={idx} className="item-row">
-                    <div className="item-desc">
+            <h3>Itens ({itens.length})</h3>
+            <ul className="itens-scroll">
+              {itens.map((item, idx) => (
+                <li key={idx} className="item-row">
+                  <div className="item-desc">
                       <strong>{item.descricao}</strong>
-                      <small>{item.codigoBarras}</small>
-                    </div>
-                    <div className="item-values">
-                      <span>{item.quantidade} x R$ {formatarMoeda(item.precoCusto)}</span>
-                      <strong>R$ {formatarMoeda(item.total)}</strong>
-                    </div>
-                    <button className="btn-trash" onClick={() => removerItem(idx)}>
-                      <Trash2 size={16}/>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+                      <small>{item.quantidade} x R$ {formatarMoeda(item.precoCusto)}</small>
+                      {/* Indicador visual se for produto novo (opcional) */}
+                      {item.novoProduto && <span style={{fontSize: '0.7rem', color: '#059669', fontWeight:'bold'}}>✨ Novo Cadastro</span>}
+                  </div>
+                  <div className="item-total"><strong>R$ {formatarMoeda(item.total)}</strong><button className="btn-trash" onClick={() => removerItem(idx)}><Trash2 size={16}/></button></div>
+                </li>
+              ))}
+            </ul>
           </div>
-
           <div className="resumo-footer">
-            <div className="total-geral">
-              <span>Total da Nota</span>
-              <h2>R$ {formatarMoeda(totalGeral)}</h2>
-            </div>
-
-            <div className="audit-info">
-              <User size={14}/>
-              <span>Registrado por: <strong>Usuário Logado</strong></span>
-            </div>
-
-            <button className="btn-finalizar" onClick={finalizarEntrada}>
-              <Save size={20}/> Confirmar Entrada
-            </button>
+            <div className="audit-info"><User size={14}/><span>Resp: <strong>{usuario.nome}</strong></span></div>
+            <div className="total-block"><span>Total Nota</span><h2>R$ {formatarMoeda(totalGeral)}</h2></div>
+            <button className="btn-finalizar" onClick={finalizarEntrada} disabled={loading}>{loading ? '...' : <><Save size={20}/> Confirmar</>}</button>
           </div>
         </div>
-
       </div>
     </div>
   );
 };
-
 export default EntradaEstoque;

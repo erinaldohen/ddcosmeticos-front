@@ -3,7 +3,7 @@ import { useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingCart, DollarSign, Package,
   FileText, ShieldCheck, LogOut, History, User, Menu, X,
-  Truck // <--- NOVO IMPORT DO ÍCONE
+  Truck, Users // <--- 1. NOVO IMPORT DO ÍCONE USERS
 } from 'lucide-react';
 import './MainLayout.css';
 
@@ -30,9 +30,10 @@ const MainLayout = ({ children }) => {
     { label: 'Gerir Caixa', path: '/caixa', icon: <DollarSign size={20} /> },
     { label: 'Histórico Caixas', path: '/historico-caixa', icon: <History size={20} /> },
 
-    // Agrupamento lógico de Produtos e Estoque
+    // --- GRUPO DE GESTÃO (FORNECEDORES, PRODUTOS, ESTOQUE) ---
+    { label: 'Fornecedores', path: '/fornecedores', icon: <Users size={20} /> }, // <--- 2. NOVO MENU ADICIONADO
     { label: 'Produtos', path: '/produtos', icon: <Package size={20} /> },
-    { label: 'Entrada Estoque', path: '/estoque/entrada', icon: <Truck size={20} /> }, // <--- NOVO MENU
+    { label: 'Entrada Estoque', path: '/estoque/entrada', icon: <Truck size={20} /> },
 
     { label: 'Fiscal', path: '/fiscal', icon: <FileText size={20} /> },
     { label: 'Auditoria', path: '/auditoria', icon: <ShieldCheck size={20} /> },

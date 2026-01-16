@@ -12,7 +12,11 @@ import Dashboard from './pages/Dashboard/Dashboard';
 import PDV from './pages/PDV/PDV';
 import ProdutoList from './pages/Produtos/ProdutoList';
 import ProdutoForm from './pages/Produtos/ProdutoForm';
-import EntradaEstoque from './pages/Estoque/EntradaEstoque'; // <--- NOVO IMPORT
+import EntradaEstoque from './pages/Estoque/EntradaEstoque';
+// --- NOVOS IMPORTS FORNECEDORES ---
+import FornecedorList from './pages/Fornecedores/FornecedorList';
+import FornecedorForm from './pages/Fornecedores/FornecedorForm';
+// ----------------------------------
 import GerenciamentoCaixa from './pages/Caixa/GerenciamentoCaixa';
 import HistoricoCaixa from './pages/Caixa/HistoricoCaixa';
 import RelatorioImpostos from './pages/Fiscal/RelatorioImpostos';
@@ -80,6 +84,7 @@ function App() {
           </AdminRoute>
         } />
 
+        {/* PRODUTOS */}
         <Route path="/produtos" element={
           <AdminRoute>
             <MainLayout><ProdutoList /></MainLayout>
@@ -98,7 +103,27 @@ function App() {
           </AdminRoute>
         } />
 
-        {/* --- NOVA ROTA DE ESTOQUE --- */}
+        {/* --- NOVAS ROTAS DE FORNECEDORES --- */}
+        <Route path="/fornecedores" element={
+          <AdminRoute>
+            <MainLayout><FornecedorList /></MainLayout>
+          </AdminRoute>
+        } />
+
+        <Route path="/fornecedores/novo" element={
+          <AdminRoute>
+            <MainLayout><FornecedorForm /></MainLayout>
+          </AdminRoute>
+        } />
+
+        <Route path="/fornecedores/editar/:id" element={
+          <AdminRoute>
+            <MainLayout><FornecedorForm /></MainLayout>
+          </AdminRoute>
+        } />
+        {/* ----------------------------------- */}
+
+        {/* ESTOQUE */}
         <Route path="/estoque/entrada" element={
           <AdminRoute>
             <MainLayout><EntradaEstoque /></MainLayout>

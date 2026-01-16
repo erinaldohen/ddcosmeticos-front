@@ -1,16 +1,25 @@
+/* =========================================
+   LAYOUT E ESTRUTURA
+   ========================================= */
+
 .entrada-layout {
   display: flex;
   gap: 24px;
   align-items: flex-start;
+  height: calc(100vh - 180px); /* Ajusta altura para caber na tela */
 }
 
+/* Coluna Esquerda (Formulários) */
 .painel-principal {
   flex: 2;
   display: flex;
   flex-direction: column;
   gap: 20px;
+  overflow-y: auto;
+  padding-bottom: 20px;
 }
 
+/* Coluna Direita (Lista) */
 .painel-resumo {
   flex: 1;
   background: white;
@@ -18,33 +27,35 @@
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 140px);
-  position: sticky;
-  top: 20px;
+  height: 100%;
+  border: 1px solid #e2e8f0;
 }
+
+/* =========================================
+   CARDS E INPUTS
+   ========================================= */
 
 .card-entrada {
   background: white;
   padding: 24px;
   border-radius: 12px;
   border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
 }
 
 .card-entrada.destaque {
-  border-left: 4px solid #6366f1;
+  border-left: 5px solid #6366f1; /* Destaque roxo para a área de ação */
 }
 
 .card-title {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 0;
+  margin: 0 0 20px 0;
   font-size: 1.1rem;
   color: #1e293b;
   border-bottom: 1px solid #f1f5f9;
-  padding-bottom: 15px;
-  margin-bottom: 20px;
+  padding-bottom: 12px;
 }
 
 .input-warning {
@@ -52,16 +63,16 @@
   background-color: #fffbeb !important;
 }
 
-/* SEARCH BOX */
+/* Search Box (Input Principal) */
 .search-box-entrada {
   display: flex;
   gap: 10px;
 }
 .search-box-entrada input {
   flex: 1;
-  height: 48px;
+  height: 50px;
   padding: 0 16px;
-  font-size: 1rem;
+  font-size: 1.1rem;
   border: 2px solid #e2e8f0;
   border-radius: 8px;
 }
@@ -70,61 +81,91 @@
   outline: none;
 }
 
-/* EDITOR DE ITEM */
+/* =========================================
+   EDITOR DE ITEM (Área Cinza)
+   ========================================= */
+
 .item-editor {
-  margin-top: 20px;
   background: #f8fafc;
   padding: 20px;
   border-radius: 8px;
   border: 1px dashed #cbd5e1;
+  animation: fadeIn 0.3s ease;
 }
 
-.produto-info {
-  margin-bottom: 15px;
-}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
+.produto-header { margin-bottom: 15px; }
 .prod-nome { display: block; font-weight: 700; font-size: 1.1rem; color: #0f172a; }
 .prod-ean { display: block; font-size: 0.9rem; color: #64748b; margin-top: 4px; }
 
-.inputs-valores {
+.inputs-valores-row {
   display: flex;
   gap: 15px;
   align-items: flex-end;
+  flex-wrap: wrap;
 }
 
+.actions-row {
+  display: flex;
+  gap: 10px;
+  margin-left: auto; /* Empurra botões para direita */
+}
+
+/* Botões de Ação do Item */
 .btn-add-item {
   height: 42px;
-  padding: 0 20px;
-  background: #10b981;
+  padding: 0 24px;
+  background: #10b981; /* Verde Sucesso */
   color: white;
   border: none;
   border-radius: 8px;
   font-weight: 600;
   display: flex; align-items: center; gap: 8px;
   cursor: pointer;
+  transition: background 0.2s;
 }
+.btn-add-item:hover { background: #059669; }
 
 .btn-cancel-item {
   height: 42px;
-  padding: 0 15px;
-  background: transparent;
+  padding: 0 16px;
+  background: white;
   color: #ef4444;
   border: 1px solid #ef4444;
   border-radius: 8px;
   cursor: pointer;
 }
 
-/* LISTA LATERAL */
+/* =========================================
+   LISTA LATERAL (ITENS ADICIONADOS)
+   ========================================= */
+
 .lista-itens {
+  flex: 1;
   padding: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.lista-itens h3 { margin: 0 0 15px 0; font-size: 1rem; color: #64748b; }
+
+.itens-scroll {
   flex: 1;
   overflow-y: auto;
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
-.lista-itens h3 { margin-top: 0; font-size: 1rem; color: #64748b; }
 
 .empty-state {
-  text-align: center;
-  margin-top: 40px;
-  color: #94a3b8;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #cbd5e1;
 }
 
 .item-row {
@@ -135,20 +176,22 @@
   border-bottom: 1px solid #f1f5f9;
 }
 
-.item-desc { display: flex; flex-direction: column; flex: 1; }
-.item-desc strong { font-size: 0.9rem; }
-.item-desc small { font-size: 0.75rem; color: #64748b; }
+.item-desc { display: flex; flex-direction: column; max-width: 60%; }
+.item-desc strong { font-size: 0.9rem; color: #334155; }
+.item-desc small { font-size: 0.8rem; color: #64748b; }
 
-.item-values { text-align: right; margin-right: 15px; }
-.item-values span { display: block; font-size: 0.8rem; color: #64748b; }
-.item-values strong { display: block; font-size: 0.95rem; color: #0f172a; }
+.item-total { display: flex; align-items: center; gap: 10px; }
+.item-total strong { color: #0f172a; font-weight: 700; }
 
 .btn-trash {
-  background: none; border: none; color: #94a3b8; cursor: pointer;
+  background: none; border: none; color: #94a3b8; cursor: pointer; padding: 4px;
 }
-.btn-trash:hover { color: #ef4444; }
+.btn-trash:hover { color: #ef4444; background: #fee2e2; border-radius: 4px; }
 
-/* FOOTER */
+/* =========================================
+   FOOTER (TOTAIS E FINALIZAR)
+   ========================================= */
+
 .resumo-footer {
   padding: 24px;
   background: #f8fafc;
@@ -156,26 +199,177 @@
   border-radius: 0 0 12px 12px;
 }
 
-.total-geral span { display: block; font-size: 0.9rem; color: #64748b; }
-.total-geral h2 { margin: 5px 0 20px 0; color: #6366f1; }
-
 .audit-info {
   display: flex; align-items: center; gap: 8px;
   font-size: 0.8rem; color: #64748b; margin-bottom: 20px;
-  background: #e2e8f0; padding: 8px; border-radius: 6px;
+  background: #e2e8f0; padding: 8px; border-radius: 6px; justify-content: center;
 }
+
+.total-block { text-align: right; margin-bottom: 20px; }
+.total-block span { font-size: 0.9rem; color: #64748b; }
+.total-block h2 { margin: 5px 0 0 0; color: #6366f1; font-size: 1.8rem; }
 
 .btn-finalizar {
   width: 100%;
-  height: 50px;
+  height: 54px;
   background: #6366f1;
   color: white;
   border: none;
   border-radius: 8px;
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 1.1rem;
   display: flex; justify-content: center; align-items: center; gap: 10px;
   cursor: pointer;
   transition: background 0.2s;
+  box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4);
 }
-.btn-finalizar:hover { background: #4f46e5; }
+.btn-finalizar:hover:not(:disabled) { background: #4f46e5; transform: translateY(-1px); }
+.btn-finalizar:disabled { background: #94a3b8; cursor: not-allowed; box-shadow: none; }
+
+/* =========================================
+   BOTÃO XML E TOOLTIPS
+   ========================================= */
+
+.btn-xml {
+    background-color: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex; gap: 8px; align-items: center;
+    transition: all 0.2s;
+}
+.btn-xml:hover { background-color: #e2e8f0; border-color: #94a3b8; }
+
+/* Correção da Legenda (Tooltip) - Embaixo do botão */
+.btn-xml[data-label]::after {
+    top: 100%;
+    bottom: auto;
+    margin-top: 8px;
+    width: max-content;
+    max-width: 200px;
+    white-space: normal;
+    text-align: center;
+    z-index: 9999;
+}
+
+.btn-xml[data-label]::before {
+    top: 100%;
+    bottom: auto;
+    border-top-color: transparent;
+    border-bottom-color: #1e293b;
+    margin-top: -4px;
+}
+
+/* =========================================
+   LISTA DE SUGESTÕES (DESIGN NOVO ELEGANTE)
+   ========================================= */
+
+.search-box-container {
+    position: relative;
+    z-index: 100;
+}
+
+/* Container Flutuante com Sombra Suave */
+.dropdown-sugestoes {
+    position: absolute;
+    top: calc(100% + 4px); /* Respiro do input */
+    left: 0;
+    right: 0;
+
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+
+    box-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.05),
+        0 10px 15px -3px rgba(0, 0, 0, 0.05);
+
+    max-height: 280px;
+    overflow-y: auto;
+    z-index: 1000;
+    padding: 8px;
+
+    /* Scrollbar Fina */
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+
+.dropdown-sugestoes::-webkit-scrollbar { width: 5px; }
+.dropdown-sugestoes::-webkit-scrollbar-track { background: transparent; }
+.dropdown-sugestoes::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
+
+/* ITEM DA LISTA */
+.sugestao-item {
+    display: flex;
+    align-items: center;
+    gap: 16px; /* Espaço Ícone -> Texto */
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-bottom: 2px;
+}
+
+/* Estado Ativo */
+.sugestao-item.ativo,
+.sugestao-item:hover {
+    background-color: #f1f5f9;
+}
+
+/* Ícone (Avatar Quadrado) */
+.sugestao-icon-wrapper {
+    width: 42px;
+    height: 42px;
+    background-color: #e0e7ff; /* Fundo Roxo Claro */
+    color: #6366f1; /* Ícone Roxo */
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* Quando ativo, destaca o ícone */
+.sugestao-item.ativo .sugestao-icon-wrapper {
+    background-color: #6366f1;
+    color: white;
+    box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.3);
+}
+
+/* Conteúdo de Texto */
+.sugestao-conteudo {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 2px;
+}
+
+.sugestao-nome {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 0.95rem;
+    line-height: 1.2;
+}
+
+.sugestao-sublinha {
+    display: flex;
+    align-items: center;
+    color: #94a3b8;
+}
+
+.sugestao-ean {
+    font-size: 0.8rem;
+    font-family: 'Consolas', monospace;
+    letter-spacing: 0.5px;
+}
+
+/* Dica de Enter */
+.sugestao-enter-hint {
+    font-size: 1rem;
+    color: #94a3b8;
+    font-weight: bold;
+    padding-right: 8px;
+}
