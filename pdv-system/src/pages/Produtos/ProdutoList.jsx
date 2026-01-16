@@ -248,41 +248,40 @@ const ProdutoList = () => {
 
   // --- BUSCA DE DADOS ---
     const carregarProdutos = useCallback(async (pagina, termo) => {
-        console.log(`📡 Buscando página: ${pagina}, Termo: "${termo}"`);
+          setLoading(true);
+          try {
+            if (modoLixeira) {
+              const listaInativos = await produtoService.buscarLixeira();
+              const filtrados = termo
+                ? listaInativos.filter(p => p.descricao.toLowerCase().includes(termo.toLowerCase()) || p.codigoBarras.includes(termo))
+                : listaInativos;
 
-        setLoading(true);
-        try {
-          if (modoLixeira) {
-            const listaInativos = await produtoService.buscarLixeira();
-            const filtrados = termo
-              ? listaInativos.filter(p => p.descricao.toLowerCase().includes(termo.toLowerCase()) || p.codigoBarras.includes(termo))
-              : listaInativos;
-            setProdutos(filtrados);
-            setTotalPages(1);
-            setTotalElements(filtrados.length);
-            if(page !== 0) setPage(0);
-          } else {
-            // Modo Normal
-            const dados = await produtoService.listar(pagina, 10, termo);
+              setProdutos(filtrados);
+              setTotalPages(1);
+              setTotalElements(filtrados.length);
+              if(page !== 0) setPage(0);
 
-            // --- CORREÇÃO AQUI ---
-            // O Spring retorna 'content' para a lista e 'totalPages' para o número de páginas
-            // Verificamos se 'dados.content' existe, senão usamos 'dados' (caso o service já tenha tratado)
-            const lista = dados.content || dados.itens || [];
-            const paginas = dados.totalPages || dados.totalPaginas || 0;
-            const total = dados.totalElements || 0;
+            } else {
+              // --- MODO NORMAL ---
+              const dados = await produtoService.listar(pagina, 10, termo);
 
-            setProdutos(lista);
-            setTotalPages(paginas);
-            setTotalElements(total);
+              // CORREÇÃO DA EQUIPA DE FRONTEND:
+              // Verifica se o backend mandou no formato Spring ('content') ou personalizado ('itens')
+              const lista = dados.content || dados.itens || [];
+              const paginas = dados.totalPages || dados.totalPaginas || 0;
+              const total = dados.totalElements || 0;
+
+              setProdutos(lista);
+              setTotalPages(paginas);
+              setTotalElements(total);
+            }
+          } catch (error) {
+            console.error("Erro ao listar produtos:", error);
+            toast.error("Não foi possível carregar a lista de produtos.");
+          } finally {
+            setLoading(false);
           }
-        } catch (error) {
-          console.error(error); // Bom para debugar
-          toast.error("Erro ao sincronizar dados.");
-        } finally {
-          setLoading(false);
-        }
-      }, [modoLixeira]); // Removido 'page' da dependência para evitar loop, embora useCallback lide bem
+        }, [modoLixeira]);
 
   // Efeitos
   useEffect(() => {
