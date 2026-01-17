@@ -21,7 +21,6 @@ import GerenciamentoCaixa from './pages/Caixa/GerenciamentoCaixa';
 import HistoricoCaixa from './pages/Caixa/HistoricoCaixa';
 import RelatorioImpostos from './pages/Fiscal/RelatorioImpostos';
 import Auditoria from './pages/Auditoria/Auditoria';
-import LixeiraProdutos from './pages/Auditoria/LixeiraProdutos';
 
 // --- COMPONENTES DE PROTEÇÃO ---
 
@@ -139,12 +138,6 @@ function App() {
         <Route path="/auditoria" element={
           <AdminRoute>
             <MainLayout><Auditoria /></MainLayout>
-          </AdminRoute>
-        } />
-
-        <Route path="/auditoria/lixeira" element={
-          <AdminRoute>
-            <MainLayout><LixeiraProdutos /></MainLayout>
           </AdminRoute>
         } />
 

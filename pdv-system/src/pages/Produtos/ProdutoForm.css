@@ -29,13 +29,11 @@ body {
   padding: 40px;
   max-width: 1200px;
   margin: 0 auto;
-  overflow: visible; /* Garante que tooltips não sumam */
+  overflow: visible;
 }
 
-/* --- MOTOR DE LEGENDA INSTANTÂNEA (Para botões e ícones) --- */
-[data-label] {
-  position: relative;
-}
+/* --- MOTOR DE LEGENDA INSTANTÂNEA --- */
+[data-label] { position: relative; }
 
 [data-label]::after {
   content: attr(data-label);
@@ -43,7 +41,7 @@ body {
   bottom: 100%;
   left: 50%;
   transform: translate(-50%, -8px);
-  background: #1e293b; /* Slate-900 */
+  background: #1e293b;
   color: white;
   padding: 7px 12px;
   border-radius: 6px;
@@ -89,7 +87,7 @@ body {
 .page-title h1 {
   font-size: 1.8rem;
   font-weight: 700;
-  color: var(--text-main);
+  /* color: var(--text-main); -> REMOVIDO (Herda do body) */
   margin: 0;
   letter-spacing: -0.025em;
 }
@@ -114,17 +112,15 @@ body {
   padding: 32px;
   transition: box-shadow 0.2s;
   position: relative;
-  overflow: visible !important; /* Vital para tooltips laterais */
+  overflow: visible !important;
 }
 
-.form-section:hover {
-  box-shadow: var(--shadow-md);
-}
+.form-section:hover { box-shadow: var(--shadow-md); }
 
 .section-title {
   font-size: 1.1rem;
   font-weight: 600;
-  color: var(--text-main);
+  /* color: var(--text-main); -> REMOVIDO (Herda do body) */
   margin: 0 0 24px 0;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--border-subtle);
@@ -142,11 +138,7 @@ body {
   height: 32px !important;
 }
 
-.form-row {
-  display: flex;
-  gap: 24px;
-  margin-bottom: 24px;
-}
+.form-row { display: flex; gap: 24px; margin-bottom: 24px; }
 
 .form-group {
   flex: 1;
@@ -189,18 +181,11 @@ body {
 }
 
 /* --- INPUT GROUPS E BOTÕES --- */
-.input-action-group {
-  display: flex;
-  gap: 8px;
-  width: 100%;
-}
+.input-action-group { display: flex; gap: 8px; width: 100%; }
 
 .btn-magic, .btn-search-icon {
   height: 42px;
   width: 42px;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  color: var(--primary);
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
@@ -208,6 +193,12 @@ body {
   cursor: pointer;
   transition: all 0.2s;
   flex-shrink: 0;
+}
+
+.btn-magic {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  color: var(--primary);
 }
 
 .btn-search-icon {
@@ -222,9 +213,7 @@ body {
 /* --- DROPDOWN NCM E TOOLTIP LATERAL --- */
 .ncm-dropdown {
   position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
+  top: 100%; left: 0; right: 0;
   background: white;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
@@ -245,14 +234,11 @@ body {
   border-bottom: 1px solid #f1f5f9;
 }
 
-.ncm-suggestion-item:hover {
-  background-color: var(--primary-super-light);
-}
+.ncm-suggestion-item:hover { background-color: var(--primary-super-light); }
 
 .ncm-tooltip-box {
   position: absolute;
-  left: 103%;
-  top: 50%;
+  left: 103%; top: 50%;
   transform: translateY(-50%) translateX(-10px);
   background-color: #1e293b;
   color: #ffffff;
@@ -273,8 +259,7 @@ body {
 .ncm-tooltip-box::after {
   content: "";
   position: absolute;
-  top: 50%;
-  right: 100%;
+  top: 50%; right: 100%;
   transform: translateY(-50%);
   border: 7px solid transparent;
   border-right-color: #1e293b;
@@ -301,8 +286,7 @@ body {
   flex: 1;
 }
 
-/* --- PRECIFICAÇÃO E HIGHLIGHTS (CORRIGIDO) --- */
-
+/* --- PRECIFICAÇÃO E HIGHLIGHTS --- */
 .input-prefix-group {
   position: relative;
   display: flex;
@@ -310,21 +294,9 @@ body {
   width: 100%;
 }
 
-/* O símbolo R$ */
-.input-prefix-group .prefix {
-  position: absolute;
-  left: 12px;
-  color: var(--text-muted);
-  font-weight: 600;
-  font-size: 0.95rem;
-  pointer-events: none; /* Permite clicar através do ícone */
-  z-index: 10;
-}
-
-/* O símbolo % (Markup/Margem) */
+.input-prefix-group .prefix,
 .input-prefix-group .suffix {
   position: absolute;
-  right: 12px;
   color: var(--text-muted);
   font-weight: 600;
   font-size: 0.95rem;
@@ -332,19 +304,16 @@ body {
   z-index: 10;
 }
 
-/* O Campo de Texto (Input) - CORREÇÃO DE ESPAÇAMENTO */
+.input-prefix-group .prefix { left: 12px; }
+.input-prefix-group .suffix { right: 12px; }
+
 .input-prefix-group input {
   width: 100%;
-  /* Aumentado para 45px para o número não ficar em cima do R$ */
   padding-left: 45px !important;
   padding-right: 12px;
 }
 
-/* Se o input tiver um sufixo (como o Markup %), dá espaço na direita */
-.input-prefix-group input:not(:last-child) {
-    /* Garante espaço para o % na direita */
-    padding-right: 35px !important;
-}
+.input-prefix-group input:not(:last-child) { padding-right: 35px !important; }
 
 .input-highlight {
   background-color: #eff6ff !important;

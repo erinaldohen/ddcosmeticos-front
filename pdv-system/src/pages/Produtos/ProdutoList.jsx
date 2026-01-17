@@ -3,11 +3,12 @@ import api from '../../services/api';
 import { produtoService } from '../../services/produtoService';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
+import ConfirmModal from '../../components/ConfirmModal'; // Importação do Modal Global
 import {
   Search, Plus, Edit3, Trash2, Box,
   ChevronLeft, ChevronRight, Zap, Printer, History, X,
   RotateCcw, MoreHorizontal, ImageOff, Filter, XCircle, AlertOctagon,
-  Copy, Check, Upload, FileText, FileSpreadsheet // Ícones novos
+  Copy, Check, Upload, FileText, FileSpreadsheet, Bot
 } from 'lucide-react';
 import './ProdutoList.css';
 
@@ -36,6 +37,7 @@ const TableSkeleton = () => (
             </div>
           </div>
         </td>
+        <td><div className="sk-line w-80"></div></td>
         <td><div className="sk-line w-100"></div></td>
         <td><div className="sk-line w-60"></div></td>
         <td><div className="sk-badge"></div></td>
@@ -63,7 +65,7 @@ const CopyableCode = ({ code }) => {
     if (!code) return;
     navigator.clipboard.writeText(code);
     setCopied(true);
-    toast.success("Código copiado!", { autoClose: 1000, hideProgressBar: true, position: "bottom-center" });
+    toast.success("Copiado!", { autoClose: 1000, hideProgressBar: true, position: "bottom-center" });
     setTimeout(() => setCopied(false), 2000);
   };
 
@@ -71,9 +73,7 @@ const CopyableCode = ({ code }) => {
     <div className="code-wrapper" onClick={handleCopy} data-label={copied ? "Copiado!" : "Clique para copiar"}>
       <span className="product-code">{code || 'S/GTIN'}</span>
       {code && (
-        copied
-        ? <Check size={12} className="text-green-500" />
-        : <Copy size={12} className="icon-copy" />
+        copied ? <Check size={12} className="text-green-500" /> : <Copy size={12} className="icon-copy" />
       )}
     </div>
   );
@@ -140,33 +140,7 @@ const ActionMenu = ({ onHistory, onPrint, loadingPrint }) => {
   );
 };
 
-// --- MODAIS ---
-const ConfirmModal = ({ isOpen, onClose, onConfirm, title, message, confirmText, type = 'danger' }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="modal-backdrop">
-      <div className="modal-card small">
-        <div className="modal-header-clean">
-          <div className={`icon-circle ${type === 'danger' ? 'danger' : 'success'}`}>
-             {type === 'danger' ? <Trash2 size={20}/> : <RotateCcw size={20}/>}
-          </div>
-          <button onClick={onClose} className="btn-close-simple"><X size={20}/></button>
-        </div>
-        <div className="modal-body-clean">
-           <h3>{title}</h3>
-           <p>{message}</p>
-        </div>
-        <div className="modal-footer-clean">
-           <button className="btn-secondary" onClick={onClose}>Cancelar</button>
-           <button className={`btn-primary ${type === 'danger' ? 'red' : 'green'}`} onClick={() => { onConfirm(); onClose(); }}>
-             {confirmText}
-           </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
+// --- COMPONENTE: MODAL HISTÓRICO ---
 const HistoricoModal = ({ isOpen, onClose, historico, produtoNome }) => {
   if (!isOpen) return null;
   return (
@@ -194,7 +168,7 @@ const HistoricoModal = ({ isOpen, onClose, historico, produtoNome }) => {
                   <div className="timeline-content">
                     <span className={`tag-mini ${item.tipo}`}>{item.tipo}</span>
                     <div className="timeline-grid">
-                      <div><label>Nome</label> {item.nomeProduto}</div>
+                      <div><label>Usuario</label> {item.usuario || 'Sistema'}</div>
                       <div><label>Preço</label> R$ {item.precoVenda?.toFixed(2)}</div>
                       <div><label>Estoque</label> {item.quantidadeEstoque}</div>
                     </div>
@@ -214,6 +188,7 @@ const HistoricoModal = ({ isOpen, onClose, historico, produtoNome }) => {
 // ==================================================================================
 const ProdutoList = () => {
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
 
   // --- ESTADOS ---
   const [produtos, setProdutos] = useState([]);
@@ -234,7 +209,9 @@ const ProdutoList = () => {
   const [showHistoricoModal, setShowHistoricoModal] = useState(false);
   const [historicoData, setHistoricoData] = useState([]);
   const [selectedProdutoNome, setSelectedProdutoNome] = useState('');
-  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger' });
+
+  // ESTADO DO MODAL GLOBAL
+  const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger', confirmText: 'Confirmar' });
 
   const getImageUrl = (url) => {
     if (!url) return null;
@@ -242,12 +219,17 @@ const ProdutoList = () => {
     return `http://localhost:8080${url}`;
   };
 
-  // --- BUSCA DE DADOS (CORRIGIDA E BLINDADA) ---
+  // --- BUSCA DE DADOS ---
   const carregarProdutos = useCallback(async (pagina, termo) => {
     setLoading(true);
     try {
       if (modoLixeira) {
-        const listaInativos = await produtoService.buscarLixeira();
+        // --- MODO LIXEIRA ---
+        const listaBruta = await produtoService.buscarLixeira();
+
+        // CORREÇÃO: Aceita tudo que vem do backend (ativo=0 ou null) sem filtrar
+        const listaInativos = Array.isArray(listaBruta) ? listaBruta : [];
+
         const filtrados = termo
           ? listaInativos.filter(p => p.descricao.toLowerCase().includes(termo.toLowerCase()) || p.codigoBarras.includes(termo))
           : listaInativos;
@@ -261,7 +243,6 @@ const ProdutoList = () => {
         // --- MODO NORMAL ---
         const dados = await produtoService.listar(pagina, 10, termo);
 
-        // CORREÇÃO: Tratamento para lista vazia ou nula
         if (!dados) {
             setProdutos([]);
             setTotalPages(0);
@@ -269,9 +250,8 @@ const ProdutoList = () => {
             return;
         }
 
-        // Verifica formato Spring ('content') ou personalizado ('itens')
-        const lista = dados.content || dados.itens || [];
-        const paginas = dados.totalPages || dados.totalPaginas || 0;
+        const lista = dados.itens || dados.content || [];
+        const paginas = dados.totalPaginas || dados.totalPages || 0;
         const total = dados.totalElements || 0;
 
         setProdutos(lista);
@@ -279,19 +259,13 @@ const ProdutoList = () => {
         setTotalElements(total);
       }
     } catch (error) {
-      console.error("Debug Erro Listagem:", error);
-
-      // Tratamento silencioso para 404 (Lista vazia não é erro crítico)
+      console.error("Erro Listagem:", error);
       if (error.response && error.response.status === 404) {
           setProdutos([]);
           setTotalElements(0);
-      }
-      // Erro de Conexão (Backend desligado)
-      else if (error.code === "ERR_NETWORK") {
+      } else if (error.code === "ERR_NETWORK") {
           toast.error("Servidor offline. Verifique o backend.");
-      }
-      // Erro genérico
-      else {
+      } else {
           toast.error("Erro ao carregar lista de produtos.");
       }
     } finally {
@@ -306,7 +280,9 @@ const ProdutoList = () => {
 
   useEffect(() => {
     setSelectedIds([]);
-  }, [page, modoLixeira]);
+  }, [modoLixeira]);
+
+  // --- HANDLERS ---
 
   const handleSearchChange = (e) => {
     setTermoBusca(e.target.value);
@@ -323,100 +299,133 @@ const ProdutoList = () => {
     else setSelectedIds([...selectedIds, id]);
   };
 
-  // --- LÓGICA DE IMPORTAÇÃO ---
-  // --- LÓGICA DE IMPORTAÇÃO (ATUALIZADA PARA TOAST) ---
-    const handleImportar = async (e) => {
+  // --- IMPORTAÇÃO ---
+  const handleTriggerImport = () => {
+    if (fileInputRef.current) fileInputRef.current.click();
+  };
+
+  const handleImportar = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
 
       const formData = new FormData();
       formData.append("arquivo", file);
 
-      // 1. Inicia o toast de carregamento e guarda o ID dele
       const toastId = toast.loading("Processando arquivo... Aguarde.");
+      e.target.value = null;
 
       try {
-        const res = await api.post('/produtos/importar', formData, {
+        const response = await api.post('/produtos/importar', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
 
-        // 2. Analisa se houve erros no retorno do backend para decidir a cor
-        const temErros = !res.data.includes("❌ Erros: 0");
+        const dados = response.data;
+        const msg = dados.mensagem || dados.message || (typeof dados === 'string' ? dados : "Importação concluída.");
 
-        // 3. Atualiza o toast existente (não cria um novo, substitui o "Carregando")
-        toast.update(toastId, {
-          render: (
-            <div style={{ whiteSpace: 'pre-line', fontSize: '0.9rem', lineHeight: '1.4' }}>
-              <strong>Processamento Finalizado</strong>
-              <br/>
-              {res.data} {/* O backend já manda formatado com quebras de linha */}
-            </div>
-          ),
-          type: temErros ? "warning" : "success", // Amarelo se tiver erro, Verde se for sucesso total
-          isLoading: false,
-          autoClose: 5000, // Fecha sozinho em 5 segundos
-          closeOnClick: true,
-          draggable: true
-        });
+        const isSuccess = (dados.sucesso === true) ||
+                          msg.toLowerCase().startsWith('sucesso') ||
+                          msg.toLowerCase().includes('0 erros') ||
+                          msg.toLowerCase().includes('sem erros');
 
-        carregarProdutos(page, debouncedSearch);
-      } catch (err) {
-        console.error(err);
-        // Se der erro de rede ou 500
+        if (isSuccess) {
+           const hasPartialErrors = (dados.qtdErros > 0);
+           toast.update(toastId, {
+             render: msg,
+             type: hasPartialErrors ? "warning" : "success",
+             isLoading: false,
+             autoClose: 5000
+           });
+           carregarProdutos(page, debouncedSearch);
+        } else {
+           throw new Error(msg);
+        }
+      } catch (error) {
+        console.error(error);
+        const errorMsg = error.response?.data?.mensagem || error.message || "Falha crítica na importação.";
         toast.update(toastId, {
-          render: "Falha crítica ao enviar arquivo.",
+          render: errorMsg,
           type: "error",
           isLoading: false,
           autoClose: 4000
         });
       }
-
-      // Limpa o input
-      e.target.value = null;
-    };
-
-  // --- LÓGICA DE EXPORTAÇÃO ---
-  const handleExportar = async (tipo) => {
-    const toastId = toast.loading(`Gerando ${tipo.toUpperCase()}...`);
-    try {
-      const res = await api.get(`/produtos/exportar/${tipo}`, {
-        responseType: 'blob'
-      });
-
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `estoque_ddcosmeticos.${tipo === 'excel' ? 'xlsx' : 'csv'}`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-
-      toast.update(toastId, { render: "Download iniciado!", type: "success", isLoading: false, autoClose: 2000 });
-    } catch (err) {
-      toast.update(toastId, { render: "Erro ao exportar.", type: "error", isLoading: false, autoClose: 3000 });
-    }
   };
 
-  // --- AÇÕES EM MASSA ---
+  // --- AÇÕES COM MODAL ELEGANTE ---
+
+  // 1. ROBÔ IA
+  const handleCorrigirNcms = () => {
+    setConfirmModal({
+      isOpen: true,
+      type: 'robot',
+      title: 'IA Fiscal Inteligente',
+      message: 'O Robô irá analisar o histórico e descrições para corrigir NCMs inválidos automaticamente. Deseja iniciar a varredura?',
+      confirmText: 'Iniciar Robô',
+      onConfirm: async () => {
+        const toastId = toast.loading("🤖 Analisando base de dados...");
+        try {
+          const response = await api.post('/produtos/corrigir-ncms-ia');
+          const { qtdCorrigidos } = response.data;
+
+          toast.update(toastId, {
+            render: `Sucesso! ${qtdCorrigidos || 0} NCMs foram corrigidos pela IA.`,
+            type: "success", isLoading: false, autoClose: 5000
+          });
+          carregarProdutos(page, debouncedSearch);
+        } catch (error) {
+          toast.update(toastId, {
+            render: "Erro ao executar Robô Fiscal.",
+            type: "error", isLoading: false, autoClose: 3000
+          });
+        }
+      }
+    });
+  };
+
+  // 2. SANEAMENTO FISCAL
+  const handleSaneamento = () => {
+    setConfirmModal({
+      isOpen: true,
+      type: 'warning',
+      title: 'Recalcular Tributos',
+      message: 'Isso irá recalcular as regras fiscais (IBS, CBS, CST) de todo o estoque baseado nos NCMs atuais. Pode levar alguns segundos.',
+      confirmText: 'Recalcular Agora',
+      onConfirm: async () => {
+        setLoadingSaneamento(true);
+        try {
+          await produtoService.saneamentoFiscal();
+          toast.success("Tributos atualizados com sucesso!");
+          carregarProdutos(page, debouncedSearch);
+        } catch (e) {
+          toast.error("Falha no saneamento fiscal.");
+        } finally {
+          setLoadingSaneamento(false);
+        }
+      }
+    });
+  };
+
+  // 3. AÇÕES EM MASSA
   const handleBulkAction = () => {
     const isRestore = modoLixeira;
-    const actionName = isRestore ? 'Restaurar' : 'Excluir';
+    const actionName = isRestore ? 'Restaurar' : 'Mover para Lixeira';
 
     setConfirmModal({
       isOpen: true,
-      title: isRestore ? 'Restaurar Selecionados' : 'Mover para Lixeira',
-      message: `Tem certeza que deseja ${actionName.toLowerCase()} ${selectedIds.length} itens?`,
       type: isRestore ? 'success' : 'danger',
+      title: isRestore ? 'Restaurar Selecionados' : 'Inativar Selecionados',
+      message: `Você selecionou ${selectedIds.length} itens. Tem certeza que deseja ${actionName.toLowerCase()}?`,
       confirmText: `Sim, ${actionName}`,
       onConfirm: async () => {
         try {
           await Promise.all(selectedIds.map(id => {
             const prod = produtos.find(p => p.id === id);
+            if(!prod) return Promise.resolve();
             return isRestore
               ? produtoService.restaurar(prod.codigoBarras)
               : produtoService.excluir(prod.codigoBarras);
           }));
-          toast.success(`Itens processados com sucesso.`);
+          toast.success(`Operação realizada com sucesso.`);
           setSelectedIds([]);
           carregarProdutos(page, debouncedSearch);
         } catch (e) { toast.error("Erro na operação em massa."); }
@@ -424,20 +433,24 @@ const ProdutoList = () => {
     });
   };
 
+  // --- CORREÇÃO DO ERRO REFERENCE ERROR: FUNÇÃO ADICIONADA ---
   const handleBulkPrint = () => {
     toast.info(`Fila de impressão iniciada para ${selectedIds.length} itens.`);
     setSelectedIds([]);
   };
 
-  // --- AÇÕES INDIVIDUAIS ---
+  // 4. AÇÕES INDIVIDUAIS
   const handleSingleAction = (type, prod) => {
     const isDelete = type === 'delete';
+
     setConfirmModal({
       isOpen: true,
-      title: isDelete ? 'Mover para Lixeira' : 'Restaurar Produto',
-      message: isDelete ? `Deseja remover "${prod.descricao}"?` : `Restaurar "${prod.descricao}"?`,
       type: isDelete ? 'danger' : 'success',
-      confirmText: isDelete ? 'Mover' : 'Restaurar',
+      title: isDelete ? 'Inativar Produto' : 'Restaurar Produto',
+      message: isDelete
+        ? `Deseja realmente mover "${prod.descricao}" para a lixeira? Ele deixará de aparecer nas vendas.`
+        : `Deseja restaurar "${prod.descricao}"? Ele voltará a aparecer nas vendas imediatamente.`,
+      confirmText: isDelete ? 'Inativar' : 'Restaurar',
       onConfirm: async () => {
         try {
           if (isDelete) await produtoService.excluir(prod.codigoBarras);
@@ -450,15 +463,22 @@ const ProdutoList = () => {
     });
   };
 
-  const handleSaneamento = async () => {
-    if (!window.confirm("Isso irá recalcular tributos de todo o estoque. Continuar?")) return;
-    setLoadingSaneamento(true);
+  // --- EXPORTAÇÃO E IMPRESSÃO ---
+  const handleExportar = async (tipo) => {
+    const toastId = toast.loading(`Gerando ${tipo.toUpperCase()}...`);
     try {
-      await produtoService.saneamentoFiscal();
-      toast.success("Tributos atualizados.");
-      carregarProdutos(page, debouncedSearch);
-    } catch (e) { toast.error("Falha no saneamento."); }
-    finally { setLoadingSaneamento(false); }
+      const res = await api.get(`/produtos/exportar/${tipo}`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `estoque_ddcosmeticos.${tipo === 'excel' ? 'xlsx' : 'csv'}`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.update(toastId, { render: "Download iniciado!", type: "success", isLoading: false, autoClose: 2000 });
+    } catch (err) {
+      toast.update(toastId, { render: "Erro ao exportar arquivo.", type: "error", isLoading: false, autoClose: 3000 });
+    }
   };
 
   const handlePrint = async (id) => {
@@ -490,37 +510,61 @@ const ProdutoList = () => {
 
   return (
     <>
-      <div className="modern-container">
+      <div className="modern-container" style={{overflow: 'visible'}}>
+
         {/* HEADER */}
         <header className="list-header">
           <div>
             <h1 className="title-gradient">{modoLixeira ? 'Lixeira' : 'Produtos'}</h1>
-            <p className="subtitle">{modoLixeira ? 'Recuperação de itens' : `Gestão de inventário • ${totalElements} itens`}</p>
+            <p className="subtitle">{modoLixeira ? 'Recuperação de itens inativados' : `Gestão de inventário • ${totalElements} itens`}</p>
           </div>
           <div className="header-controls">
+            {/* Toggle Lixeira */}
             <div className="toggle-wrapper">
               <button className={`toggle-btn ${!modoLixeira ? 'active' : ''}`} onClick={() => setModoLixeira(false)}>Ativos</button>
               <button className={`toggle-btn ${modoLixeira ? 'active' : ''}`} onClick={() => setModoLixeira(true)}>Lixeira</button>
             </div>
+
             {!modoLixeira && (
               <>
-                <div style={{display: 'flex', gap: 5, marginRight: 10, paddingRight: 10, borderRight: '1px solid #e2e8f0'}}>
-                    <button className="btn-secondary icon-only" onClick={() => handleExportar('csv')} title="Exportar CSV">
+                <div style={{display: 'flex', gap: 5, marginRight: 10, paddingRight: 10, borderRight: '1px solid #e2e8f0', alignItems: 'center'}}>
+
+                    {/* BOTÃO ROBÔ IA */}
+                    <button
+                        className="btn-secondary"
+                        onClick={handleCorrigirNcms}
+                        data-label="IA Fiscal: Corrigir NCMs"
+                        style={{ backgroundColor: '#8b5cf6', color: 'white', borderColor: '#7c3aed' }}
+                    >
+                        <Bot size={18} />
+                    </button>
+
+                    <button className="btn-secondary icon-only" onClick={handleSaneamento} disabled={loadingSaneamento} data-label="Recalcular Tributos">
+                        {loadingSaneamento ? <div className="spinner-micro dark"></div> : <Zap size={18} />}
+                    </button>
+
+                    <div style={{width: 1, height: 24, background: '#cbd5e1', margin: '0 5px'}}></div>
+
+                    <button className="btn-secondary icon-only" onClick={() => handleExportar('csv')} data-label="Exportar CSV">
                         <FileText size={18} color="#64748b"/>
                     </button>
-                    <button className="btn-secondary icon-only" onClick={() => handleExportar('excel')} title="Exportar Excel">
+                    <button className="btn-secondary icon-only" onClick={() => handleExportar('excel')} data-label="Exportar Excel">
                         <FileSpreadsheet size={18} color="#10b981"/>
                     </button>
-                    <div style={{position:'relative', overflow: 'hidden', display: 'flex'}}>
-                        <input type="file" accept=".csv, .xls, .xlsx" style={{position:'absolute', left:0, top:0, opacity:0, width:'100%', height:'100%', cursor:'pointer'}} onChange={handleImportar} />
-                        <button className="btn-secondary icon-only" title="Importar">
-                            <Upload size={18} color="#3b82f6"/>
-                        </button>
-                    </div>
+
+                    {/* INPUT OCULTO + BOTÃO TRIGGER */}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleImportar}
+                      accept=".csv, .xls, .xlsx"
+                      style={{display: 'none'}}
+                    />
+                    <button className="btn-secondary icon-only" onClick={handleTriggerImport} data-label="Importar Arquivo">
+                        <Upload size={18} color="#3b82f6"/>
+                    </button>
                 </div>
-                <button className="btn-secondary icon-only" onClick={handleSaneamento} disabled={loadingSaneamento} title="Recalcular Tributos">
-                  {loadingSaneamento ? <div className="spinner-micro dark"></div> : <Zap size={18} />}
-                </button>
+
                 <button className="btn-primary" onClick={() => navigate('/produtos/novo')}>
                   <Plus size={18} strokeWidth={3} />
                   <span>Novo Produto</span>
@@ -552,7 +596,8 @@ const ProdutoList = () => {
                       <input type="checkbox" onChange={handleSelectAll} checked={produtos.length > 0 && selectedIds.length === produtos.length} disabled={produtos.length === 0} />
                     </div>
                   </th>
-                  <th width="40%">Produto</th>
+                  <th width="35%">Produto</th>
+                  <th>Marca</th>
                   <th>Preço</th>
                   <th>Estoque</th>
                   <th>Status</th>
@@ -563,7 +608,7 @@ const ProdutoList = () => {
                 {loading ? (
                   <TableSkeleton />
                 ) : produtos.length === 0 ? (
-                  <tr><td colSpan="6"><div className="empty-state"><Box size={48} strokeWidth={1} /><h3>Nenhum produto encontrado</h3></div></td></tr>
+                  <tr><td colSpan="7" className="text-center"><div className="empty-state"><Box size={48} strokeWidth={1} /><h3>Nenhum produto encontrado</h3></div></td></tr>
                 ) : (
                   produtos.map((prod) => {
                     const isSelected = selectedIds.includes(prod.id);
@@ -581,6 +626,7 @@ const ProdutoList = () => {
                             </div>
                           </div>
                         </td>
+                        <td>{prod.marca || '-'}</td>
                         <td className="font-numeric">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(prod.precoVenda)}</td>
                         <td>
                           <div className="stock-pill">
@@ -592,11 +638,17 @@ const ProdutoList = () => {
                         <td onClick={(e) => e.stopPropagation()}>
                           <div className="actions-flex">
                             {modoLixeira ? (
-                              <button className="btn-icon-soft green" onClick={() => handleSingleAction('restore', prod)}><RotateCcw size={18} /></button>
+                              <button className="btn-icon-soft green" onClick={() => handleSingleAction('restore', prod)} data-label="Restaurar">
+                                <RotateCcw size={18} />
+                              </button>
                             ) : (
                               <>
-                                <button className="btn-icon-soft blue" onClick={() => navigate(`/produtos/editar/${prod.id}`)}><Edit3 size={18} /></button>
-                                <button className="btn-icon-soft red" onClick={() => handleSingleAction('delete', prod)}><Trash2 size={18} /></button>
+                                <button className="btn-icon-soft blue" onClick={() => navigate(`/produtos/editar/${prod.id}`)} data-label="Editar">
+                                  <Edit3 size={18} />
+                                </button>
+                                <button className="btn-icon-soft red" onClick={() => handleSingleAction('delete', prod)} data-label="Inativar">
+                                  <Trash2 size={18} />
+                                </button>
                                 <ActionMenu onHistory={() => handleOpenHistorico(prod.id, prod.descricao)} onPrint={() => handlePrint(prod.id)} loadingPrint={loadingPrint === prod.id} />
                               </>
                             )}
@@ -623,8 +675,19 @@ const ProdutoList = () => {
       </div>
 
       <BulkActionBar count={selectedIds.length} onClear={() => setSelectedIds([])} onDelete={handleBulkAction} onPrint={handleBulkPrint} mode={modoLixeira} />
+
       <HistoricoModal isOpen={showHistoricoModal} onClose={() => setShowHistoricoModal(false)} historico={historicoData} produtoNome={selectedProdutoNome} />
-      <ConfirmModal isOpen={confirmModal.isOpen} onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })} onConfirm={confirmModal.onConfirm} title={confirmModal.title} message={confirmModal.message} confirmText={confirmModal.confirmText} type={confirmModal.type} />
+
+      {/* USO DO NOVO MODAL GLOBAL */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        type={confirmModal.type}
+      />
     </>
   );
 };

@@ -1,0 +1,79 @@
+/* --- src/components/ConfirmModal.css --- */
+
+.modal-backdrop {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.modal-card.small {
+  width: 400px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.modal-header-clean {
+  padding: 24px 24px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+}
+
+.modal-body-clean { padding: 16px 24px; }
+.modal-body-clean h3 { margin: 0 0 8px 0; color: #1e293b; font-size: 1.1rem; font-weight: 600; }
+.modal-body-clean p { margin: 0; color: #64748b; font-size: 0.95rem; line-height: 1.5; }
+
+.modal-footer-clean {
+  padding: 16px 24px 24px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  background: #f8fafc; /* Fundo leve no rodapé */
+}
+
+/* --- ÍCONES E CORES --- */
+.icon-circle {
+  width: 48px; height: 48px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 8px;
+}
+
+.icon-circle.danger { background: #fee2e2; color: #ef4444; }
+.icon-circle.success { background: #dcfce7; color: #22c55e; }
+.icon-circle.warning { background: #ffedd5; color: #f97316; }
+.icon-circle.robot { background: #f3e8ff; color: #9333ea; }
+.icon-circle.info { background: #dbeafe; color: #3b82f6; }
+
+/* Botões Coloridos */
+.btn-primary.red { background: #ef4444; color: white; border: none; }
+.btn-primary.red:hover { background: #dc2626; }
+
+.btn-primary.green { background: #22c55e; color: white; border: none; }
+.btn-primary.green:hover { background: #16a34a; }
+
+.btn-primary.purple { background: #9333ea; color: white; border: none; }
+.btn-primary.purple:hover { background: #7e22ce; }
+
+.btn-primary.orange { background: #f97316; color: white; border: none; }
+.btn-primary.orange:hover { background: #ea580c; }
+
+.btn-primary.blue { background: #3b82f6; color: white; border: none; }
+
+.btn-close-simple {
+  background: transparent; border: none; cursor: pointer; color: #94a3b8;
+}
+.btn-close-simple:hover { color: #64748b; }

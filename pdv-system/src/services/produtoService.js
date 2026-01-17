@@ -1,15 +1,17 @@
-import api from './api'; // Usa a instância configurada com o Token
+import api from './api';
 
-// O baseURL já está configurado no api.js (geralmente http://localhost:8080/api/v1)
 const RESOURCE_URL = '/produtos';
 
 export const produtoService = {
 
   /**
    * Lista produtos com paginação e filtro
+   * (Mantido conforme seu original)
    */
   listar: async (pagina = 0, tamanho = 10, filtro = '') => {
     try {
+      // Dica: Se o backend tiver endpoint /resumo, use ele para ser mais rápido.
+      // Se não, mantemos a rota padrão.
       const response = await api.get(RESOURCE_URL, {
         params: {
           page: pagina,
@@ -33,7 +35,7 @@ export const produtoService = {
   },
 
   /**
-   * Busca um único produto pelo ID (Para edição)
+   * Busca um único produto pelo ID
    */
   obterPorId: async (id) => {
     try {
@@ -46,7 +48,7 @@ export const produtoService = {
   },
 
   /**
-   * Salva um novo produto (POST)
+   * Salva um novo produto
    */
   salvar: async (produto) => {
     try {
@@ -59,7 +61,7 @@ export const produtoService = {
   },
 
   /**
-   * Atualiza um produto existente (PUT)
+   * Atualiza um produto existente
    */
   atualizar: async (id, produto) => {
     try {
@@ -72,7 +74,7 @@ export const produtoService = {
   },
 
   /**
-   * Exclui (ou inativa) um produto pelo ID/EAN
+   * Exclui (Inativa) um produto
    */
   excluir: async (ean) => {
     try {
@@ -83,20 +85,25 @@ export const produtoService = {
     }
   },
 
+  // --- NOVAS IMPLEMENTAÇÕES NECESSÁRIAS ---
+
   /**
-   * Consulta externa (COSMOS) para preenchimento automático via EAN
+   * [NOVO] Executa o Robô de IA para corrigir NCMs
+   * Necessário para o botão roxo funcionar
    */
-  consultarEan: async (ean) => {
+  corrigirNcmsIA: async () => {
     try {
-      const response = await api.get(`${RESOURCE_URL}/consulta-externa/${ean}`);
+      const response = await api.post(`${RESOURCE_URL}/corrigir-ncms-ia`);
       return response.data;
     } catch (error) {
+      console.error("Erro ao rodar IA Fiscal:", error);
       throw error;
     }
   },
 
   /**
-   * Saneamento fiscal em massa
+   * [ATUALIZADO] Saneamento fiscal em massa
+   * Recalcula tributos (IBS/CBS, PIS/COFINS) de todos os produtos
    */
   saneamentoFiscal: async () => {
     try {
@@ -109,7 +116,64 @@ export const produtoService = {
   },
 
   /**
-   * Obtém string ZPL para impressão de etiqueta
+   * [NOVO] Importação de Arquivo
+   */
+  importarProdutos: async (formData) => {
+    try {
+      const response = await api.post(`${RESOURCE_URL}/importar`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Erro na importação:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * [NOVO] Exportação de Arquivo
+   */
+  exportarProdutos: async (tipo) => {
+    try {
+      const response = await api.get(`${RESOURCE_URL}/exportar/${tipo}`, {
+        responseType: 'blob' // CRÍTICO: Garante que o arquivo não venha corrompido/vazio
+      });
+      return response.data;
+    } catch (error) {
+      console.error("Erro na exportação:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * [NOVO] Validação Fiscal no Formulário
+   */
+  validarDadosFiscais: async (descricao, ncm) => {
+    try {
+      const response = await api.post('/fiscal/validar', { descricao, ncm });
+      return response.data;
+    } catch (error) {
+      // Falha silenciosa para não travar o form
+      return null;
+    }
+  },
+
+  // --- FIM DAS NOVAS IMPLEMENTAÇÕES ---
+
+  /**
+   * Consulta externa (COSMOS)
+   */
+  consultarEan: async (ean) => {
+    try {
+      const response = await api.get(`/fiscal/consultar-ean/${ean}`); // Ajuste de rota comum
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  /**
+   * Impressão de etiqueta
    */
   imprimirEtiqueta: async (id) => {
     try {
@@ -122,7 +186,7 @@ export const produtoService = {
   },
 
   /**
-   * Upload de imagem do produto
+   * Upload de imagem
    */
   uploadImagem: async (id, arquivo) => {
     try {
@@ -141,7 +205,7 @@ export const produtoService = {
   },
 
   /**
-   * Histórico de alterações do produto (Auditoria)
+   * Histórico
    */
   buscarHistorico: async (id) => {
     try {
@@ -154,7 +218,7 @@ export const produtoService = {
   },
 
   /**
-   * Lista produtos na lixeira (Excluídos/Inativos)
+   * Lixeira
    */
   buscarLixeira: async () => {
     try {
@@ -167,11 +231,12 @@ export const produtoService = {
   },
 
   /**
-   * Restaura um produto da lixeira
+   * [CORRIGIDO] Restaurar da lixeira
+   * Alterado de PATCH para PUT para bater com o Controller Java
    */
   restaurar: async (ean) => {
     try {
-      await api.patch(`${RESOURCE_URL}/${ean}/reativar`);
+      await api.put(`${RESOURCE_URL}/${ean}/reativar`);
     } catch (error) {
       console.error("Erro ao restaurar produto:", error);
       throw error;
@@ -183,14 +248,14 @@ export const produtoService = {
    */
   reativar: async (ean) => {
     try {
-      await api.patch(`${RESOURCE_URL}/${ean}/reativar`);
+      await api.put(`${RESOURCE_URL}/${ean}/reativar`);
     } catch (error) {
       throw error;
     }
   },
 
   /**
-   * Busca NCM via BrasilAPI por código ou descrição
+   * Busca NCM via BrasilAPI
    */
   buscarNcms: async (termo) => {
     try {
@@ -211,17 +276,17 @@ export const produtoService = {
   },
 
   /**
-   * Gera um código de barras interno padrão EAN-13
+   * Gera EAN interno
    */
   gerarEanInterno: async () => {
     try {
       const response = await api.get(`${RESOURCE_URL}/proximo-sequencial`);
       return response.data.ean;
     } catch (error) {
+      // Fallback local
       const prefix = "789";
       const random = Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
       const base = prefix + random;
-
       let sum = 0;
       for (let i = 0; i < 12; i++) {
         sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);

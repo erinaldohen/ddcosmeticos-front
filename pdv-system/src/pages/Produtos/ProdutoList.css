@@ -776,3 +776,22 @@ input[type="checkbox"]:checked::before {
   color: #64748b;           /* Cinza escuro */
   border: 1px solid #e2e8f0;
 }
+
+/* --- Estilos para o Modal Elegante --- */
+
+/* Cores dos Círculos de Ícone */
+.icon-circle.robot { background-color: #f3e8ff; color: #9333ea; } /* Roxo suave */
+.icon-circle.warning { background-color: #ffedd5; color: #c2410c; } /* Laranja suave */
+
+/* Cores dos Botões de Ação */
+.btn-primary.purple {
+  background: linear-gradient(135deg, #a855f7 0%, #7e22ce 100%);
+  box-shadow: 0 4px 12px rgba(126, 34, 206, 0.3);
+}
+.btn-primary.purple:hover { filter: brightness(1.1); }
+
+.btn-primary.orange {
+  background: linear-gradient(135deg, #fb923c 0%, #ea580c 100%);
+  box-shadow: 0 4px 12px rgba(234, 88, 12, 0.3);
+}
+.btn-primary.orange:hover { filter: brightness(1.1); }
