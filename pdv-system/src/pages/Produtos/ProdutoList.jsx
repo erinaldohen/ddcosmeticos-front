@@ -1,14 +1,15 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import api from '../../services/api';
 import { produtoService } from '../../services/produtoService';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
-import ConfirmModal from '../../components/ConfirmModal'; // Importação do Modal Global
+import ConfirmModal from '../../components/ConfirmModal';
 import {
   Search, Plus, Edit3, Trash2, Box,
   ChevronLeft, ChevronRight, Zap, Printer, History, X,
   RotateCcw, MoreHorizontal, ImageOff, Filter, XCircle, AlertOctagon,
-  Copy, Check, Upload, FileText, FileSpreadsheet, Bot
+  Copy, Check, Upload, FileText, FileSpreadsheet, Bot, AlertTriangle,
+  Tags, Image as ImageIcon, DollarSign
 } from 'lucide-react';
 import './ProdutoList.css';
 
@@ -140,7 +141,7 @@ const ActionMenu = ({ onHistory, onPrint, loadingPrint }) => {
   );
 };
 
-// --- COMPONENTE: MODAL HISTÓRICO ---
+// --- MODAL HISTÓRICO ---
 const HistoricoModal = ({ isOpen, onClose, historico, produtoNome }) => {
   if (!isOpen) return null;
   return (
@@ -190,7 +191,7 @@ const ProdutoList = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
-  // --- ESTADOS ---
+  // --- ESTADOS BÁSICOS ---
   const [produtos, setProdutos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingSaneamento, setLoadingSaneamento] = useState(false);
@@ -198,6 +199,17 @@ const ProdutoList = () => {
 
   const [modoLixeira, setModoLixeira] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
+
+  // --- ESTADOS DE FILTRO FRONTEND ---
+  const [showFilters, setShowFilters] = useState(false);
+  const [filtros, setFiltros] = useState({
+    estoque: 'todos', // todos, baixo, com-estoque
+    marca: '',        // string vazia = todas
+    categoria: '',
+    semImagem: false,
+    semNcm: false,
+    precoZerado: false
+  });
 
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -210,7 +222,6 @@ const ProdutoList = () => {
   const [historicoData, setHistoricoData] = useState([]);
   const [selectedProdutoNome, setSelectedProdutoNome] = useState('');
 
-  // ESTADO DO MODAL GLOBAL
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger', confirmText: 'Confirmar' });
 
   const getImageUrl = (url) => {
@@ -219,17 +230,24 @@ const ProdutoList = () => {
     return `http://localhost:8080${url}`;
   };
 
+  // --- EXTRAÇÃO AUTOMÁTICA DE OPÇÕES (MARCAS/CATEGORIAS) ---
+  const marcasDisponiveis = useMemo(() => {
+    const unicas = new Set(produtos.map(p => p.marca).filter(Boolean));
+    return Array.from(unicas).sort();
+  }, [produtos]);
+
+  const categoriasDisponiveis = useMemo(() => {
+    const unicas = new Set(produtos.map(p => p.categoria).filter(Boolean));
+    return Array.from(unicas).sort();
+  }, [produtos]);
+
   // --- BUSCA DE DADOS ---
   const carregarProdutos = useCallback(async (pagina, termo) => {
     setLoading(true);
     try {
       if (modoLixeira) {
-        // --- MODO LIXEIRA ---
         const listaBruta = await produtoService.buscarLixeira();
-
-        // CORREÇÃO: Aceita tudo que vem do backend (ativo=0 ou null) sem filtrar
         const listaInativos = Array.isArray(listaBruta) ? listaBruta : [];
-
         const filtrados = termo
           ? listaInativos.filter(p => p.descricao.toLowerCase().includes(termo.toLowerCase()) || p.codigoBarras.includes(termo))
           : listaInativos;
@@ -240,14 +258,10 @@ const ProdutoList = () => {
         if(page !== 0) setPage(0);
 
       } else {
-        // --- MODO NORMAL ---
-        const dados = await produtoService.listar(pagina, 10, termo);
+        const dados = await produtoService.listar(pagina, 10, termo); // Pega 10 (paginado)
 
         if (!dados) {
-            setProdutos([]);
-            setTotalPages(0);
-            setTotalElements(0);
-            return;
+            setProdutos([]); setTotalPages(0); setTotalElements(0); return;
         }
 
         const lista = dados.itens || dados.content || [];
@@ -264,16 +278,15 @@ const ProdutoList = () => {
           setProdutos([]);
           setTotalElements(0);
       } else if (error.code === "ERR_NETWORK") {
-          toast.error("Servidor offline. Verifique o backend.");
+          toast.error("Servidor offline.");
       } else {
-          toast.error("Erro ao carregar lista de produtos.");
+          toast.error("Erro ao carregar lista.");
       }
     } finally {
       setLoading(false);
     }
   }, [modoLixeira]);
 
-  // Efeitos
   useEffect(() => {
     carregarProdutos(page, debouncedSearch);
   }, [page, debouncedSearch, modoLixeira, carregarProdutos]);
@@ -282,15 +295,23 @@ const ProdutoList = () => {
     setSelectedIds([]);
   }, [modoLixeira]);
 
-  // --- HANDLERS ---
+  // --- HANDLERS FILTROS ---
+  const handleFiltroChange = (key, value) => {
+    setFiltros(prev => ({ ...prev, [key]: value }));
+  };
 
+  const limparFiltros = () => {
+    setFiltros({ estoque: 'todos', marca: '', categoria: '', semImagem: false, semNcm: false, precoZerado: false });
+  };
+
+  // --- HANDLERS AÇÕES ---
   const handleSearchChange = (e) => {
     setTermoBusca(e.target.value);
     if(page !== 0) setPage(0);
   };
 
   const handleSelectAll = (e) => {
-    if (e.target.checked) setSelectedIds(produtos.map(p => p.id));
+    if (e.target.checked) setSelectedIds(listaVisual.map(p => p.id));
     else setSelectedIds([]);
   };
 
@@ -299,133 +320,85 @@ const ProdutoList = () => {
     else setSelectedIds([...selectedIds, id]);
   };
 
-  // --- IMPORTAÇÃO ---
-  const handleTriggerImport = () => {
-    if (fileInputRef.current) fileInputRef.current.click();
-  };
+  const handleTriggerImport = () => { if (fileInputRef.current) fileInputRef.current.click(); };
 
   const handleImportar = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-
       const formData = new FormData();
       formData.append("arquivo", file);
-
       const toastId = toast.loading("Processando arquivo... Aguarde.");
       e.target.value = null;
 
       try {
-        const response = await api.post('/produtos/importar', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-
+        const response = await api.post('/produtos/importar', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
         const dados = response.data;
-        const msg = dados.mensagem || dados.message || (typeof dados === 'string' ? dados : "Importação concluída.");
-
-        const isSuccess = (dados.sucesso === true) ||
-                          msg.toLowerCase().startsWith('sucesso') ||
-                          msg.toLowerCase().includes('0 erros') ||
-                          msg.toLowerCase().includes('sem erros');
+        const msg = dados.mensagem || "Importação concluída.";
+        const isSuccess = (dados.sucesso === true) || msg.toLowerCase().startsWith('sucesso') || msg.toLowerCase().includes('0 erros');
 
         if (isSuccess) {
            const hasPartialErrors = (dados.qtdErros > 0);
-           toast.update(toastId, {
-             render: msg,
-             type: hasPartialErrors ? "warning" : "success",
-             isLoading: false,
-             autoClose: 5000
-           });
+           toast.update(toastId, { render: msg, type: hasPartialErrors ? "warning" : "success", isLoading: false, autoClose: 5000 });
            carregarProdutos(page, debouncedSearch);
         } else {
            throw new Error(msg);
         }
       } catch (error) {
-        console.error(error);
-        const errorMsg = error.response?.data?.mensagem || error.message || "Falha crítica na importação.";
-        toast.update(toastId, {
-          render: errorMsg,
-          type: "error",
-          isLoading: false,
-          autoClose: 4000
-        });
+        const errorMsg = error.response?.data?.mensagem || "Falha crítica na importação.";
+        toast.update(toastId, { render: errorMsg, type: "error", isLoading: false, autoClose: 4000 });
       }
   };
 
-  // --- AÇÕES COM MODAL ELEGANTE ---
-
-  // 1. ROBÔ IA
   const handleCorrigirNcms = () => {
     setConfirmModal({
-      isOpen: true,
-      type: 'robot',
-      title: 'IA Fiscal Inteligente',
-      message: 'O Robô irá analisar o histórico e descrições para corrigir NCMs inválidos automaticamente. Deseja iniciar a varredura?',
+      isOpen: true, type: 'robot', title: 'IA Fiscal Inteligente',
+      message: 'O Robô irá analisar o histórico e descrições para corrigir NCMs inválidos automaticamente.',
       confirmText: 'Iniciar Robô',
       onConfirm: async () => {
         const toastId = toast.loading("🤖 Analisando base de dados...");
         try {
           const response = await api.post('/produtos/corrigir-ncms-ia');
-          const { qtdCorrigidos } = response.data;
-
-          toast.update(toastId, {
-            render: `Sucesso! ${qtdCorrigidos || 0} NCMs foram corrigidos pela IA.`,
-            type: "success", isLoading: false, autoClose: 5000
-          });
+          toast.update(toastId, { render: `Sucesso! ${response.data.qtdCorrigidos || 0} NCMs corrigidos.`, type: "success", isLoading: false, autoClose: 5000 });
           carregarProdutos(page, debouncedSearch);
         } catch (error) {
-          toast.update(toastId, {
-            render: "Erro ao executar Robô Fiscal.",
-            type: "error", isLoading: false, autoClose: 3000
-          });
+          toast.update(toastId, { render: "Erro ao executar Robô.", type: "error", isLoading: false, autoClose: 3000 });
         }
       }
     });
   };
 
-  // 2. SANEAMENTO FISCAL
   const handleSaneamento = () => {
     setConfirmModal({
-      isOpen: true,
-      type: 'warning',
-      title: 'Recalcular Tributos',
-      message: 'Isso irá recalcular as regras fiscais (IBS, CBS, CST) de todo o estoque baseado nos NCMs atuais. Pode levar alguns segundos.',
+      isOpen: true, type: 'warning', title: 'Recalcular Tributos',
+      message: 'Isso irá recalcular as regras fiscais de todo o estoque. Pode levar alguns segundos.',
       confirmText: 'Recalcular Agora',
       onConfirm: async () => {
         setLoadingSaneamento(true);
         try {
           await produtoService.saneamentoFiscal();
-          toast.success("Tributos atualizados com sucesso!");
+          toast.success("Tributos atualizados!");
           carregarProdutos(page, debouncedSearch);
-        } catch (e) {
-          toast.error("Falha no saneamento fiscal.");
-        } finally {
-          setLoadingSaneamento(false);
-        }
+        } catch (e) { toast.error("Falha no saneamento."); }
+        finally { setLoadingSaneamento(false); }
       }
     });
   };
 
-  // 3. AÇÕES EM MASSA
   const handleBulkAction = () => {
     const isRestore = modoLixeira;
     const actionName = isRestore ? 'Restaurar' : 'Mover para Lixeira';
-
     setConfirmModal({
-      isOpen: true,
-      type: isRestore ? 'success' : 'danger',
-      title: isRestore ? 'Restaurar Selecionados' : 'Inativar Selecionados',
-      message: `Você selecionou ${selectedIds.length} itens. Tem certeza que deseja ${actionName.toLowerCase()}?`,
+      isOpen: true, type: isRestore ? 'success' : 'danger',
+      title: isRestore ? 'Restaurar' : 'Inativar Selecionados',
+      message: `Deseja ${actionName.toLowerCase()} ${selectedIds.length} itens?`,
       confirmText: `Sim, ${actionName}`,
       onConfirm: async () => {
         try {
           await Promise.all(selectedIds.map(id => {
             const prod = produtos.find(p => p.id === id);
-            if(!prod) return Promise.resolve();
-            return isRestore
-              ? produtoService.restaurar(prod.codigoBarras)
-              : produtoService.excluir(prod.codigoBarras);
+            return isRestore ? produtoService.restaurar(prod.codigoBarras) : produtoService.excluir(prod.codigoBarras);
           }));
-          toast.success(`Operação realizada com sucesso.`);
+          toast.success(`Operação realizada.`);
           setSelectedIds([]);
           carregarProdutos(page, debouncedSearch);
         } catch (e) { toast.error("Erro na operação em massa."); }
@@ -433,29 +406,18 @@ const ProdutoList = () => {
     });
   };
 
-  // --- CORREÇÃO DO ERRO REFERENCE ERROR: FUNÇÃO ADICIONADA ---
-  const handleBulkPrint = () => {
-    toast.info(`Fila de impressão iniciada para ${selectedIds.length} itens.`);
-    setSelectedIds([]);
-  };
+  const handleBulkPrint = () => { toast.info(`Fila de impressão para ${selectedIds.length} itens.`); setSelectedIds([]); };
 
-  // 4. AÇÕES INDIVIDUAIS
   const handleSingleAction = (type, prod) => {
     const isDelete = type === 'delete';
-
     setConfirmModal({
-      isOpen: true,
-      type: isDelete ? 'danger' : 'success',
+      isOpen: true, type: isDelete ? 'danger' : 'success',
       title: isDelete ? 'Inativar Produto' : 'Restaurar Produto',
-      message: isDelete
-        ? `Deseja realmente mover "${prod.descricao}" para a lixeira? Ele deixará de aparecer nas vendas.`
-        : `Deseja restaurar "${prod.descricao}"? Ele voltará a aparecer nas vendas imediatamente.`,
+      message: isDelete ? `Inativar "${prod.descricao}"?` : `Restaurar "${prod.descricao}"?`,
       confirmText: isDelete ? 'Inativar' : 'Restaurar',
       onConfirm: async () => {
         try {
-          if (isDelete) await produtoService.excluir(prod.codigoBarras);
-          else await produtoService.restaurar(prod.codigoBarras);
-
+          if (isDelete) await produtoService.excluir(prod.codigoBarras); else await produtoService.restaurar(prod.codigoBarras);
           toast.success(isDelete ? "Produto inativado." : "Produto restaurado.");
           carregarProdutos(isDelete ? page : 0, debouncedSearch);
         } catch (e) { toast.error("Erro na operação."); }
@@ -463,50 +425,65 @@ const ProdutoList = () => {
     });
   };
 
-  // --- EXPORTAÇÃO E IMPRESSÃO ---
   const handleExportar = async (tipo) => {
-    const toastId = toast.loading(`Gerando ${tipo.toUpperCase()}...`);
+    const toastId = toast.loading(`Gerando...`);
     try {
       const res = await api.get(`/produtos/exportar/${tipo}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `estoque_ddcosmeticos.${tipo === 'excel' ? 'xlsx' : 'csv'}`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
+      link.href = url; link.setAttribute('download', `estoque.${tipo === 'excel' ? 'xlsx' : 'csv'}`);
+      document.body.appendChild(link); link.click(); link.remove();
       toast.update(toastId, { render: "Download iniciado!", type: "success", isLoading: false, autoClose: 2000 });
-    } catch (err) {
-      toast.update(toastId, { render: "Erro ao exportar arquivo.", type: "error", isLoading: false, autoClose: 3000 });
-    }
+    } catch (err) { toast.update(toastId, { render: "Erro na exportação.", type: "error", isLoading: false, autoClose: 3000 }); }
   };
 
   const handlePrint = async (id) => {
     setLoadingPrint(id);
     try {
       const zpl = await produtoService.imprimirEtiqueta(id);
-      const w = window.open('', '_blank', 'width=500,height=500');
-      w.document.write(`<pre>${zpl}</pre>`);
-      w.document.close();
-    } catch (e) { toast.error("Erro ao gerar etiqueta."); }
-    finally { setLoadingPrint(null); }
+      const w = window.open('', '_blank', 'width=500,height=500'); w.document.write(`<pre>${zpl}</pre>`); w.document.close();
+    } catch (e) { toast.error("Erro ao gerar etiqueta."); } finally { setLoadingPrint(null); }
   };
 
   const handleOpenHistorico = async (id, nome) => {
-    setSelectedProdutoNome(nome);
-    setShowHistoricoModal(true);
-    setHistoricoData([]);
-    try {
-      const dados = await produtoService.buscarHistorico(id);
-      setHistoricoData(dados);
-    } catch (e) { toast.error("Histórico indisponível."); }
+    setSelectedProdutoNome(nome); setShowHistoricoModal(true); setHistoricoData([]);
+    try { setHistoricoData(await produtoService.buscarHistorico(id)); } catch (e) { toast.error("Histórico indisponível."); }
   };
 
   const StatusIndicator = ({ prod }) => {
       if (!prod.ativo) return <span className="status-badge inactive">Inativo</span>;
-      if (prod.quantidadeEmEstoque <= (prod.estoqueMinimo || 5)) return <span className="status-badge warning">Estoque Baixo</span>;
+      if (prod.quantidadeEmEstoque <= (prod.estoqueMinimo || 5)) return <span className="status-badge warning">Baixo</span>;
       return <span className="status-badge active">Ativo</span>;
   };
+
+  // --- MOTOR DE FILTRAGEM FRONTEND ---
+  const listaVisual = useMemo(() => {
+    if (!produtos) return [];
+    if (modoLixeira) return produtos; // Lixeira não usa filtros visuais avançados
+
+    return produtos.filter(p => {
+        // 1. Estoque
+        if (filtros.estoque === 'baixo' && p.quantidadeEmEstoque > (p.estoqueMinimo || 5)) return false;
+        if (filtros.estoque === 'com-estoque' && p.quantidadeEmEstoque <= (p.estoqueMinimo || 5)) return false;
+
+        // 2. Marca
+        if (filtros.marca && p.marca !== filtros.marca) return false;
+
+        // 3. Categoria
+        if (filtros.categoria && p.categoria !== filtros.categoria) return false;
+
+        // 4. Sem Imagem
+        if (filtros.semImagem && p.urlImagem) return false;
+
+        // 5. Sem NCM
+        if (filtros.semNcm && p.ncm && p.ncm !== '00000000') return false;
+
+        // 6. Preço Zerado
+        if (filtros.precoZerado && p.precoVenda > 0) return false;
+
+        return true;
+    });
+  }, [produtos, filtros, modoLixeira]);
 
   return (
     <>
@@ -519,7 +496,6 @@ const ProdutoList = () => {
             <p className="subtitle">{modoLixeira ? 'Recuperação de itens inativados' : `Gestão de inventário • ${totalElements} itens`}</p>
           </div>
           <div className="header-controls">
-            {/* Toggle Lixeira */}
             <div className="toggle-wrapper">
               <button className={`toggle-btn ${!modoLixeira ? 'active' : ''}`} onClick={() => setModoLixeira(false)}>Ativos</button>
               <button className={`toggle-btn ${modoLixeira ? 'active' : ''}`} onClick={() => setModoLixeira(true)}>Lixeira</button>
@@ -528,47 +504,19 @@ const ProdutoList = () => {
             {!modoLixeira && (
               <>
                 <div style={{display: 'flex', gap: 5, marginRight: 10, paddingRight: 10, borderRight: '1px solid #e2e8f0', alignItems: 'center'}}>
-
-                    {/* BOTÃO ROBÔ IA */}
-                    <button
-                        className="btn-secondary"
-                        onClick={handleCorrigirNcms}
-                        data-label="IA Fiscal: Corrigir NCMs"
-                        style={{ backgroundColor: '#8b5cf6', color: 'white', borderColor: '#7c3aed' }}
-                    >
+                    <button className="btn-secondary" onClick={handleCorrigirNcms} data-label="IA Fiscal: Corrigir NCMs" style={{ backgroundColor: '#8b5cf6', color: 'white', borderColor: '#7c3aed' }}>
                         <Bot size={18} />
                     </button>
-
                     <button className="btn-secondary icon-only" onClick={handleSaneamento} disabled={loadingSaneamento} data-label="Recalcular Tributos">
                         {loadingSaneamento ? <div className="spinner-micro dark"></div> : <Zap size={18} />}
                     </button>
-
                     <div style={{width: 1, height: 24, background: '#cbd5e1', margin: '0 5px'}}></div>
-
-                    <button className="btn-secondary icon-only" onClick={() => handleExportar('csv')} data-label="Exportar CSV">
-                        <FileText size={18} color="#64748b"/>
-                    </button>
-                    <button className="btn-secondary icon-only" onClick={() => handleExportar('excel')} data-label="Exportar Excel">
-                        <FileSpreadsheet size={18} color="#10b981"/>
-                    </button>
-
-                    {/* INPUT OCULTO + BOTÃO TRIGGER */}
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleImportar}
-                      accept=".csv, .xls, .xlsx"
-                      style={{display: 'none'}}
-                    />
-                    <button className="btn-secondary icon-only" onClick={handleTriggerImport} data-label="Importar Arquivo">
-                        <Upload size={18} color="#3b82f6"/>
-                    </button>
+                    <button className="btn-secondary icon-only" onClick={() => handleExportar('csv')} data-label="Exportar CSV"><FileText size={18} color="#64748b"/></button>
+                    <button className="btn-secondary icon-only" onClick={() => handleExportar('excel')} data-label="Exportar Excel"><FileSpreadsheet size={18} color="#10b981"/></button>
+                    <input type="file" ref={fileInputRef} onChange={handleImportar} accept=".csv, .xls, .xlsx" style={{display: 'none'}} />
+                    <button className="btn-secondary icon-only" onClick={handleTriggerImport} data-label="Importar Arquivo"><Upload size={18} color="#3b82f6"/></button>
                 </div>
-
-                <button className="btn-primary" onClick={() => navigate('/produtos/novo')}>
-                  <Plus size={18} strokeWidth={3} />
-                  <span>Novo Produto</span>
-                </button>
+                <button className="btn-primary" onClick={() => navigate('/produtos/novo')}><Plus size={18} strokeWidth={3} /><span>Novo Produto</span></button>
               </>
             )}
           </div>
@@ -583,9 +531,68 @@ const ProdutoList = () => {
               {termoBusca && <button className="clear-btn" onClick={() => setTermoBusca('')}><X size={14}/></button>}
             </div>
             <div className="toolbar-actions">
-              <button className="btn-filter"><Filter size={16}/> Filtros</button>
+              <button
+                  className={`btn-filter ${showFilters ? 'active' : ''}`}
+                  onClick={() => setShowFilters(!showFilters)}
+                  data-label="Filtros Avançados"
+              >
+                  <Filter size={16}/> Filtros {Object.values(filtros).some(v => v !== 'todos' && v !== '' && v !== false) && <span className="filter-badge"></span>}
+              </button>
             </div>
           </div>
+
+          {/* PAINEL DE FILTROS AVANÇADOS */}
+          {showFilters && !modoLixeira && (
+            <div className="filters-panel fade-in">
+                <div className="filters-grid">
+                    {/* COLUNA 1: ESTOQUE */}
+                    <div className="filter-group">
+                        <label>Situação do Estoque</label>
+                        <div className="toggle-options">
+                            <button onClick={() => handleFiltroChange('estoque', 'todos')} className={filtros.estoque === 'todos' ? 'active' : ''}>Todos</button>
+                            <button onClick={() => handleFiltroChange('estoque', 'baixo')} className={filtros.estoque === 'baixo' ? 'active warning' : ''}>Baixo</button>
+                            <button onClick={() => handleFiltroChange('estoque', 'com-estoque')} className={filtros.estoque === 'com-estoque' ? 'active success' : ''}>OK</button>
+                        </div>
+                    </div>
+
+                    {/* COLUNA 2: MARCA */}
+                    <div className="filter-group">
+                        <label>Marca</label>
+                        <select value={filtros.marca} onChange={(e) => handleFiltroChange('marca', e.target.value)}>
+                            <option value="">Todas as marcas</option>
+                            {marcasDisponiveis.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                    </div>
+
+                    {/* COLUNA 3: CATEGORIA */}
+                    <div className="filter-group">
+                        <label>Categoria</label>
+                        <select value={filtros.categoria} onChange={(e) => handleFiltroChange('categoria', e.target.value)}>
+                            <option value="">Todas as categorias</option>
+                            {categoriasDisponiveis.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                    </div>
+                </div>
+
+                <div className="filters-row-secondary">
+                    <div className="filter-checks">
+                        <label className={`check-card ${filtros.semImagem ? 'active' : ''}`}>
+                            <input type="checkbox" checked={filtros.semImagem} onChange={(e) => handleFiltroChange('semImagem', e.target.checked)} />
+                            <ImageIcon size={16} /> Sem Imagem
+                        </label>
+                        <label className={`check-card ${filtros.semNcm ? 'active' : ''}`}>
+                            <input type="checkbox" checked={filtros.semNcm} onChange={(e) => handleFiltroChange('semNcm', e.target.checked)} />
+                            <Tags size={16} /> NCM Pendente
+                        </label>
+                        <label className={`check-card ${filtros.precoZerado ? 'active' : ''}`}>
+                            <input type="checkbox" checked={filtros.precoZerado} onChange={(e) => handleFiltroChange('precoZerado', e.target.checked)} />
+                            <DollarSign size={16} /> Preço R$ 0,00
+                        </label>
+                    </div>
+                    <button className="btn-text-red" onClick={limparFiltros}>Limpar Filtros</button>
+                </div>
+            </div>
+          )}
 
           <div className="table-wrapper">
             <table className="modern-table">
@@ -593,7 +600,7 @@ const ProdutoList = () => {
                 <tr>
                   <th className="th-checkbox">
                     <div className="checkbox-wrapper">
-                      <input type="checkbox" onChange={handleSelectAll} checked={produtos.length > 0 && selectedIds.length === produtos.length} disabled={produtos.length === 0} />
+                      <input type="checkbox" onChange={handleSelectAll} checked={listaVisual.length > 0 && selectedIds.length === listaVisual.length} disabled={listaVisual.length === 0} />
                     </div>
                   </th>
                   <th width="35%">Produto</th>
@@ -607,10 +614,10 @@ const ProdutoList = () => {
               <tbody>
                 {loading ? (
                   <TableSkeleton />
-                ) : produtos.length === 0 ? (
-                  <tr><td colSpan="7" className="text-center"><div className="empty-state"><Box size={48} strokeWidth={1} /><h3>Nenhum produto encontrado</h3></div></td></tr>
+                ) : listaVisual.length === 0 ? (
+                  <tr><td colSpan="7" className="text-center"><div className="empty-state"><Box size={48} strokeWidth={1} /><h3>Nenhum produto encontrado</h3><p>Tente ajustar os filtros.</p></div></td></tr>
                 ) : (
-                  produtos.map((prod) => {
+                  listaVisual.map((prod) => {
                     const isSelected = selectedIds.includes(prod.id);
                     return (
                       <tr key={prod.id} className={`fade-in ${isSelected ? 'row-selected' : ''}`} onClick={() => handleSelectOne(prod.id)}>
@@ -638,17 +645,11 @@ const ProdutoList = () => {
                         <td onClick={(e) => e.stopPropagation()}>
                           <div className="actions-flex">
                             {modoLixeira ? (
-                              <button className="btn-icon-soft green" onClick={() => handleSingleAction('restore', prod)} data-label="Restaurar">
-                                <RotateCcw size={18} />
-                              </button>
+                              <button className="btn-icon-soft green" onClick={() => handleSingleAction('restore', prod)} data-label="Restaurar"><RotateCcw size={18} /></button>
                             ) : (
                               <>
-                                <button className="btn-icon-soft blue" onClick={() => navigate(`/produtos/editar/${prod.id}`)} data-label="Editar">
-                                  <Edit3 size={18} />
-                                </button>
-                                <button className="btn-icon-soft red" onClick={() => handleSingleAction('delete', prod)} data-label="Inativar">
-                                  <Trash2 size={18} />
-                                </button>
+                                <button className="btn-icon-soft blue" onClick={() => navigate(`/produtos/editar/${prod.id}`)} data-label="Editar"><Edit3 size={18} /></button>
+                                <button className="btn-icon-soft red" onClick={() => handleSingleAction('delete', prod)} data-label="Inativar"><Trash2 size={18} /></button>
                                 <ActionMenu onHistory={() => handleOpenHistorico(prod.id, prod.descricao)} onPrint={() => handlePrint(prod.id)} loadingPrint={loadingPrint === prod.id} />
                               </>
                             )}
@@ -675,19 +676,8 @@ const ProdutoList = () => {
       </div>
 
       <BulkActionBar count={selectedIds.length} onClear={() => setSelectedIds([])} onDelete={handleBulkAction} onPrint={handleBulkPrint} mode={modoLixeira} />
-
       <HistoricoModal isOpen={showHistoricoModal} onClose={() => setShowHistoricoModal(false)} historico={historicoData} produtoNome={selectedProdutoNome} />
-
-      {/* USO DO NOVO MODAL GLOBAL */}
-      <ConfirmModal
-        isOpen={confirmModal.isOpen}
-        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
-        onConfirm={confirmModal.onConfirm}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        confirmText={confirmModal.confirmText}
-        type={confirmModal.type}
-      />
+      <ConfirmModal isOpen={confirmModal.isOpen} onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })} onConfirm={confirmModal.onConfirm} title={confirmModal.title} message={confirmModal.message} confirmText={confirmModal.confirmText} type={confirmModal.type} />
     </>
   );
 };
