@@ -45,9 +45,17 @@ const EntradaEstoque = () => {
 
   const carregarFornecedores = async () => {
     try {
-      const res = await api.get('/fornecedores');
-      setFornecedores(res.data || []);
-    } catch (e) { toast.error("Erro ao carregar fornecedores."); }
+      // ATUALIZAÇÃO IMPORTANTE: Usando o endpoint /dropdown para evitar erro 500 e garantir array limpo
+      // Se falhar, faz fallback para o endpoint padrão tratando a paginação (.content)
+      const res = await api.get('/fornecedores/dropdown')
+        .catch(async () => await api.get('/fornecedores?size=100'));
+
+      const lista = Array.isArray(res.data) ? res.data : (res.data.content || []);
+      setFornecedores(lista);
+    } catch (e) {
+      console.error("Erro ao carregar fornecedores:", e);
+      toast.error("Erro ao carregar lista de fornecedores.");
+    }
   };
 
   // --- HELPERS ---
@@ -225,32 +233,30 @@ const EntradaEstoque = () => {
 
     setLoading(true);
     try {
-      for (const item of itens) {
-        await api.post('/estoque/entrada', {
-          // Identificação
-          idProduto: item.idProduto, // Se tiver ID, o backend vincula/atualiza. Se null, cria.
-          codigoBarras: item.codigoBarras,
+      // Envia como um POST único para o backend (Endpoint de Entrada Manual/XML)
+      const payload = {
+        fornecedorId: cabecalho.fornecedorId,
+        numeroNfe: cabecalho.tipoEntrada === 'NOTA_FISCAL' ? cabecalho.numeroDocumento : null,
+        dataEmissao: cabecalho.dataEmissao,
+        observacao: cabecalho.observacao,
+        itens: itens.map(item => ({
+            produtoId: item.idProduto, // Se null, backend cria novo
+            codigoBarras: item.codigoBarras,
+            descricao: item.descricao,
+            ncm: item.ncm,
+            quantidade: item.quantidade,
+            precoCustoUnitario: item.precoCusto,
+            codigoNoFornecedor: item.codigoNoFornecedor,
+            unidade: item.unidade
+        }))
+      };
 
-          // Dados da Transação
-          quantidade: item.quantidade,
-          precoCusto: item.precoCusto,
+      await api.post('/estoque/entrada/manual', payload);
 
-          // Dados para Aprendizado e Auto-Cadastro
-          descricao: item.descricao,
-          ncm: item.ncm,
-          unidade: item.unidade,
-          codigoNoFornecedor: item.codigoNoFornecedor, // Envia para o backend aprender o vínculo
-
-          // Cabeçalho
-          numeroNotaFiscal: cabecalho.tipoEntrada === 'NOTA_FISCAL' ? cabecalho.numeroDocumento : null,
-          fornecedorId: cabecalho.fornecedorId,
-          observacao: `Entrada Manual: ${cabecalho.observacao}`
-        });
-      }
       toast.success("Estoque atualizado e Vínculos aprendidos!");
       navigate('/produtos');
     } catch (e) {
-        toast.error("Erro ao processar entrada.");
+        toast.error("Erro ao processar entrada. Verifique o console.");
         console.error(e);
     }
     finally { setLoading(false); }
@@ -286,7 +292,10 @@ const EntradaEstoque = () => {
                 <label>Fornecedor *</label>
                 <select value={cabecalho.fornecedorId} onChange={(e) => setCabecalho({...cabecalho, fornecedorId: e.target.value})} className={!cabecalho.fornecedorId ? 'input-warning' : ''}>
                   <option value="">Selecione...</option>
-                  {fornecedores.map(f => <option key={f.id} value={f.id}>{f.razaoSocial || f.nomeFantasia}</option>)}
+                  {/* PROTEÇÃO CONTRA CRASH SE FORNECEDORES FOR NULL */}
+                  {Array.isArray(fornecedores) && fornecedores.map(f => (
+                    <option key={f.id} value={f.id}>{f.razaoSocial || f.nomeFantasia}</option>
+                  ))}
                 </select>
               </div>
               <div className="form-group"><label>Nº Doc</label><input value={cabecalho.numeroDocumento} onChange={(e) => setCabecalho({...cabecalho, numeroDocumento: e.target.value})} placeholder="Ex: 12345" /></div>
@@ -391,7 +400,6 @@ const EntradaEstoque = () => {
 
                       {item.alertaDivergencia && (
                           <div className="divergencia-box">
-                              {/* CORREÇÃO AQUI: Usando &gt; ao invés de > */}
                               <AlertTriangle size={12}/> Preço diverge &gt; 50%
                           </div>
                       )}
