@@ -170,14 +170,17 @@ export const produtoService = {
   },
 
   /**
-   * Consulta externa (COSMOS)
+   * Consulta se um EAN já existe (interno ou externo)
    */
   consultarEan: async (ean) => {
     try {
-      const response = await api.get(`/fiscal/consultar-ean/${ean}`);
+      // Endpoint ajustado para o padrão REST do controller (/produtos/123)
+      // Se retornar 200, o produto existe.
+      const response = await api.get(`${RESOURCE_URL}/${ean}`);
       return response.data;
     } catch (error) {
-      throw error;
+      // Se der 404 (Not Found), significa que o produto NÃO existe (o que é bom para cadastrar novo)
+      return null;
     }
   },
 
@@ -284,23 +287,53 @@ export const produtoService = {
   },
 
   /**
-   * Gera EAN interno
+   * [ATUALIZADO] Gera EAN interno Seguro e Único
+   * Usa prefixo 200 (Uso Interno) para evitar colisão com indústria.
+   * Verifica no banco se o código já existe antes de retornar.
    */
   gerarEanInterno: async () => {
+    // Função auxiliar para calcular dígito verificador EAN-13
+    const calcularDigito = (base) => {
+        let sum = 0;
+        for (let i = 0; i < 12; i++) {
+            sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
+        }
+        return (10 - (sum % 10)) % 10;
+    };
+
+    const gerarCandidato = () => {
+        // Prefixo 200 é reservado para uso interno/instore (GS1), evitando conflito com 789
+        const prefix = "200";
+        const random = Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
+        const base = prefix + random;
+        return base + calcularDigito(base);
+    };
+
     try {
+      // 1. Tenta usar o serviço do backend se disponível (ideal)
       const response = await api.get(`${RESOURCE_URL}/proximo-sequencial`);
       return response.data.ean;
     } catch (error) {
-      // Fallback local caso o backend falhe
-      const prefix = "789";
-      const random = Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
-      const base = prefix + random;
-      let sum = 0;
-      for (let i = 0; i < 12; i++) {
-        sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
+      // 2. Fallback Local Seguro com Verificação de Duplicidade
+      let eanGerado = gerarCandidato();
+      let tentativas = 0;
+      const maxTentativas = 3; // Evita loop infinito
+
+      while (tentativas < maxTentativas) {
+          try {
+              // Tenta buscar o produto no backend. Se der sucesso (200), ele EXISTE -> Conflito!
+              await api.get(`${RESOURCE_URL}/${eanGerado}`);
+              console.warn(`Colisão detectada para EAN ${eanGerado}. Gerando novo...`);
+              eanGerado = gerarCandidato();
+              tentativas++;
+          } catch (e) {
+              // Se der erro 404 (Not Found), significa que o código está LIVRE.
+              // Pode usar com segurança!
+              return eanGerado;
+          }
       }
-      const checkDigit = (10 - (sum % 10)) % 10;
-      return base + checkDigit;
+      // Se falhar 3x, retorna o último gerado (chance de colisão infinitesimal)
+      return eanGerado;
     }
   }
 };
