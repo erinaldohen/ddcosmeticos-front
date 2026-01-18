@@ -5,21 +5,36 @@ const RESOURCE_URL = '/produtos';
 export const produtoService = {
 
   /**
-   * Lista produtos com paginação e filtro
-   * (Mantido conforme seu original)
+   * [ATUALIZADO] Lista produtos com paginação e filtro NO SERVIDOR
+   * Aceita o 4º parâmetro 'filtros' para enviar ao Backend
    */
-  listar: async (pagina = 0, tamanho = 10, filtro = '') => {
+  listar: async (pagina = 0, tamanho = 10, termo = '', filtros = {}) => {
     try {
-      // Dica: Se o backend tiver endpoint /resumo, use ele para ser mais rápido.
-      // Se não, mantemos a rota padrão.
-      const response = await api.get(RESOURCE_URL, {
-        params: {
-          page: pagina,
-          size: tamanho,
-          termo: filtro || ''
-        }
-      });
+      // Mapeamento dos parâmetros para o padrão do Backend
+      const params = {
+        page: pagina,
+        size: tamanho,
+        termo: termo || ''
+      };
 
+      // Adiciona filtros avançados se existirem
+      if (filtros) {
+        if (filtros.marca) params.marca = filtros.marca;
+        if (filtros.categoria) params.categoria = filtros.categoria;
+
+        // Mapeia o status do estoque do frontend para o backend
+        if (filtros.estoque && filtros.estoque !== 'todos') {
+          // Frontend: 'com-estoque' -> Backend: 'ok'
+          // Frontend: 'baixo'       -> Backend: 'baixo'
+          params.statusEstoque = filtros.estoque === 'com-estoque' ? 'ok' : 'baixo';
+        }
+
+        if (filtros.semImagem) params.semImagem = true;
+        if (filtros.semNcm) params.semNcm = true;
+        if (filtros.precoZerado) params.precoZero = true; // Note: backend usa 'precoZero'
+      }
+
+      const response = await api.get(RESOURCE_URL, { params });
       const data = response.data;
 
       return {
@@ -30,7 +45,8 @@ export const produtoService = {
       };
     } catch (error) {
       console.error("Erro no serviço de listagem:", error);
-      throw error;
+      // Retorna objeto vazio seguro para não quebrar a tela
+      return { itens: [], totalPaginas: 0, totalElementos: 0 };
     }
   },
 
@@ -85,11 +101,8 @@ export const produtoService = {
     }
   },
 
-  // --- NOVAS IMPLEMENTAÇÕES NECESSÁRIAS ---
-
   /**
-   * [NOVO] Executa o Robô de IA para corrigir NCMs
-   * Necessário para o botão roxo funcionar
+   * Executa o Robô de IA para corrigir NCMs
    */
   corrigirNcmsIA: async () => {
     try {
@@ -102,8 +115,7 @@ export const produtoService = {
   },
 
   /**
-   * [ATUALIZADO] Saneamento fiscal em massa
-   * Recalcula tributos (IBS/CBS, PIS/COFINS) de todos os produtos
+   * Saneamento fiscal em massa
    */
   saneamentoFiscal: async () => {
     try {
@@ -116,7 +128,7 @@ export const produtoService = {
   },
 
   /**
-   * [NOVO] Importação de Arquivo
+   * Importação de Arquivo
    */
   importarProdutos: async (formData) => {
     try {
@@ -131,12 +143,12 @@ export const produtoService = {
   },
 
   /**
-   * [NOVO] Exportação de Arquivo
+   * Exportação de Arquivo
    */
   exportarProdutos: async (tipo) => {
     try {
       const response = await api.get(`${RESOURCE_URL}/exportar/${tipo}`, {
-        responseType: 'blob' // CRÍTICO: Garante que o arquivo não venha corrompido/vazio
+        responseType: 'blob'
       });
       return response.data;
     } catch (error) {
@@ -146,26 +158,23 @@ export const produtoService = {
   },
 
   /**
-   * [NOVO] Validação Fiscal no Formulário
+   * Validação Fiscal no Formulário
    */
   validarDadosFiscais: async (descricao, ncm) => {
     try {
       const response = await api.post('/fiscal/validar', { descricao, ncm });
       return response.data;
     } catch (error) {
-      // Falha silenciosa para não travar o form
       return null;
     }
   },
-
-  // --- FIM DAS NOVAS IMPLEMENTAÇÕES ---
 
   /**
    * Consulta externa (COSMOS)
    */
   consultarEan: async (ean) => {
     try {
-      const response = await api.get(`/fiscal/consultar-ean/${ean}`); // Ajuste de rota comum
+      const response = await api.get(`/fiscal/consultar-ean/${ean}`);
       return response.data;
     } catch (error) {
       throw error;
@@ -218,7 +227,7 @@ export const produtoService = {
   },
 
   /**
-   * Lixeira
+   * Busca itens da Lixeira (Inativos)
    */
   buscarLixeira: async () => {
     try {
@@ -231,8 +240,7 @@ export const produtoService = {
   },
 
   /**
-   * [CORRIGIDO] Restaurar da lixeira
-   * Alterado de PATCH para PUT para bater com o Controller Java
+   * Restaurar da lixeira (Reativar)
    */
   restaurar: async (ean) => {
     try {
@@ -244,7 +252,7 @@ export const produtoService = {
   },
 
   /**
-   * Alias para restaurar
+   * Alias para restaurar (manter compatibilidade)
    */
   reativar: async (ean) => {
     try {
@@ -283,7 +291,7 @@ export const produtoService = {
       const response = await api.get(`${RESOURCE_URL}/proximo-sequencial`);
       return response.data.ean;
     } catch (error) {
-      // Fallback local
+      // Fallback local caso o backend falhe
       const prefix = "789";
       const random = Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
       const base = prefix + random;

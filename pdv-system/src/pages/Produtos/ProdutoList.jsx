@@ -23,6 +23,9 @@ function useDebounce(value, delay) {
   return debouncedValue;
 }
 
+// ... (Componentes Auxiliares TableSkeleton, ProductImage, CopyableCode, BulkActionBar, ActionMenu, HistoricoModal MANTIDOS IGUAIS) ...
+// (Para economizar espaço, mantive apenas o ProdutoList alterado abaixo. Copie os componentes auxiliares do seu código original)
+
 // --- COMPONENTE: SKELETON ---
 const TableSkeleton = () => (
   <>
@@ -241,55 +244,54 @@ const ProdutoList = () => {
     return Array.from(unicas).sort();
   }, [produtos]);
 
-  // --- BUSCA DE DADOS ---
+  // --- BUSCA DE DADOS (SERVIDOR) ---
   const carregarProdutos = useCallback(async (pagina, termo) => {
     setLoading(true);
     try {
       if (modoLixeira) {
+        // Lógica da Lixeira (Client-side, pois é uma lista menor e específica)
         const listaBruta = await produtoService.buscarLixeira();
         const listaInativos = Array.isArray(listaBruta) ? listaBruta : [];
         const filtrados = termo
           ? listaInativos.filter(p => p.descricao.toLowerCase().includes(termo.toLowerCase()) || p.codigoBarras.includes(termo))
           : listaInativos;
-
         setProdutos(filtrados);
         setTotalPages(1);
         setTotalElements(filtrados.length);
-        if(page !== 0) setPage(0);
-
       } else {
-        const dados = await produtoService.listar(pagina, 10, termo); // Pega 10 (paginado)
+        // --- MODO NORMAL: SERVER-SIDE FILTERING ---
+        // Passamos o objeto 'filtros' inteiro para o serviço
+        const dados = await produtoService.listar(pagina, 10, termo, filtros);
 
-        if (!dados) {
-            setProdutos([]); setTotalPages(0); setTotalElements(0); return;
+        if (dados && dados.itens) {
+            setProdutos(dados.itens);
+            setTotalPages(dados.totalPaginas);
+            setTotalElements(dados.totalElementos);
+        } else {
+            setProdutos([]);
+            setTotalPages(0);
+            setTotalElements(0);
         }
-
-        const lista = dados.itens || dados.content || [];
-        const paginas = dados.totalPaginas || dados.totalPages || 0;
-        const total = dados.totalElements || 0;
-
-        setProdutos(lista);
-        setTotalPages(paginas);
-        setTotalElements(total);
       }
     } catch (error) {
       console.error("Erro Listagem:", error);
-      if (error.response && error.response.status === 404) {
-          setProdutos([]);
-          setTotalElements(0);
-      } else if (error.code === "ERR_NETWORK") {
-          toast.error("Servidor offline.");
-      } else {
-          toast.error("Erro ao carregar lista.");
-      }
+      toast.error("Erro ao carregar lista.");
     } finally {
       setLoading(false);
     }
-  }, [modoLixeira]);
+  }, [modoLixeira, filtros]); // <--- 'filtros' deve ser dependência
 
+  // UseEffect para recarregar quando filtros ou busca mudam
+  useEffect(() => {
+    // Se mudou filtro, volta pra página 0
+    if (page !== 0) setPage(0);
+    carregarProdutos(0, debouncedSearch);
+  }, [debouncedSearch, filtros, modoLixeira]);
+
+  // UseEffect separado para PAGINAÇÃO (para não resetar página ao paginar)
   useEffect(() => {
     carregarProdutos(page, debouncedSearch);
-  }, [page, debouncedSearch, modoLixeira, carregarProdutos]);
+  }, [page]);
 
   useEffect(() => {
     setSelectedIds([]);
@@ -307,11 +309,12 @@ const ProdutoList = () => {
   // --- HANDLERS AÇÕES ---
   const handleSearchChange = (e) => {
     setTermoBusca(e.target.value);
-    if(page !== 0) setPage(0);
+    // Removemos setPage(0) aqui, pois o debounce já cuida de chamar o useEffect que reseta a página
   };
 
   const handleSelectAll = (e) => {
-    if (e.target.checked) setSelectedIds(listaVisual.map(p => p.id));
+    // Seleciona da lista 'produtos' (já filtrada pelo servidor)
+    if (e.target.checked) setSelectedIds(produtos.map(p => p.id));
     else setSelectedIds([]);
   };
 
@@ -456,35 +459,6 @@ const ProdutoList = () => {
       return <span className="status-badge active">Ativo</span>;
   };
 
-  // --- MOTOR DE FILTRAGEM FRONTEND ---
-  const listaVisual = useMemo(() => {
-    if (!produtos) return [];
-    if (modoLixeira) return produtos; // Lixeira não usa filtros visuais avançados
-
-    return produtos.filter(p => {
-        // 1. Estoque
-        if (filtros.estoque === 'baixo' && p.quantidadeEmEstoque > (p.estoqueMinimo || 5)) return false;
-        if (filtros.estoque === 'com-estoque' && p.quantidadeEmEstoque <= (p.estoqueMinimo || 5)) return false;
-
-        // 2. Marca
-        if (filtros.marca && p.marca !== filtros.marca) return false;
-
-        // 3. Categoria
-        if (filtros.categoria && p.categoria !== filtros.categoria) return false;
-
-        // 4. Sem Imagem
-        if (filtros.semImagem && p.urlImagem) return false;
-
-        // 5. Sem NCM
-        if (filtros.semNcm && p.ncm && p.ncm !== '00000000') return false;
-
-        // 6. Preço Zerado
-        if (filtros.precoZerado && p.precoVenda > 0) return false;
-
-        return true;
-    });
-  }, [produtos, filtros, modoLixeira]);
-
   return (
     <>
       <div className="modern-container" style={{overflow: 'visible'}}>
@@ -600,7 +574,7 @@ const ProdutoList = () => {
                 <tr>
                   <th className="th-checkbox">
                     <div className="checkbox-wrapper">
-                      <input type="checkbox" onChange={handleSelectAll} checked={listaVisual.length > 0 && selectedIds.length === listaVisual.length} disabled={listaVisual.length === 0} />
+                      <input type="checkbox" onChange={handleSelectAll} checked={produtos.length > 0 && selectedIds.length === produtos.length} disabled={produtos.length === 0} />
                     </div>
                   </th>
                   <th width="35%">Produto</th>
@@ -614,10 +588,10 @@ const ProdutoList = () => {
               <tbody>
                 {loading ? (
                   <TableSkeleton />
-                ) : listaVisual.length === 0 ? (
+                ) : produtos.length === 0 ? (
                   <tr><td colSpan="7" className="text-center"><div className="empty-state"><Box size={48} strokeWidth={1} /><h3>Nenhum produto encontrado</h3><p>Tente ajustar os filtros.</p></div></td></tr>
                 ) : (
-                  listaVisual.map((prod) => {
+                  produtos.map((prod) => {
                     const isSelected = selectedIds.includes(prod.id);
                     return (
                       <tr key={prod.id} className={`fade-in ${isSelected ? 'row-selected' : ''}`} onClick={() => handleSelectOne(prod.id)}>
