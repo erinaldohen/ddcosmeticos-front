@@ -1,15 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DollarSign, ShoppingBag, Smartphone, CreditCard, TrendingUp, ArrowRight } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+// REMOVIDO: ResponsiveContainer (Causa do erro)
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
 import api from '../../services/api';
 import AlertasAuditoria from '../../components/Dashboard/AlertasAuditoria';
 
 const Dashboard = () => {
   const navigate = useNavigate();
 
-  // TRAVA DE SEGURANÇA: Controla se o gráfico pode ser renderizado
-  const [chartEnabled, setChartEnabled] = useState(false);
+  // REFERÊNCIA PARA MEDIR O TAMANHO REAL
+  const chartContainerRef = useRef(null);
+
+  // ESTADO PARA LARGURA DO GRÁFICO (Manual)
+  const [chartWidth, setChartWidth] = useState(0);
 
   const [resumo, setResumo] = useState({
     faturamentoTotal: 0,
@@ -19,19 +23,37 @@ const Dashboard = () => {
     caixaStatus: 'FECHADO'
   });
 
+  // 1. CARREGAMENTO DE DADOS
   useEffect(() => {
     carregarDadosDashboard();
+  }, []);
 
-    // TRUQUE DO DOUBLE-FRAME:
-    // requestAnimationFrame garante que o navegador terminou o "paint" do CSS
-    // antes de deixarmos o Recharts tentar calcular o tamanho.
-    const timer = requestAnimationFrame(() => {
-      setTimeout(() => {
-        setChartEnabled(true);
-      }, 200); // Pequeno delay extra por segurança
-    });
+  // 2. LÓGICA MANUAL DE RESPONSIVIDADE (INFALÍVEL)
+  // Substitui o ResponsiveContainer que estava dando erro
+  useEffect(() => {
+    const handleResize = () => {
+      if (chartContainerRef.current) {
+        // Pega a largura exata da div pai e desconta padding se necessário
+        setChartWidth(chartContainerRef.current.offsetWidth - 10);
+      }
+    };
 
-    return () => cancelAnimationFrame(timer);
+    // Mede na inicialização
+    handleResize();
+
+    // Mede se a tela mudar de tamanho
+    window.addEventListener('resize', handleResize);
+
+    // Observer para detectar mudanças no Grid (caso o menu lateral abra/feche)
+    const observer = new ResizeObserver(handleResize);
+    if (chartContainerRef.current) {
+      observer.observe(chartContainerRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      observer.disconnect();
+    };
   }, []);
 
   const carregarDadosDashboard = async () => {
@@ -102,44 +124,52 @@ const Dashboard = () => {
       {/* MAIN GRID */}
       <div className="dashboard-grid" style={{ marginTop: '25px', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
 
-        {/* COLUNA ESQUERDA - CORREÇÃO CRÍTICA 1: minWidth: 0 e overflow: hidden */}
-        {/* Isso impede que o Grid calcule errado o tamanho da coluna */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0, overflow: 'hidden' }}>
+        {/* COLUNA ESQUERDA */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0 }}>
 
           <div className="chart-card" style={{ padding: '20px' }}>
             <h3 style={{ marginBottom: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <TrendingUp size={18} /> Composição da Receita
             </h3>
 
-            {/* CORREÇÃO CRÍTICA 2: Wrapper com tamanho FIXO em pixels para altura */}
-            <div style={{ width: '100%', height: '300px', position: 'relative' }}>
-              {chartEnabled ? (
-                // ResponsiveContainer precisa de um pai com tamanho definido
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={dadosGrafico} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+            {/* CONTAINER REF: Aqui medimos o tamanho */}
+            <div
+                ref={chartContainerRef}
+                style={{ width: '100%', height: '300px', minHeight: '300px', position: 'relative', overflow: 'hidden' }}
+            >
+              {chartWidth > 0 ? (
+                // LÓGICA MANUAL: Passamos o width exato em pixels.
+                // Isso impede que o Recharts tente adivinhar e calcule -1.
+                <BarChart
+                    width={chartWidth}
+                    height={300}
+                    data={dadosGrafico}
+                    layout="vertical"
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" hide />
                     <YAxis dataKey="name" type="category" width={70} tick={{fontSize: 12}} />
                     <Tooltip
                         formatter={(value) => format(value)}
                         cursor={{ fill: 'transparent' }}
-                        contentStyle={{ zIndex: 1000 }} // Garante que o tooltip fique por cima
+                        contentStyle={{ zIndex: 1000, borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                     />
                     <Bar dataKey="valor" radius={[0, 4, 4, 0]} barSize={30}>
                         {dadosGrafico.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                     </Bar>
-                    </BarChart>
-                </ResponsiveContainer>
+                </BarChart>
               ) : (
-                // Placeholder enquanto o layout carrega
+                // LOADING: Se a largura for 0 (carregando), mostra spinner
                 <div style={{
                     width: '100%', height: '100%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: '#f8fafc', borderRadius: '8px', color: '#94a3b8'
                 }}>
-                  Carregando gráfico...
+                  <div className="spinner-border text-primary" role="status" style={{marginRight: 10, width: '1.5rem', height: '1.5rem'}}></div>
+                  <span>Carregando gráfico...</span>
                 </div>
               )}
             </div>

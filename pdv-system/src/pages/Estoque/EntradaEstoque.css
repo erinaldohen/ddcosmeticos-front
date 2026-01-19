@@ -1,473 +1,348 @@
 /* =========================================
-   LAYOUT E ESTRUTURA
+   1. LAYOUT E ESTRUTURA GLOBAL
    ========================================= */
 
-.entrada-layout {
-  display: flex;
-  gap: 24px;
-  align-items: flex-start;
-  height: calc(100vh - 180px); /* Ajusta altura para caber na tela */
-}
-
-/* Coluna Esquerda (Formulários) */
-.painel-principal {
-  flex: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  overflow-y: auto;
-  padding-bottom: 20px;
-}
-
-/* Coluna Direita (Lista) */
-.painel-resumo {
-  flex: 1;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  border: 1px solid #e2e8f0;
-}
-
-/* =========================================
-   CARDS E INPUTS
-   ========================================= */
-
-.card-entrada {
-  background: white;
-  padding: 24px;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-}
-
-.card-entrada.destaque {
-  border-left: 5px solid #6366f1; /* Destaque roxo para a área de ação */
-}
-
-.card-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 20px 0;
-  font-size: 1.1rem;
-  color: #1e293b;
-  border-bottom: 1px solid #f1f5f9;
-  padding-bottom: 12px;
-}
-
-.input-warning {
-  border-color: #f59e0b !important;
-  background-color: #fffbeb !important;
-}
-
-/* Search Box (Input Principal) */
-.search-box-entrada {
-  display: flex;
-  gap: 10px;
-}
-.search-box-entrada input {
-  flex: 1;
-  height: 50px;
-  padding: 0 16px;
-  font-size: 1.1rem;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-}
-.search-box-entrada input:focus {
-  border-color: #6366f1;
-  outline: none;
-}
-
-/* =========================================
-   EDITOR DE ITEM (Área Cinza)
-   ========================================= */
-
-.item-editor {
-  background: #f8fafc;
-  padding: 20px;
-  border-radius: 8px;
-  border: 1px dashed #cbd5e1;
-  animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
-
-.produto-header { margin-bottom: 15px; }
-.prod-nome { display: block; font-weight: 700; font-size: 1.1rem; color: #0f172a; }
-.prod-ean { display: block; font-size: 0.9rem; color: #64748b; margin-top: 4px; }
-
-.inputs-valores-row {
-  display: flex;
-  gap: 15px;
-  align-items: flex-end;
-  flex-wrap: wrap;
-}
-
-.actions-row {
-  display: flex;
-  gap: 10px;
-  margin-left: auto; /* Empurra botões para direita */
-}
-
-/* Botões de Ação do Item */
-.btn-add-item {
-  height: 42px;
-  padding: 0 24px;
-  background: #10b981; /* Verde Sucesso */
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  display: flex; align-items: center; gap: 8px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.btn-add-item:hover { background: #059669; }
-
-.btn-cancel-item {
-  height: 42px;
-  padding: 0 16px;
-  background: white;
-  color: #ef4444;
-  border: 1px solid #ef4444;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-/* =========================================
-   LISTA LATERAL (ITENS ADICIONADOS)
-   ========================================= */
-
-.lista-itens {
-  flex: 1;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.lista-itens h3 { margin: 0 0 15px 0; font-size: 1rem; color: #64748b; }
-
-.itens-scroll {
-  flex: 1;
-  overflow-y: auto;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.empty-state {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #cbd5e1;
-}
-
-/* --- ESTILOS DE STATUS DA IMPORTAÇÃO (SEMÁFORO INTELIGENTE) --- */
-
-/* Base do Card do Item na Lista */
-.item-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid #f1f5f9;
-  background: white;
-  transition: all 0.2s;
-  border-left: 4px solid transparent; /* Faixa colorida à esquerda */
-}
-
-/* 🟢 MATCH EXATO (Verde) */
-.item-row.match-verde {
-  border-left-color: #10b981;
-  background-color: #f0fdf4;
-}
-
-/* 🟡 SUGESTÃO (Amarelo) */
-.item-row.match-amarelo {
-  border-left-color: #f59e0b;
-  background-color: #fffbeb;
-}
-
-/* 🔵 NOVO PRODUTO (Azul) */
-.item-row.match-novo {
-  border-left-color: #3b82f6;
-  background-color: #eff6ff;
-}
-
-/* 🔴 ALERTA DE PREÇO (Vermelho) */
-.item-row.match-alerta {
-  border-left-color: #ef4444;
-  background-color: #fef2f2;
-}
-
-/* Layout das Informações de Texto */
-.item-info-col {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-}
-
-.xml-desc {
-  font-weight: 700;
-  color: #1e293b;
-  font-size: 0.95rem;
-}
-
-.system-desc {
-  font-size: 0.85rem;
-  color: #64748b;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* Badges (Etiquetas) */
-.badge-status {
-  font-size: 0.7rem;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  display: inline-block;
-  width: fit-content;
-}
-
-.badge-verde { background: #d1fae5; color: #065f46; }
-.badge-amarelo { background: #fef3c7; color: #92400e; }
-.badge-azul { background: #dbeafe; color: #1e40af; }
-.badge-vermelho { background: #fee2e2; color: #991b1b; }
-
-/* Botões de Ação na Lista (Ex: Vincular) */
-.btn-action-sm {
-  padding: 4px 12px;
-  border-radius: 6px;
-  border: none;
-  font-size: 0.8rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  transition: opacity 0.2s;
-  white-space: nowrap;
-}
-
-.btn-accept {
-  background-color: #10b981;
-  color: white;
-}
-.btn-accept:hover { opacity: 0.9; }
-
-/* Alerta de Divergência */
-.divergencia-box {
-  margin-top: 4px;
-  font-size: 0.75rem;
-  color: #b91c1c;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-weight: 600;
-}
-
-/* Valores Totais do Item */
-.item-total {
-  display: flex;
-  flex-direction: column; /* Coluna para alinhar Preço em cima do Botão */
-  align-items: flex-end;
-  gap: 5px;
-}
-.item-total strong { color: #0f172a; font-weight: 700; }
-
-.btn-trash {
-  background: none; border: none; color: #94a3b8; cursor: pointer; padding: 4px;
-}
-.btn-trash:hover { color: #ef4444; background: #fee2e2; border-radius: 4px; }
-
-/* =========================================
-   FOOTER (TOTAIS E FINALIZAR)
-   ========================================= */
-
-.resumo-footer {
-  padding: 24px;
-  background: #f8fafc;
-  border-top: 1px solid #e2e8f0;
-  border-radius: 0 0 12px 12px;
-}
-
-.audit-info {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 0.8rem; color: #64748b; margin-bottom: 20px;
-  background: #e2e8f0; padding: 8px; border-radius: 6px; justify-content: center;
-}
-
-.total-block { text-align: right; margin-bottom: 20px; }
-.total-block span { font-size: 0.9rem; color: #64748b; }
-.total-block h2 { margin: 5px 0 0 0; color: #6366f1; font-size: 1.8rem; }
-
-.btn-finalizar {
-  width: 100%;
-  height: 54px;
-  background: #6366f1;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 1.1rem;
-  display: flex; justify-content: center; align-items: center; gap: 10px;
-  cursor: pointer;
-  transition: background 0.2s;
-  box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.4);
-}
-.btn-finalizar:hover:not(:disabled) { background: #4f46e5; transform: translateY(-1px); }
-.btn-finalizar:disabled { background: #94a3b8; cursor: not-allowed; box-shadow: none; }
-
-/* =========================================
-   BOTÃO XML E TOOLTIPS
-   ========================================= */
-
-.btn-xml {
-    background-color: #f1f5f9;
-    border: 1px solid #cbd5e1;
+.entrada-container {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 32px;
+    background-color: #f1f5f9; /* Slate-100 */
+    min-height: 100vh;
+    font-family: 'Inter', sans-serif;
     color: #334155;
-    padding: 8px 16px;
-    border-radius: 6px;
+}
+
+/* --- CABEÇALHO --- */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.page-title h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin: 0;
+}
+
+.page-title p {
+    color: #64748b;
+    font-size: 0.9rem;
+    margin-top: 4px;
+}
+
+/* --- CARDS (BLOCOS BRANCOS) --- */
+.bloco-entrada {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+    padding: 24px;
+    border: 1px solid #e2e8f0;
+}
+
+.titulo-sessao {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* =========================================
+   2. FORMULÁRIOS, GRID E INPUTS
+   ========================================= */
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 16px;
+    align-items: end;
+}
+
+.col-12 { grid-column: span 12; }
+.col-8  { grid-column: span 8; }
+.col-6  { grid-column: span 6; }
+.col-4  { grid-column: span 4; }
+.col-3  { grid-column: span 3; }
+.col-2  { grid-column: span 2; }
+
+label {
+    display: block;
+    font-size: 0.85rem;
     font-weight: 600;
+    color: #475569;
+    margin-bottom: 6px;
+}
+
+/* Estilo Base dos Inputs */
+input, select {
+    width: 100%;
+    height: 42px;
+    padding: 0 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    background-color: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    color: #334155;
+}
+
+input:focus, select:focus {
+    outline: none;
+    border-color: #6366f1; /* Indigo-500 */
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Input Group (Botão acoplado ao input) */
+.input-group {
+    display: flex;
+}
+.input-group input, .input-group select {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+}
+.input-group .btn-addon {
+    height: 42px;
+    padding: 0 14px;
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-left: none;
+    border-radius: 0 6px 6px 0;
+    color: #64748b;
     cursor: pointer;
-    display: flex; gap: 8px; align-items: center;
+    display: flex; align-items: center;
     transition: all 0.2s;
 }
-.btn-xml:hover { background-color: #e2e8f0; border-color: #94a3b8; }
+.input-group .btn-addon:hover { background: #e2e8f0; color: #4f46e5; }
 
-/* Correção da Legenda (Tooltip) */
-.btn-xml[data-label]::after {
-    top: 100%;
-    bottom: auto;
-    margin-top: 8px;
-    width: max-content;
-    max-width: 200px;
-    white-space: normal;
+/* =========================================
+   3. BOTÕES PADRONIZADOS
+   ========================================= */
+
+.btn-std {
+    height: 42px;
+    padding: 0 20px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.btn-primary { background-color: #4f46e5; color: white; }
+.btn-primary:hover { background-color: #4338ca; }
+.btn-primary:disabled { background-color: #94a3b8; cursor: not-allowed; }
+
+.btn-secondary { background-color: white; border: 1px solid #cbd5e1; color: #475569; }
+.btn-secondary:hover { background-color: #f8fafc; border-color: #94a3b8; }
+
+.btn-success { background-color: #10b981; color: white; }
+.btn-success:hover { background-color: #059669; }
+
+.btn-icon-danger {
+    background: none; border: none; color: #94a3b8; cursor: pointer;
+    padding: 6px; border-radius: 4px; transition: all 0.2s;
+}
+.btn-icon-danger:hover { color: #ef4444; background-color: #fee2e2; }
+
+/* =========================================
+   4. TABELA E LISTAS
+   ========================================= */
+
+.table-container { overflow-x: auto; }
+
+.tabela-padrao {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.tabela-padrao th {
+    text-align: left;
+    padding: 12px 16px;
+    background-color: #f8fafc;
+    color: #64748b;
+    font-weight: 600;
+    border-bottom: 1px solid #e2e8f0;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+}
+
+.tabela-padrao td {
+    padding: 16px;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: middle;
+}
+
+.tabela-padrao tr:hover td { background-color: #f8fafc; }
+
+/* Empty State */
+.empty-state {
     text-align: center;
+    padding: 60px 20px;
+    color: #94a3b8;
+}
+.empty-state svg { margin-bottom: 16px; opacity: 0.5; }
+.empty-state h3 { font-size: 1.1rem; color: #475569; margin-bottom: 4px; }
+
+/* Dropdown Busca */
+.dropdown-busca {
+    position: absolute; top: 100%; left: 0; right: 0;
+    background: white; border: 1px solid #e2e8f0; border-radius: 8px;
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+    z-index: 50; margin-top: 4px; max-height: 300px; overflow-y: auto;
+}
+.item-busca {
+    padding: 12px 16px; cursor: pointer; display: flex; justify-content: space-between;
+    border-bottom: 1px solid #f1f5f9;
+}
+.item-busca:hover { background-color: #f8fafc; }
+
+/* Footer Resumo */
+.footer-resumo {
+    display: flex; justify-content: flex-end; align-items: center;
+    gap: 24px; margin-top: 24px; padding-top: 24px; border-top: 2px dashed #e2e8f0;
+}
+.total-label { font-size: 0.9rem; color: #64748b; margin-right: 8px; }
+.total-value { font-size: 1.8rem; font-weight: 700; color: #4f46e5; }
+
+/* =========================================
+   5. MODAIS
+   ========================================= */
+
+.modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center; z-index: 9999;
+}
+.modal-card {
+    background: white; padding: 32px; border-radius: 16px;
+    width: 100%; max-width: 500px;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+}
+.modal-header {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+}
+.modal-header h3 { font-size: 1.2rem; color: #1e293b; margin: 0; }
+.modal-header button { background: none; border: none; cursor: pointer; color: #64748b; }
+
+.modal-actions {
+    display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;
+}
+
+/* =========================================
+   6. TOOLTIPS (LEGENDA INSTANTÂNEA)
+   ========================================= */
+
+[data-tooltip] {
+    position: relative;
+    cursor: pointer;
+}
+
+/* Caixa do texto */
+[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-8px);
+    background-color: #1e293b; /* Fundo Escuro */
+    color: #fff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
+    z-index: 9999;
+    pointer-events: none;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+}
+
+/* Seta */
+[data-tooltip]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-3px);
+    border-width: 6px;
+    border-style: solid;
+    border-color: #1e293b transparent transparent transparent;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease;
     z-index: 9999;
 }
 
-.btn-xml[data-label]::before {
-    top: 100%;
-    bottom: auto;
-    border-top-color: transparent;
-    border-bottom-color: #1e293b;
-    margin-top: -4px;
+[data-tooltip]:hover::after,
+[data-tooltip]:hover::before {
+    opacity: 1;
+    visibility: visible;
 }
 
 /* =========================================
-   LISTA DE SUGESTÕES (DESIGN NOVO ELEGANTE)
+   7. CALENDÁRIO CUSTOMIZADO (WRAPPER)
    ========================================= */
 
-.search-box-container {
+.date-input-wrapper {
     position: relative;
-    z-index: 100;
+    width: 100%;
+    height: 42px;
+    /* Wrapper herda o cursor para o tooltip funcionar */
+    cursor: pointer;
 }
 
-/* Container Flutuante com Sombra Suave */
-.dropdown-sugestoes {
+/* Ícone Lucide sobreposto */
+.date-input-wrapper .icon-calendar {
     position: absolute;
-    top: calc(100% + 4px); /* Respiro do input */
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6366f1; /* Indigo */
+    pointer-events: none; /* Clique passa pelo ícone */
+    z-index: 10;
+}
+
+/* Input de Data Transparente e Estilizado */
+.date-input-wrapper input[type="date"] {
+    width: 100%;
+    height: 100%;
+    padding-left: 12px;
+    padding-right: 40px; /* Espaço para o ícone */
+    cursor: pointer;
+
+    /* Remove aparência padrão feia */
+    appearance: none;
+    -webkit-appearance: none;
+
+    /* Garante que o popup nativo seja claro */
+    color-scheme: light;
+}
+
+/* Truque: Expande a área clicável do calendário nativo para cobrir todo o input */
+.date-input-wrapper input[type="date"]::-webkit-calendar-picker-indicator {
+    position: absolute;
+    top: 0;
     left: 0;
     right: 0;
-
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-
-    box-shadow:
-        0 4px 6px -1px rgba(0, 0, 0, 0.05),
-        0 10px 15px -3px rgba(0, 0, 0, 0.05);
-
-    max-height: 280px;
-    overflow-y: auto;
-    z-index: 1000;
-    padding: 8px;
-
-    /* Scrollbar Fina */
-    scrollbar-width: thin;
-    scrollbar-color: #cbd5e1 transparent;
-}
-
-.dropdown-sugestoes::-webkit-scrollbar { width: 5px; }
-.dropdown-sugestoes::-webkit-scrollbar-track { background: transparent; }
-.dropdown-sugestoes::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
-
-/* ITEM DA LISTA */
-.sugestao-item {
-    display: flex;
-    align-items: center;
-    gap: 16px; /* Espaço Ícone -> Texto */
-    padding: 10px 12px;
-    border-radius: 8px;
+    bottom: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0; /* Invisível mas clicável */
     cursor: pointer;
-    transition: all 0.15s ease;
-    margin-bottom: 2px;
-}
-
-.sugestao-item.ativo,
-.sugestao-item:hover {
-    background-color: #f1f5f9;
-}
-
-/* Ícone (Avatar Quadrado) */
-.sugestao-icon-wrapper {
-    width: 42px;
-    height: 42px;
-    background-color: #e0e7ff; /* Fundo Roxo Claro */
-    color: #6366f1; /* Ícone Roxo */
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.sugestao-item.ativo .sugestao-icon-wrapper {
-    background-color: #6366f1;
-    color: white;
-    box-shadow: 0 4px 6px -1px rgba(99, 102, 241, 0.3);
-}
-
-.sugestao-conteudo {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    gap: 2px;
-}
-
-.sugestao-nome {
-    font-weight: 600;
-    color: #1e293b;
-    font-size: 0.95rem;
-    line-height: 1.2;
-}
-
-.sugestao-sublinha {
-    display: flex;
-    align-items: center;
-    color: #94a3b8;
-}
-
-.sugestao-ean {
-    font-size: 0.8rem;
-    font-family: 'Consolas', monospace;
-    letter-spacing: 0.5px;
-}
-
-.sugestao-enter-hint {
-    font-size: 1rem;
-    color: #94a3b8;
-    font-weight: bold;
-    padding-right: 8px;
 }

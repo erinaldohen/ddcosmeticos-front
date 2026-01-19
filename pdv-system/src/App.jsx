@@ -38,6 +38,7 @@ const AdminRoute = ({ children }) => {
 
   if (!token) return <Navigate to="/login" replace />;
 
+  // Se o usuário não for ADMIN, manda para o PDV em vez de deslogar
   if (usuario.perfil !== 'ROLE_ADMIN') {
     return <Navigate to="/pdv" replace />;
   }
@@ -123,6 +124,16 @@ function App() {
         {/* ----------------------------------- */}
 
         {/* ESTOQUE */}
+
+        {/* CORREÇÃO CRÍTICA: Rota /estoque adicionada.
+            Sem ela, o navigate('/estoque') caía no path="*" e deslogava o usuário.
+            Estou apontando para ProdutoList, pois geralmente é onde se vê o estoque. */}
+        <Route path="/estoque" element={
+          <AdminRoute>
+            <MainLayout><ProdutoList /></MainLayout>
+          </AdminRoute>
+        } />
+
         <Route path="/estoque/entrada" element={
           <AdminRoute>
             <MainLayout><EntradaEstoque /></MainLayout>
@@ -141,6 +152,7 @@ function App() {
           </AdminRoute>
         } />
 
+        {/* Rota Curinga: Qualquer endereço não listado acima redireciona para login */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>

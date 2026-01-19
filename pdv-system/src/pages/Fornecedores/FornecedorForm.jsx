@@ -8,10 +8,13 @@ import {
 import { maskCNPJ, maskPhone, maskCEP, unmask } from '../../utils/masks';
 import './FornecedorForm.css';
 
-const FornecedorForm = () => {
+// ADIÇÃO 1: Props para controlar modo modal e callback de sucesso
+const FornecedorForm = ({ isModal = false, onSuccess }) => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const isEdit = !!id;
+
+  // Se for modal, nunca é edição por URL (é sempre criação rápida)
+  const isEdit = !isModal && !!id;
 
   const [loading, setLoading] = useState(false);
   const [loadingCnpj, setLoadingCnpj] = useState(false);
@@ -84,12 +87,30 @@ const FornecedorForm = () => {
     }
   };
 
+  // ADIÇÃO 2: Verificação de Duplicidade antes da API Externa
   const consultarCNPJ = async () => {
     const cnpjLimpo = unmask(formData.cnpj);
     if (cnpjLimpo.length !== 14) return toast.warning("CNPJ incompleto.");
 
     setLoadingCnpj(true);
     try {
+      // 1. Verifica se já existe no banco LOCAL
+      try {
+          const check = await api.get(`/fornecedores/buscar-por-cnpj/${cnpjLimpo}`);
+          if (check.data && check.data.id) {
+              // Se já existe e estamos no modal, pergunta se quer usar este
+              if (isModal) {
+                  toast.success("Fornecedor já cadastrado! Selecionando...");
+                  if (onSuccess) onSuccess(check.data); // Fecha modal e seleciona
+                  return;
+              } else if (!isEdit) {
+                  toast.warning("Atenção: Este CNPJ já está cadastrado no sistema.");
+                  // Não impede consulta, mas avisa
+              }
+          }
+      } catch (ignored) { /* 404 = Não existe, segue o fluxo */ }
+
+      // 2. Consulta API Externa (Receita)
       const res = await api.get(`/fornecedores/consulta-cnpj/${cnpjLimpo}`);
       const dados = res.data;
 
@@ -107,9 +128,9 @@ const FornecedorForm = () => {
         cep: maskCEP(dados.cep || prev.cep),
         telefone: maskPhone(dados.telefone || prev.telefone)
       }));
-      toast.success("Dados da Receita importados!");
+      toast.success("Dados importados com sucesso!");
     } catch (error) {
-      toast.error("Erro ao consultar CNPJ.");
+      toast.error("Erro ao consultar CNPJ na Receita.");
     } finally {
       setLoadingCnpj(false);
     }
@@ -126,14 +147,23 @@ const FornecedorForm = () => {
     };
 
     try {
+      let responseData;
       if (isEdit) {
         await api.put(`/fornecedores/${id}`, payload);
         toast.success("Fornecedor atualizado!");
+        navigate('/fornecedores');
       } else {
-        await api.post('/fornecedores', payload);
+        const res = await api.post('/fornecedores', payload);
+        responseData = res.data;
         toast.success("Fornecedor criado!");
+
+        // ADIÇÃO 3: Lógica de retorno para Modal
+        if (isModal && onSuccess) {
+            onSuccess(responseData); // Retorna o objeto criado para o pai
+        } else {
+            navigate('/fornecedores');
+        }
       }
-      navigate('/fornecedores');
     } catch (error) {
       toast.error(error.response?.data?.message || "Erro ao salvar.");
     } finally {
@@ -141,32 +171,42 @@ const FornecedorForm = () => {
     }
   };
 
-  return (
-    <div className="ff-wrapper">
-      <div className="ff-container-limit">
-        <header className="ff-header">
-          <div className="ff-title-area">
-            <div className="ff-icon-bg">
-              <Building2 size={24} color="#fff" />
-            </div>
-            <div className="ff-text-header">
-              <h1>{isEdit ? 'Editar Fornecedor' : 'Novo Fornecedor'}</h1>
-              <p>Gerencie as informações fiscais e de contato do parceiro.</p>
-            </div>
-          </div>
-          <button className="ff-btn-back" onClick={() => navigate('/fornecedores')}>
-            <ArrowLeft size={18} /> Voltar
-          </button>
-        </header>
+  // Ajuste de layout: Se for modal, remove o wrapper externo e o cabeçalho
+  const WrapperComponent = isModal ? 'div' : 'div';
+  const wrapperClass = isModal ? 'ff-modal-mode' : 'ff-wrapper';
 
-        <form onSubmit={handleSubmit} className="ff-form-card">
+  return (
+    <div className={wrapperClass}>
+      <div className={isModal ? '' : 'ff-container-limit'}>
+
+        {/* CABEÇALHO (Só exibe se NÃO for modal) */}
+        {!isModal && (
+            <header className="ff-header">
+              <div className="ff-title-area">
+                <div className="ff-icon-bg">
+                  <Building2 size={24} color="#fff" />
+                </div>
+                <div className="ff-text-header">
+                  <h1>{isEdit ? 'Editar Fornecedor' : 'Novo Fornecedor'}</h1>
+                  <p>Gerencie as informações fiscais e de contato.</p>
+                </div>
+              </div>
+              <button className="ff-btn-back" onClick={() => navigate('/fornecedores')}>
+                <ArrowLeft size={18} /> Voltar
+              </button>
+            </header>
+        )}
+
+        <form onSubmit={handleSubmit} className={isModal ? 'ff-form-modal' : 'ff-form-card'}>
 
           {/* SEÇÃO 1: EMPRESARIAL */}
           <div className="ff-section">
-            <div className="ff-section-title">
-              <Building2 size={18} />
-              <span>Dados Fiscais</span>
-            </div>
+            {!isModal && (
+                <div className="ff-section-title">
+                  <Building2 size={18} />
+                  <span>Dados Fiscais</span>
+                </div>
+            )}
 
             <div className="ff-grid">
               <div className="ff-col-5">
@@ -181,12 +221,13 @@ const FornecedorForm = () => {
                       onChange={handleChange}
                       required
                       maxLength={18}
+                      autoFocus={isModal} // Foco automático no modal
                     />
                     <label className="ff-label-floating">CNPJ *</label>
                   </div>
                   <button type="button" className="ff-btn-query" onClick={consultarCNPJ} disabled={loadingCnpj}>
                     {loadingCnpj ? <Loader size={16} className="ff-spin"/> : <Search size={16}/>}
-                    Receita
+                    {isModal ? '' : 'Receita'} {/* Texto curto no modal */}
                   </button>
                 </div>
               </div>
@@ -197,26 +238,30 @@ const FornecedorForm = () => {
             </div>
           </div>
 
-          {/* SEÇÃO 2: CONTATO */}
+          {/* SEÇÃO 2: CONTATO (Simplificada no Modal se quiser, mas mantive completa) */}
           <div className="ff-section">
-            <div className="ff-section-title">
-              <Phone size={18} />
-              <span>Canais de Contato</span>
-            </div>
+            {!isModal && (
+                <div className="ff-section-title">
+                  <Phone size={18} />
+                  <span>Contato</span>
+                </div>
+            )}
             <div className="ff-grid">
-              <FF_Input label="E-mail Corporativo" name="email" value={formData.email} onChange={handleChange} colSpan="ff-col-6" />
-              <FF_Input label="Telefone / WhatsApp" name="telefone" value={formData.telefone} onChange={handleChange} colSpan="ff-col-3" />
-              <FF_Input label="Pessoa de Contato" name="contato" value={formData.contato} onChange={handleChange} colSpan="ff-col-3" />
+              <FF_Input label="E-mail" name="email" value={formData.email} onChange={handleChange} colSpan="ff-col-6" />
+              <FF_Input label="Telefone" name="telefone" value={formData.telefone} onChange={handleChange} colSpan="ff-col-3" />
+              <FF_Input label="Contato" name="contato" value={formData.contato} onChange={handleChange} colSpan="ff-col-3" />
             </div>
           </div>
 
           {/* SEÇÃO 3: ENDEREÇO */}
           <div className="ff-section">
-            <div className="ff-section-title">
-              <MapPin size={18} />
-              <span>Localização</span>
-              {loadingCep && <span className="ff-loading-tag">Buscando...</span>}
-            </div>
+            {!isModal && (
+                <div className="ff-section-title">
+                  <MapPin size={18} />
+                  <span>Endereço</span>
+                  {loadingCep && <span className="ff-loading-tag">...</span>}
+                </div>
+            )}
             <div className="ff-grid">
               <FF_Input label="CEP" name="cep" value={formData.cep} onChange={handleChange} onBlur={consultarCEP} colSpan="ff-col-3" />
               <FF_Input label="Logradouro" name="logradouro" value={formData.logradouro} onChange={handleChange} colSpan="ff-col-7" />
@@ -228,9 +273,13 @@ const FornecedorForm = () => {
           </div>
 
           <div className="ff-footer">
-            <button type="button" className="ff-btn-cancel" onClick={() => navigate('/fornecedores')}>
-              Cancelar
-            </button>
+            {/* Se for modal, o botão cancelar é gerenciado pelo pai (Overlay) ou pode ser oculto */}
+            {!isModal && (
+                <button type="button" className="ff-btn-cancel" onClick={() => navigate('/fornecedores')}>
+                  Cancelar
+                </button>
+            )}
+
             <button type="submit" className="ff-btn-save" disabled={loading}>
               {loading ? <Loader size={18} className="ff-spin"/> : <CheckCircle size={18}/>}
               {loading ? 'Salvando...' : 'Salvar Cadastro'}
@@ -243,7 +292,7 @@ const FornecedorForm = () => {
   );
 };
 
-// Componente Interno Isolado
+// Componente Interno
 const FF_Input = ({ label, name, value, onChange, colSpan = "ff-col-12", required = false, id = null, onBlur = null }) => (
   <div className={`ff-floating-group ${colSpan}`}>
     <input

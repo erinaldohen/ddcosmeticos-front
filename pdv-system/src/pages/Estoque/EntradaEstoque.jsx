@@ -3,439 +3,528 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import {
-  Truck, Save, Plus, Search, Trash2, ArrowLeft, User, Barcode,
-  UploadCloud, X, Package, Check, AlertTriangle, Link as LinkIcon
+  Truck, Save, Plus, Search, Trash2, ArrowLeft, Package, Check,
+  AlertTriangle, Link as LinkIcon, Loader, Barcode, UploadCloud, X,
+  ShoppingCart, FileText, Calendar // <--- ADICIONADO AQUI
 } from 'lucide-react';
+
+import FornecedorForm from '../Fornecedores/FornecedorForm';
 import './EntradaEstoque.css';
 
 const EntradaEstoque = () => {
   const navigate = useNavigate();
-  const searchInputRef = useRef(null);
-  const qtdInputRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const listaSugestoesRef = useRef(null);
 
-  const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
-
+  // --- ESTADOS ---
   const [loading, setLoading] = useState(false);
+  const [loadingModal, setLoadingModal] = useState(false);
+
+  const [listaFornecedores, setListaFornecedores] = useState([]);
+  const [itens, setItens] = useState([]);
   const [cabecalho, setCabecalho] = useState({
     fornecedorId: '',
-    tipoEntrada: 'NOTA_FISCAL',
     numeroDocumento: '',
-    dataEmissao: new Date().toISOString().split('T')[0],
-    observacao: ''
+    dataEmissao: new Date().toISOString().split('T')[0]
   });
 
-  const [fornecedores, setFornecedores] = useState([]);
-  const [itens, setItens] = useState([]);
+  // Modais
+  const [showModalFornecedor, setShowModalFornecedor] = useState(false);
+  const [showModalProduto, setShowModalProduto] = useState(false);
 
-  // --- ESTADOS DA BUSCA INTELIGENTE ---
+  // Form Produto Rápido
+  const [novoProduto, setNovoProduto] = useState({ codigoBarras: '', descricao: '', precoCusto: '', ncm: '', unidade: 'UN' });
+
+  // Busca e Inserção
   const [termoBusca, setTermoBusca] = useState('');
   const [sugestoes, setSugestoes] = useState([]);
-  const [indiceAtivo, setIndiceAtivo] = useState(-1);
-  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
-
   const [produtoSelecionado, setProdutoSelecionado] = useState(null);
   const [qtdItem, setQtdItem] = useState(1);
   const [custoItem, setCustoItem] = useState('');
 
+  const fileInputRef = useRef(null);
+  const qtdInputRef = useRef(null);
+
+  // --- INICIALIZAÇÃO ---
   useEffect(() => {
     carregarFornecedores();
   }, []);
 
   const carregarFornecedores = async () => {
     try {
-      // ATUALIZAÇÃO IMPORTANTE: Usando o endpoint /dropdown para evitar erro 500 e garantir array limpo
-      // Se falhar, faz fallback para o endpoint padrão tratando a paginação (.content)
-      const res = await api.get('/fornecedores/dropdown')
-        .catch(async () => await api.get('/fornecedores?size=100'));
-
-      const lista = Array.isArray(res.data) ? res.data : (res.data.content || []);
-      setFornecedores(lista);
+      const res = await api.get('/fornecedores/dropdown').catch(async () => await api.get('/fornecedores?size=100'));
+      setListaFornecedores(Array.isArray(res.data) ? res.data : (res.data.content || []));
     } catch (e) {
-      console.error("Erro ao carregar fornecedores:", e);
-      toast.error("Erro ao carregar lista de fornecedores.");
+        toast.error("Não foi possível carregar a lista de fornecedores.");
     }
   };
 
-  // --- HELPERS ---
-  const parseMoeda = (v) => v ? parseFloat(v.toString().replace(/\./g, '').replace(',', '.')) : 0;
-  const formatarMoeda = (v) => v ? Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '';
-  const aplicarMascara = (v) => {
-    const n = v.replace(/\D/g, "");
-    return n ? (Number(n) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : "";
-  };
-
-  // --- BUSCA COM DEBOUNCE ---
+  // --- BUSCA PRODUTO ---
   useEffect(() => {
-    const delayDebounceFn = setTimeout(async () => {
-      if (termoBusca.length >= 2 && !produtoSelecionado) {
+    const delay = setTimeout(async () => {
+      if (termoBusca.length >= 3 && !produtoSelecionado) {
         try {
           const res = await api.get(`/produtos?termo=${termoBusca}`);
-          const lista = res.data.content || [];
-          setSugestoes(lista);
-          setMostrarSugestoes(true);
-          setIndiceAtivo(0);
+          setSugestoes(res.data.content || []);
         } catch (err) { console.error(err); }
       } else {
         setSugestoes([]);
-        setMostrarSugestoes(false);
-        setIndiceAtivo(-1);
       }
-    }, 300);
-    return () => clearTimeout(delayDebounceFn);
+    }, 400);
+    return () => clearTimeout(delay);
   }, [termoBusca, produtoSelecionado]);
 
-  // --- AUTO-SCROLL DA LISTA ---
-  useEffect(() => {
-    if (mostrarSugestoes && listaSugestoesRef.current && indiceAtivo >= 0) {
-      const itemAtivo = listaSugestoesRef.current.children[indiceAtivo];
-      if (itemAtivo) {
-        itemAtivo.scrollIntoView({
-          behavior: 'smooth',
-          block: 'nearest',
-        });
-      }
-    }
-  }, [indiceAtivo, mostrarSugestoes]);
-
-  // --- NAVEGAÇÃO POR TECLADO ---
-  const handleKeyDownBusca = (e) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setIndiceAtivo(prev => (prev < sugestoes.length - 1 ? prev + 1 : prev));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setIndiceAtivo(prev => (prev > 0 ? prev - 1 : 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (mostrarSugestoes && sugestoes.length > 0 && indiceAtivo >= 0) {
-        selecionarProduto(sugestoes[indiceAtivo]);
-      }
-    } else if (e.key === 'Escape') {
-      setMostrarSugestoes(false);
-    }
+  // --- HELPER: INTELIGÊNCIA PARA XML ---
+  const inferirMarcaPeloFornecedor = (nomeFornecedor) => {
+      if (!nomeFornecedor) return "GENERICA";
+      const nomeUpper = nomeFornecedor.toUpperCase();
+      if (nomeUpper.includes("EUDORA")) return "EUDORA";
+      if (nomeUpper.includes("BOTICARIO")) return "BOTICARIO";
+      if (nomeUpper.includes("NATURA")) return "NATURA";
+      if (nomeUpper.includes("AVON")) return "AVON";
+      return "GENERICA";
   };
 
+  const inferirCategoriaPorNCM = (ncm) => {
+      if (!ncm) return "GERAL";
+      const prefixo = ncm.replace(/\./g, '').substring(0, 4);
+      const mapa = {
+          '3303': 'PERFUMARIA', '3304': 'MAQUIAGEM', '3305': 'CAPILAR',
+          '3307': 'CORPO E BANHO', '3401': 'CORPO E BANHO'
+      };
+      return mapa[prefixo] || "GERAL";
+  };
+
+  // --- CALLBACKS DOS MODAIS ---
+  const handleFornecedorCriado = (fornecedorCriado) => {
+      setListaFornecedores(prev => [...prev, fornecedorCriado]);
+      setCabecalho(prev => ({ ...prev, fornecedorId: fornecedorCriado.id }));
+      setShowModalFornecedor(false);
+  };
+
+  const salvarNovoProduto = async () => {
+     if(!novoProduto.descricao || !novoProduto.precoCusto) {
+         toast.warn("Preencha descrição e preço de custo.");
+         return;
+     }
+     setLoadingModal(true);
+     try {
+         const payload = {
+             ...novoProduto,
+             precoCusto: parseFloat(novoProduto.precoCusto.replace(',', '.')),
+             origem: '0', cst: '102', marca: 'GENERICA', categoria: 'GERAL'
+         };
+         const res = await api.post('/produtos', payload);
+         selecionarProduto(res.data);
+         setShowModalProduto(false);
+         setNovoProduto({ codigoBarras: '', descricao: '', precoCusto: '', ncm: '', unidade: 'UN' });
+         toast.success("Produto criado! Informe a quantidade para adicionar.");
+     } catch (e) {
+         toast.error("Erro ao cadastrar produto.");
+     } finally {
+         setLoadingModal(false);
+     }
+  };
+
+  // --- LÓGICA PRINCIPAL ---
   const selecionarProduto = (prod) => {
-    if (!prod) return;
     setProdutoSelecionado(prod);
-    setCustoItem(formatarMoeda(prod.precoCusto));
-    setQtdItem(1);
-
-    setTermoBusca('');
-    setMostrarSugestoes(false);
+    setTermoBusca(prod.descricao);
     setSugestoes([]);
-    setIndiceAtivo(-1);
-
+    setCustoItem(prod.precoCusto ? prod.precoCusto.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '');
+    setQtdItem(1);
     setTimeout(() => qtdInputRef.current?.focus(), 100);
   };
 
-  // --- IMPORTAÇÃO XML INTELIGENTE ---
-  const handleImportarXmlClick = () => fileInputRef.current.click();
+  const adicionarItem = () => {
+    if (!produtoSelecionado) return;
+    const custo = parseFloat(custoItem.replace(/\./g, '').replace(',', '.'));
 
+    setItens([...itens, {
+        idProduto: produtoSelecionado.id,
+        descricao: produtoSelecionado.descricao,
+        codigoBarras: produtoSelecionado.codigoBarras,
+        quantidade: Number(qtdItem),
+        precoCusto: custo,
+        total: Number(qtdItem) * custo,
+        // Campos fiscais padrão
+        origem: '0', cst: '102', marca: produtoSelecionado.marca || 'GENERICA', categoria: produtoSelecionado.categoria || 'GERAL'
+    }]);
+
+    setProdutoSelecionado(null);
+    setTermoBusca('');
+    setQtdItem(1);
+    setCustoItem('');
+  };
+
+  const removerItem = (idx) => setItens(itens.filter((_, i) => i !== idx));
+
+  // --- IMPORTAÇÃO XML (RESTAURADA E INTELIGENTE) ---
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
     const formData = new FormData();
     formData.append("arquivo", file);
     setLoading(true);
-    const toastId = toast.loading("Analisando XML e buscando vínculos...");
+    const toastId = toast.loading("Processando XML...");
 
     try {
-       const res = await api.post('/estoque/importar-xml', formData, {
-         headers: { 'Content-Type': 'multipart/form-data' }
-       });
-       const { fornecedorId, numeroNota, itensXml } = res.data;
+       const res = await api.post('/estoque/importar-xml', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+       const { fornecedorId, razaoSocialFornecedor, numeroNota, itensXml, dataEmissao } = res.data;
 
        setCabecalho(prev => ({
          ...prev,
          fornecedorId: fornecedorId || prev.fornecedorId,
          numeroDocumento: numeroNota || prev.numeroDocumento,
-         tipoEntrada: 'NOTA_FISCAL'
+         dataEmissao: dataEmissao || prev.dataEmissao
        }));
 
-       // MAPEAMENTO COMPLETO DA INTELIGÊNCIA
-       const itensMapeados = itensXml.map(item => ({
-           idProduto: item.idProduto, // Pode vir preenchido se achou match
-           codigoBarras: item.codigoBarras,
-           descricao: item.descricao, // Descrição do XML
-           quantidade: item.quantidade,
-           precoCusto: item.precoCusto,
-           total: item.total,
+       // Se o fornecedor veio do XML e não estava na lista, adiciona visualmente
+       if (fornecedorId && razaoSocialFornecedor) {
+           setListaFornecedores(prev => {
+               if (!prev.find(f => f.id === fornecedorId)) {
+                   return [...prev, { id: fornecedorId, razaoSocial: razaoSocialFornecedor, nomeFantasia: razaoSocialFornecedor }];
+               }
+               return prev;
+           });
+       }
 
-           // Novos campos de Inteligência
-           ncm: item.ncm,
-           unidade: item.unidade,
-           statusMatch: item.statusMatch, // MATCH_EXATO, SUGESTAO_FORTE, NOVO_PRODUTO
-           motivoMatch: item.motivoMatch,
-           nomeProdutoSugerido: item.nomeProdutoSugerido, // Nome no nosso banco
-           alertaDivergencia: item.alertaDivergencia,
-           codigoNoFornecedor: item.codigoNoFornecedor // Para criar vínculo futuro
+       const marcaSugerida = inferirMarcaPeloFornecedor(razaoSocialFornecedor);
+
+       // Converte itens do XML para o formato da tela
+       const novosItens = itensXml.map(xmlItem => ({
+           idProduto: xmlItem.idProduto, // Pode ser null se for produto novo
+           descricao: xmlItem.descricao,
+           codigoBarras: xmlItem.codigoBarras,
+           quantidade: Number(xmlItem.quantidade),
+           precoCusto: Number(xmlItem.precoCusto),
+           total: Number(xmlItem.total),
+
+           // Inteligência: Tenta preencher campos se for novo
+           marca: marcaSugerida,
+           categoria: inferirCategoriaPorNCM(xmlItem.ncm),
+           origem: '0',
+           cst: '102'
        }));
 
-       setItens(prev => [...prev, ...itensMapeados]);
-       toast.update(toastId, { render: "Análise concluída!", type: "success", isLoading: false, autoClose: 3000 });
+       setItens(prev => [...prev, ...novosItens]);
+       toast.update(toastId, { render: "XML Importado com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
+
     } catch (error) {
-       console.error(error);
-       toast.update(toastId, { render: "Erro ao ler XML", type: "error", isLoading: false, autoClose: 3000 });
+       const msg = error.response?.data?.message || "Erro ao ler XML";
+       toast.update(toastId, { render: msg, type: "error", isLoading: false, autoClose: 4000 });
     } finally {
       setLoading(false);
       e.target.value = null;
     }
   };
 
-  // --- AÇÃO: ACEITAR SUGESTÃO (Converter Amarelo em Verde) ---
-  const aceitarSugestao = (index) => {
-    const novaLista = [...itens];
-    const item = novaLista[index];
+  const finalizarEntrada = async (e) => {
+    if(e) e.preventDefault();
+    if (!cabecalho.fornecedorId) return toast.warn("Atenção: Selecione o Fornecedor antes de finalizar.");
+    if (itens.length === 0) return toast.warn("A nota está vazia. Adicione produtos.");
 
-    // Atualiza status localmente para Verde
-    item.statusMatch = 'MATCH_EXATO';
-    // O idProduto já veio do backend, então ao salvar, o sistema criará o vínculo
-
-    setItens(novaLista);
-    toast.success("Vínculo confirmado! Será salvo ao finalizar.");
-  };
-
-  // --- CRUD ITENS MANUAL ---
-  const adicionarItem = () => {
-    if (!produtoSelecionado) return;
-    const custoFloat = parseMoeda(custoItem);
-
-    setItens([...itens, {
-      idProduto: produtoSelecionado.id,
-      codigoBarras: produtoSelecionado.codigoBarras,
-      descricao: produtoSelecionado.descricao,
-      ncm: produtoSelecionado.ncm,
-      unidade: produtoSelecionado.unidade,
-      quantidade: Number(qtdItem),
-      precoCusto: custoFloat,
-      total: Number(qtdItem) * custoFloat,
-
-      // Item manual é sempre um Match Exato pois o usuário escolheu
-      statusMatch: 'MATCH_EXATO',
-      nomeProdutoSugerido: produtoSelecionado.descricao
-    }]);
-
-    setProdutoSelecionado(null);
-    setQtdItem(1);
-    setCustoItem('');
-    setTimeout(() => searchInputRef.current?.focus(), 100);
-  };
-
-  const removerItem = (idx) => setItens(prev => prev.filter((_, i) => i !== idx));
-
-  // --- FINALIZAR ENTRADA ---
-  const finalizarEntrada = async () => {
-    if (!cabecalho.fornecedorId) return toast.warning("Selecione o Fornecedor.");
-    if (itens.length === 0) return toast.warning("Adicione produtos.");
+    const payload = {
+        fornecedorId: cabecalho.fornecedorId,
+        numeroDocumento: cabecalho.numeroDocumento || "MANUAL",
+        dataVencimento: cabecalho.dataEmissao, // Usa data emissão como base se não tiver boleto
+        itens: itens.map(i => ({
+            produtoId: i.idProduto,
+            codigoBarras: i.codigoBarras || "SEM GTIN",
+            descricao: i.descricao, // Envia descrição caso seja produto novo
+            quantidade: i.quantidade,
+            valorUnitario: i.precoCusto,
+            origem: i.origem,
+            cst: i.cst,
+            marca: i.marca,
+            categoria: i.categoria,
+            ncm: i.ncm || "00000000",
+            unidade: "UN"
+        }))
+    };
 
     setLoading(true);
     try {
-      // Envia como um POST único para o backend (Endpoint de Entrada Manual/XML)
-      const payload = {
-        fornecedorId: cabecalho.fornecedorId,
-        numeroNfe: cabecalho.tipoEntrada === 'NOTA_FISCAL' ? cabecalho.numeroDocumento : null,
-        dataEmissao: cabecalho.dataEmissao,
-        observacao: cabecalho.observacao,
-        itens: itens.map(item => ({
-            produtoId: item.idProduto, // Se null, backend cria novo
-            codigoBarras: item.codigoBarras,
-            descricao: item.descricao,
-            ncm: item.ncm,
-            quantidade: item.quantidade,
-            precoCustoUnitario: item.precoCusto,
-            codigoNoFornecedor: item.codigoNoFornecedor,
-            unidade: item.unidade
-        }))
-      };
-
-      await api.post('/estoque/entrada/manual', payload);
-
-      toast.success("Estoque atualizado e Vínculos aprendidos!");
-      navigate('/produtos');
-    } catch (e) {
-        toast.error("Erro ao processar entrada. Verifique o console.");
-        console.error(e);
-    }
-    finally { setLoading(false); }
+        await api.post('/estoque/entrada', payload);
+        toast.success("Entrada registrada com sucesso!");
+        navigate('/estoque');
+    } catch(e) {
+        toast.error("Falha ao registrar entrada. Tente novamente.");
+    } finally { setLoading(false); }
   };
 
-  const totalGeral = itens.reduce((acc, item) => acc + item.total, 0);
+  const totalGeral = itens.reduce((a, b) => a + b.total, 0);
 
   return (
-    <div className="container-fluid">
+    <div className="entrada-container">
+
+      {/* HEADER */}
       <div className="page-header">
         <div className="page-title">
-          <h1>Entrada de Mercadoria</h1>
-          <p>Conciliação de NFe Inteligente e Entrada Manual</p>
+            <h1>Entrada de Mercadoria</h1>
+            <p>Gerencie o estoque registrando compras e notas fiscais</p>
         </div>
-        <button className="btn-secondary" onClick={() => navigate('/produtos')}><ArrowLeft size={18}/> Voltar</button>
+        <div style={{display:'flex', gap:12}}>
+            {/* TOOLTIP: VOLTAR */}
+            <button className="btn-std btn-secondary" onClick={() => navigate('/produtos')} data-tooltip="Voltar para lista de produtos">
+                <ArrowLeft size={18}/> Voltar
+            </button>
+
+            {/* TOOLTIP: XML */}
+            <button className="btn-std btn-secondary" onClick={() => fileInputRef.current.click()} data-tooltip="Carregar arquivo XML da Nota Fiscal">
+                <UploadCloud size={18}/> Importar XML
+            </button>
+            <input type="file" style={{display:'none'}} ref={fileInputRef} onChange={handleFileChange} />
+        </div>
       </div>
 
-      <div className="entrada-layout">
-        {/* LADO ESQUERDO: FORMULÁRIOS */}
-        <div className="painel-principal">
-          <div className="card-entrada">
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, borderBottom: '1px solid #f1f5f9', paddingBottom: 15}}>
-                <h3 className="card-title" style={{margin:0, border:0, padding:0}}><Truck size={18}/> Origem</h3>
-                <div style={{display: 'flex', gap: 10}}>
-                    <input type="file" accept=".xml" ref={fileInputRef} style={{display: 'none'}} onChange={handleFileChange} />
-                    <button className="btn-xml" onClick={handleImportarXmlClick} data-label="Importar Nota Fiscal (XML)">
-                        <UploadCloud size={16}/> Importar XML
+      {/* BLOCO 1: DADOS DA NOTA */}
+      <div className="bloco-entrada">
+        <div className="titulo-sessao"><FileText size={16}/> Dados da Nota Fiscal</div>
+        <div className="form-grid">
+
+            <div className="col-6">
+                <label>Fornecedor</label>
+                <div className="input-group">
+                    <select
+                        value={cabecalho.fornecedorId}
+                        onChange={e => setCabecalho({...cabecalho, fornecedorId: e.target.value})}
+                    >
+                        <option value="">Selecione o Fornecedor...</option>
+                        {listaFornecedores.map(f => (
+                            <option key={f.id} value={f.id}>{f.razaoSocial || f.nomeFantasia}</option>
+                        ))}
+                    </select>
+                    {/* TOOLTIP: NOVO FORNECEDOR */}
+                    <button className="btn-addon" onClick={() => setShowModalFornecedor(true)} data-tooltip="Cadastrar novo fornecedor">
+                        <Plus size={18}/>
                     </button>
                 </div>
             </div>
-            <div className="form-row">
-              <div className="form-group flex-2">
-                <label>Fornecedor *</label>
-                <select value={cabecalho.fornecedorId} onChange={(e) => setCabecalho({...cabecalho, fornecedorId: e.target.value})} className={!cabecalho.fornecedorId ? 'input-warning' : ''}>
-                  <option value="">Selecione...</option>
-                  {/* PROTEÇÃO CONTRA CRASH SE FORNECEDORES FOR NULL */}
-                  {Array.isArray(fornecedores) && fornecedores.map(f => (
-                    <option key={f.id} value={f.id}>{f.razaoSocial || f.nomeFantasia}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group"><label>Nº Doc</label><input value={cabecalho.numeroDocumento} onChange={(e) => setCabecalho({...cabecalho, numeroDocumento: e.target.value})} placeholder="Ex: 12345" /></div>
-            </div>
-          </div>
 
-          <div className="card-entrada destaque" style={{overflow: 'visible'}}>
-            <h3 className="card-title"><Barcode size={18}/> Incluir Manualmente</h3>
-
-            {!produtoSelecionado && (
-              <div className="search-box-container" style={{position: 'relative', zIndex: 100}}>
-                <div className="search-box-entrada">
-                    <input ref={searchInputRef} type="text" placeholder="Digite EAN ou Nome..." value={termoBusca} onChange={(e) => setTermoBusca(e.target.value)} onKeyDown={handleKeyDownBusca} autoFocus autoComplete="off" />
-                    <button className="btn-search-icon"><Search size={18}/></button>
-                </div>
-                {mostrarSugestoes && sugestoes.length > 0 && (
-                    <div className="dropdown-sugestoes" ref={listaSugestoesRef}>
-                        {sugestoes.map((prod, index) => (
-                            <div key={prod.id} className={`sugestao-item ${index === indiceAtivo ? 'ativo' : ''}`} onClick={() => selecionarProduto(prod)} onMouseEnter={() => setIndiceAtivo(index)}>
-                                <div className="sugestao-icon-wrapper"><Package size={20} strokeWidth={1.5} /></div>
-                                <div className="sugestao-conteudo">
-                                    <span className="sugestao-nome">{prod.descricao}</span>
-                                    <div className="sugestao-sublinha"><Barcode size={14} style={{marginRight: 4}}/><span className="sugestao-ean">{prod.codigoBarras}</span></div>
-                                </div>
-                                {index === indiceAtivo && <div className="sugestao-enter-hint">↵</div>}
-                            </div>
-                        ))}
-                    </div>
-                )}
-              </div>
-            )}
-
-            {produtoSelecionado && (
-              <div className="item-editor">
-                <div className="produto-header" style={{display: 'flex', justifyContent: 'space-between'}}>
-                  <div><span className="prod-nome">{produtoSelecionado.descricao}</span><span className="prod-ean">{produtoSelecionado.codigoBarras}</span></div>
-                  <button onClick={() => { setProdutoSelecionado(null); setTimeout(()=>searchInputRef.current?.focus(), 100)}} style={{background:'none', border:'none', cursor:'pointer'}}><X size={18} color="#ef4444"/></button>
-                </div>
-                <div className="inputs-valores-row">
-                  <div className="form-group"><label>Qtd.</label><input ref={qtdInputRef} type="number" min="1" value={qtdItem} onChange={(e) => setQtdItem(e.target.value)} onKeyDown={(e)=>e.key==='Enter' && document.getElementById('input-custo').focus()}/></div>
-                  <div className="form-group"><label>Custo (R$)</label><input id="input-custo" type="text" value={custoItem} onChange={(e) => setCustoItem(aplicarMascara(e.target.value))} onKeyDown={(e)=>e.key==='Enter' && adicionarItem()}/></div>
-                  <div className="actions-row"><button className="btn-add-item" onClick={adicionarItem}><Plus size={18}/> Inserir</button></div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* LADO DIREITO: LISTA INTELIGENTE (SEMÁFORO) */}
-        <div className="painel-resumo">
-          <div className="lista-itens">
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 15}}>
-                <h3>Itens ({itens.length})</h3>
-                {itens.length > 0 && (
-                    <div style={{display:'flex', gap:6}}>
-                        <span className="badge-status badge-verde">Match</span>
-                        <span className="badge-status badge-amarelo">Sugerido</span>
-                        <span className="badge-status badge-azul">Novo</span>
-                    </div>
-                )}
+            <div className="col-3">
+                <label>Nº Documento</label>
+                <input
+                    placeholder="000.000"
+                    value={cabecalho.numeroDocumento}
+                    onChange={e => setCabecalho({...cabecalho, numeroDocumento: e.target.value})}
+                />
             </div>
 
-            <ul className="itens-scroll">
-              {itens.map((item, idx) => {
-                // LÓGICA DO SEMÁFORO
-                let rowClass = '';
+            <div className="col-3">
+                <label>Data Emissão</label>
+                {/* WRAPPER COM TOOLTIP E CALENDÁRIO CUSTOMIZADO */}
+                <div className="date-input-wrapper" data-tooltip="Clique para selecionar a data no calendário">
+                    <input
+                        type="date"
+                        value={cabecalho.dataEmissao}
+                        onChange={e => setCabecalho({...cabecalho, dataEmissao: e.target.value})}
+                    />
+                    {/* ÍCONE VISUAL (LUCIDE) AGORA IMPORTADO CORRETAMENTE */}
+                    <Calendar size={18} className="icon-calendar"/>
+                </div>
+            </div>
 
-                if (item.alertaDivergencia) rowClass = 'match-alerta';
-                else if (item.statusMatch === 'MATCH_EXATO') rowClass = 'match-verde';
-                else if (item.statusMatch === 'SUGESTAO_FORTE') rowClass = 'match-amarelo';
-                else rowClass = 'match-novo';
-
-                return (
-                  <li key={idx} className={`item-row ${rowClass}`}>
-
-                    {/* ÍCONE DE STATUS */}
-                    <div style={{marginRight: 12}}>
-                        {item.statusMatch === 'MATCH_EXATO' ? <Check size={20} color="#10b981"/> :
-                         item.statusMatch === 'SUGESTAO_FORTE' ? <AlertTriangle size={20} color="#f59e0b"/> :
-                         <Plus size={20} color="#3b82f6"/>}
-                    </div>
-
-                    {/* CONTEÚDO */}
-                    <div className="item-info-col">
-                      <span className="xml-desc">{item.descricao}</span>
-
-                      <div className="system-desc">
-                        {item.statusMatch === 'MATCH_EXATO' ? (
-                            <>
-                                <LinkIcon size={12}/>
-                                <span>Vinculado a: <strong>{item.nomeProdutoSugerido || item.descricao}</strong></span>
-                            </>
-                        ) : item.statusMatch === 'SUGESTAO_FORTE' ? (
-                            <>
-                                <AlertTriangle size={12}/>
-                                <span>Sugerido: <strong>{item.nomeProdutoSugerido}</strong>?</span>
-                            </>
-                        ) : (
-                            <span>{item.ncm ? `NCM: ${item.ncm}` : 'Sem NCM'} • Cadastro Novo</span>
-                        )}
-                      </div>
-
-                      {item.alertaDivergencia && (
-                          <div className="divergencia-box">
-                              <AlertTriangle size={12}/> Preço diverge &gt; 50%
-                          </div>
-                      )}
-
-                      <small style={{color: '#64748b', marginTop: 2}}>
-                        {item.quantidade} {item.unidade} x R$ {formatarMoeda(item.precoCusto)}
-                      </small>
-                    </div>
-
-                    {/* AÇÕES E TOTAIS */}
-                    <div className="item-total">
-                      <strong>R$ {formatarMoeda(item.total)}</strong>
-
-                      {item.statusMatch === 'SUGESTAO_FORTE' && (
-                          <button className="btn-action-sm btn-accept" onClick={() => aceitarSugestao(idx)} title="Confirmar Vínculo">
-                              <LinkIcon size={14}/> Vincular
-                          </button>
-                      )}
-
-                      <button className="btn-trash" onClick={() => removerItem(idx)}>
-                        <Trash2 size={16}/>
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-          <div className="resumo-footer">
-            <div className="audit-info"><User size={14}/><span>Resp: <strong>{usuario.nome}</strong></span></div>
-            <div className="total-block"><span>Total Nota</span><h2>R$ {formatarMoeda(totalGeral)}</h2></div>
-            <button className="btn-finalizar" onClick={finalizarEntrada} disabled={loading}>{loading ? '...' : <><Save size={20}/> Confirmar Entrada</>}</button>
-          </div>
         </div>
       </div>
+
+      {/* BLOCO 2: INSERÇÃO DE ITEM */}
+      <div className="bloco-entrada" style={{borderLeft: '4px solid #6366f1'}}>
+         <div className="titulo-sessao" style={{color:'#6366f1'}}><Package size={16}/> Adicionar Produto</div>
+         <div className="form-grid">
+
+             <div className="col-6" style={{position:'relative'}}>
+                 <label>Buscar Produto</label>
+                 <div className="input-group">
+                     <div style={{position:'relative', width:'100%'}}>
+                         <Search size={16} style={{position:'absolute', left:12, top:13, color:'#94a3b8'}}/>
+                         <input
+                            placeholder="Digite nome, código ou barras..."
+                            style={{paddingLeft: 38}}
+                            value={termoBusca}
+                            onChange={e => { setTermoBusca(e.target.value); setProdutoSelecionado(null); }}
+                         />
+                     </div>
+                     {/* TOOLTIP: NOVO PRODUTO */}
+                     <button className="btn-addon" onClick={() => setShowModalProduto(true)} data-tooltip="Cadastrar produto rápido">
+                        <Plus size={18}/>
+                     </button>
+                 </div>
+
+                 {sugestoes.length > 0 && !produtoSelecionado && (
+                     <div className="dropdown-busca">
+                         {sugestoes.map(s => (
+                             <div key={s.id} className="item-busca" onClick={() => selecionarProduto(s)}>
+                                 <span>{s.descricao}</span>
+                                 <strong>R$ {s.precoVenda?.toFixed(2)}</strong>
+                             </div>
+                         ))}
+                     </div>
+                 )}
+             </div>
+
+             <div className="col-2">
+                 <label>Quantidade</label>
+                 <input
+                    type="number"
+                    ref={qtdInputRef}
+                    value={qtdItem}
+                    onChange={e => setQtdItem(e.target.value)}
+                    min="1"
+                 />
+             </div>
+
+             <div className="col-2">
+                 <label>Custo Unit. (R$)</label>
+                 <input
+                    value={custoItem}
+                    onChange={e => setCustoItem(e.target.value)}
+                    placeholder="0,00"
+                 />
+             </div>
+
+             <div className="col-2">
+                 <button
+                    className="btn-std btn-success"
+                    style={{width:'100%'}}
+                    onClick={adicionarItem}
+                    disabled={!produtoSelecionado}
+                    data-tooltip="Adicionar item à lista abaixo"
+                 >
+                     <Plus size={18}/> Incluir
+                 </button>
+             </div>
+
+         </div>
+      </div>
+
+      {/* BLOCO 3: LISTA DE ITENS */}
+      <div className="bloco-entrada" style={{padding:0, overflow:'hidden'}}>
+
+          <div style={{padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display:'flex', justifyContent:'space-between'}}>
+              <div style={{display:'flex', alignItems:'center', gap:8, fontWeight:700, color:'#334155'}}>
+                  <ShoppingCart size={18}/> Itens no Carrinho ({itens.length})
+              </div>
+          </div>
+
+          <div className="table-container">
+              <table className="tabela-padrao">
+                  <thead>
+                      <tr>
+                          <th style={{paddingLeft: 24}}>Descrição do Produto</th>
+                          <th>Quantidade</th>
+                          <th>Valor Unitário</th>
+                          <th>Subtotal</th>
+                          <th width="50"></th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      {itens.length === 0 ? (
+                          <tr>
+                              <td colSpan="5">
+                                  <div className="empty-state">
+                                      <Package size={48} strokeWidth={1}/>
+                                      <h3>Sua nota está vazia</h3>
+                                      <p>Utilize a busca acima para adicionar produtos ou importe um XML.</p>
+                                  </div>
+                              </td>
+                          </tr>
+                      ) : (
+                          itens.map((item, idx) => (
+                              <tr key={idx}>
+                                  <td style={{paddingLeft: 24}}>
+                                      <strong style={{color:'#1e293b'}}>{item.descricao}</strong>
+                                      <div style={{fontSize:'0.8rem', color:'#64748b'}}>{item.codigoBarras}</div>
+                                  </td>
+                                  <td>{item.quantidade}</td>
+                                  <td>R$ {item.precoCusto.toFixed(2)}</td>
+                                  <td style={{color:'#4f46e5', fontWeight:700}}>R$ {item.total.toFixed(2)}</td>
+                                  <td align="center">
+                                      {/* TOOLTIP: REMOVER */}
+                                      <button className="btn-icon-danger" onClick={() => removerItem(idx)} data-tooltip="Remover este item">
+                                          <Trash2 size={18}/>
+                                      </button>
+                                  </td>
+                              </tr>
+                          ))
+                      )}
+                  </tbody>
+              </table>
+          </div>
+
+          <div className="footer-resumo" style={{margin:'0 24px 24px 24px'}}>
+               <div>
+                   <span className="total-label">VALOR TOTAL DA NOTA</span>
+                   <span className="total-value">R$ {totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+               </div>
+               {/* TOOLTIP: FINALIZAR */}
+               <button
+                  className="btn-std btn-primary"
+                  style={{height: 56, fontSize: '1.1rem', padding: '0 40px'}}
+                  onClick={finalizarEntrada}
+                  disabled={loading || itens.length === 0}
+                  data-tooltip="Salvar entrada e atualizar estoque"
+               >
+                   {loading ? <Loader className="animate-spin"/> : <Save size={20}/>}
+                   Confirmar Entrada
+               </button>
+          </div>
+
+      </div>
+
+      {/* MODAL FORNECEDOR (REUTILIZÁVEL) */}
+      {showModalFornecedor && (
+          <div className="modal-overlay">
+              <div className="modal-card" style={{ maxWidth: '800px', padding: '0' }}>
+                  <div className="modal-header" style={{ padding: '20px 20px 0 20px' }}>
+                      <h3>Novo Fornecedor</h3>
+                      <button onClick={() => setShowModalFornecedor(false)}><X size={20}/></button>
+                  </div>
+                  <div style={{ padding: '20px' }}>
+                      <FornecedorForm
+                          isModal={true}
+                          onSuccess={handleFornecedorCriado}
+                      />
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* MODAL PRODUTO RÁPIDO */}
+      {showModalProduto && (
+          <div className="modal-overlay">
+              <div className="modal-card">
+                  <div className="modal-header">
+                      <h3>Novo Produto Rápido</h3>
+                      <button onClick={() => setShowModalProduto(false)}><X size={20}/></button>
+                  </div>
+                  <div className="form-grid">
+                      <div className="col-12">
+                          <label>Código de Barras (EAN)</label>
+                          <input value={novoProduto.codigoBarras} onChange={e => setNovoProduto({...novoProduto, codigoBarras: e.target.value})} autoFocus />
+                      </div>
+                      <div className="col-12">
+                          <label>Descrição Completa</label>
+                          <input value={novoProduto.descricao} onChange={e => setNovoProduto({...novoProduto, descricao: e.target.value})} />
+                      </div>
+                      <div className="col-6">
+                          <label>Custo (R$)</label>
+                          <input value={novoProduto.precoCusto} onChange={e => setNovoProduto({...novoProduto, precoCusto: e.target.value})} placeholder="0,00" />
+                      </div>
+                      <div className="col-6">
+                          <label>NCM</label>
+                          <input value={novoProduto.ncm} onChange={e => setNovoProduto({...novoProduto, ncm: e.target.value})} placeholder="0000.00.00" />
+                      </div>
+                  </div>
+                  <div className="modal-actions">
+                      <button className="btn-std btn-secondary" onClick={() => setShowModalProduto(false)}>Cancelar</button>
+                      <button className="btn-std btn-primary" onClick={salvarNovoProduto} disabled={loadingModal}>Criar Produto</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
     </div>
   );
 };
+
 export default EntradaEstoque;
