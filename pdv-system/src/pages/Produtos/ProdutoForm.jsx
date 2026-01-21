@@ -15,7 +15,11 @@ const ProdutoForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditMode = !!id;
+
+  // Refs
   const eanInputRef = useRef(null);
+  const skuInputRef = useRef(null);
+  const formRef = useRef(null);
   const typingTimer = useRef(null);
 
   const [loading, setLoading] = useState(false);
@@ -55,24 +59,20 @@ const ProdutoForm = () => {
     estoqueNaoFiscal: 0
   });
 
-  // --- HELPER FUNCTIONS (ATUALIZADAS PARA CÁLCULO SEGURO) ---
+  // --- HELPER FUNCTIONS ---
 
-  // Converte "1.250,90" (String) -> 1250.90 (Float)
   const parseMoeda = (valor) => {
     if (!valor) return 0;
     if (typeof valor === 'number') return valor;
-    // Remove pontos de milhar e troca vírgula por ponto
     const limpo = valor.toString().replace(/\./g, '').replace(',', '.');
     return parseFloat(limpo) || 0;
   };
 
-  // Converte 1250.90 (Float) -> "1.250,90" (String)
   const formatarMoeda = (valor) => {
     if (valor === undefined || valor === null || valor === '') return '';
     return Number(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
-  // Máscara de digitação estilo ATM (0,00 -> 0,10 -> 1,00)
   const aplicarMascara = (valor) => {
     const apenasNumeros = valor.replace(/\D/g, "");
     if (apenasNumeros === "") return "";
@@ -87,12 +87,12 @@ const ProdutoForm = () => {
     const handleKeyDown = (e) => {
       if (e.altKey && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        document.getElementById('btn-submit-form')?.click();
+        saveProduct(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [formData]);
 
   useEffect(() => {
     if (!isEditMode && eanInputRef.current) eanInputRef.current.focus();
@@ -108,43 +108,24 @@ const ProdutoForm = () => {
     setLoading(true);
     try {
       const d = await produtoService.obterPorId(id);
-
       const custo = d.precoCusto || 0;
       const venda = d.precoVenda || 0;
 
       setFormData({
         ...d,
-        // Strings
-        ncm: d.ncm || '',
-        cest: d.cest || '',
-        cst: d.cst || '',
-        origem: d.origem || '0',
-        marca: d.marca || '',
-        categoria: d.categoria || '',
-        subcategoria: d.subcategoria || '',
-        descricao: d.descricao || '',
-        codigoBarras: d.codigoBarras || '',
-        urlImagem: d.urlImagem || '',
+        ncm: d.ncm || '', cest: d.cest || '', cst: d.cst || '', origem: d.origem || '0',
+        marca: d.marca || '', categoria: d.categoria || '', subcategoria: d.subcategoria || '',
+        descricao: d.descricao || '', codigoBarras: d.codigoBarras || '', urlImagem: d.urlImagem || '',
         unidade: d.unidade || 'UN',
-
-        // Booleanos
-        impostoSeletivo: d.impostoSeletivo || false,
-        monofasico: d.monofasico || false,
+        impostoSeletivo: d.impostoSeletivo || false, monofasico: d.monofasico || false,
         ativo: d.ativo !== undefined ? d.ativo : true,
-
-        // Números
         estoqueMinimo: d.estoqueMinimo !== null ? d.estoqueMinimo : '',
         diasParaReposicao: d.diasParaReposicao !== null ? d.diasParaReposicao : '',
-        estoqueFiscal: d.estoqueFiscal || 0,
-        estoqueNaoFiscal: d.estoqueNaoFiscal || 0,
+        estoqueFiscal: d.estoqueFiscal || 0, estoqueNaoFiscal: d.estoqueNaoFiscal || 0,
         quantidadeEmEstoque: (d.estoqueFiscal || 0) + (d.estoqueNaoFiscal || 0),
-
-        // Valores Monetários (Usando formatarMoeda atualizado)
         precoCusto: formatarMoeda(d.precoCusto),
         precoVenda: formatarMoeda(d.precoVenda),
         precoMedio: formatarMoeda(d.precoMedioPonderado),
-
-        // Cálculos Iniciais
         margemLucro: custo > 0 && venda > 0 ? (((venda - custo) / venda) * 100).toFixed(2).replace('.', ',') : '',
         markup: custo > 0 && venda > 0 ? (((venda - custo) / custo) * 100).toFixed(2).replace('.', ',') : ''
       });
@@ -152,16 +133,14 @@ const ProdutoForm = () => {
       if (d.urlImagem) setPreviewImagem(d.urlImagem);
     } catch (e) {
       toast.error("Erro ao carregar dados.");
-      console.error(e);
       navigate('/produtos');
     } finally {
       setLoading(false);
     }
   };
 
-  // --- HANDLERS DE PREÇO E MARKUP (A Lógica Nova) ---
+  // --- HANDLERS ---
 
-  // 1. Quando altera o Preço de Venda -> Recalcula Markup
   const handlePrecoVendaChange = (e) => {
     const valorFormatado = aplicarMascara(e.target.value);
     const vendaFloat = parseMoeda(valorFormatado);
@@ -172,29 +151,19 @@ const ProdutoForm = () => {
       let novaMargem = prev.margemLucro;
 
       if (custoFloat > 0) {
-        // Markup = ((Venda - Custo) / Custo) * 100
         const markupCalc = ((vendaFloat - custoFloat) / custoFloat) * 100;
         novoMarkup = markupCalc.toFixed(2).replace('.', ',');
-
-        // Margem = ((Venda - Custo) / Venda) * 100
         if (vendaFloat > 0) {
             const margemCalc = ((vendaFloat - custoFloat) / vendaFloat) * 100;
             novaMargem = margemCalc.toFixed(2).replace('.', ',');
         }
       }
-
-      return {
-        ...prev,
-        precoVenda: valorFormatado,
-        markup: novoMarkup,
-        margemLucro: novaMargem
-      };
+      return { ...prev, precoVenda: valorFormatado, markup: novoMarkup, margemLucro: novaMargem };
     });
   };
 
-  // 2. Quando altera o Markup -> Recalcula Preço de Venda
   const handleMarkupChange = (e) => {
-    const valorInput = e.target.value; // Permite vírgula
+    const valorInput = e.target.value;
     const markupFloat = parseFloat(valorInput.replace(',', '.'));
     const custoFloat = parseMoeda(formData.precoCusto);
 
@@ -203,25 +172,14 @@ const ProdutoForm = () => {
       let novaMargem = prev.margemLucro;
 
       if (custoFloat > 0 && !isNaN(markupFloat)) {
-        // Venda = Custo * (1 + Markup/100)
         const vendaCalc = custoFloat * (1 + (markupFloat / 100));
         novoPrecoVenda = formatarMoeda(vendaCalc);
-
-        // Atualiza margem
         const margemCalc = ((vendaCalc - custoFloat) / vendaCalc) * 100;
         novaMargem = margemCalc.toFixed(2).replace('.', ',');
       }
-
-      return {
-        ...prev,
-        markup: valorInput,
-        precoVenda: novoPrecoVenda,
-        margemLucro: novaMargem
-      };
+      return { ...prev, markup: valorInput, precoVenda: novoPrecoVenda, margemLucro: novaMargem };
     });
   };
-
-  // --- OUTROS HANDLERS ---
 
   const handleNcmChange = (e) => {
     const valor = e.target.value;
@@ -248,27 +206,16 @@ const ProdutoForm = () => {
     if (!formData.descricao) return;
     setValidandoFiscal(true);
     try {
-      const response = await api.post('/fiscal/validar', {
-        descricao: formData.descricao,
-        ncm: formData.ncm
-      });
+      const response = await api.post('/fiscal/validar', { descricao: formData.descricao, ncm: formData.ncm });
       const dadosInteligentes = response.data;
       setFormData(prev => ({
         ...prev,
-        ncm: dadosInteligentes.ncm,
-        cest: dadosInteligentes.cest,
-        cst: dadosInteligentes.cst,
-        monofasico: dadosInteligentes.monofasico,
-        impostoSeletivo: dadosInteligentes.impostoSeletivo
+        ncm: dadosInteligentes.ncm, cest: dadosInteligentes.cest, cst: dadosInteligentes.cst,
+        monofasico: dadosInteligentes.monofasico, impostoSeletivo: dadosInteligentes.impostoSeletivo
       }));
-      if (dadosInteligentes.ncm !== formData.ncm) {
-        toast.success("Dados Fiscais Ajustados Automaticamente! 🤖");
-      }
-    } catch (error) {
-      console.error("Erro na validação fiscal:", error);
-    } finally {
-      setValidandoFiscal(false);
-    }
+      if (dadosInteligentes.ncm !== formData.ncm) toast.success("Dados Fiscais Ajustados Automaticamente! 🤖");
+    } catch (error) { console.error(error); }
+    finally { setValidandoFiscal(false); }
   };
 
   const selecionarNcm = (item) => {
@@ -290,23 +237,101 @@ const ProdutoForm = () => {
     setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
+  // --- BUSCA EAN SEGURA E DEFINITIVA ---
+
   const handleBuscarEan = async () => {
     const ean = formData.codigoBarras;
-    if (!ean || ean.length < 8) return toast.warning("EAN inválido.");
+
+    if (!ean || ean.length < 3) {
+        toast.warning("Código muito curto.");
+        skuInputRef.current?.focus();
+        return;
+    }
+
     setSearchingEan(true);
+    let encontradoLocalmente = false;
+
+    // 1. BUSCA LOCAL SEGURA (Evita erro 500 ao não usar ID)
     try {
-      const dExt = await produtoService.consultarEan(ean);
-      setFormData(prev => ({
-        ...prev,
-        descricao: dExt.nome || prev.descricao, urlImagem: dExt.urlImagem || prev.urlImagem,
-        marca: dExt.marca || prev.marca, categoria: dExt.categoria || prev.categoria,
-        ncm: dExt.ncm || prev.ncm, cest: dExt.cest || prev.cest, cst: dExt.cst || prev.cst,
-        monofasico: dExt.monofasico !== undefined ? dExt.monofasico : prev.monofasico,
-      }));
-      if (dExt.urlImagem && !arquivoImagem) setPreviewImagem(dExt.urlImagem);
-      toast.success("Dados encontrados!");
-    } catch (error) { toast.info("Não encontrado."); }
-    finally { setSearchingEan(false); }
+      // Usa ?termo= para pesquisar, assim o backend não tenta converter para Long ID
+      const res = await api.get(`/produtos?termo=${ean}&size=1`);
+      const produtosEncontrados = res.data.content || [];
+
+      if (produtosEncontrados.length > 0) {
+          const prodExistente = produtosEncontrados[0];
+
+          // Verifica match exato do código de barras
+          if (prodExistente.codigoBarras === ean) {
+              encontradoLocalmente = true;
+
+              // Se é edição do mesmo produto, ok
+              if (isEditMode && String(prodExistente.id) === String(id)) {
+                  toast.info("Este código pertence a este produto.");
+                  setSearchingEan(false);
+                  return;
+              }
+
+              // Produto duplicado!
+              toast.error(`ATENÇÃO: Produto já cadastrado!\n${prodExistente.descricao}`);
+              setFormData(prev => ({ ...prev, codigoBarras: '' })); // Limpa campo
+              setTimeout(() => eanInputRef.current?.focus(), 100);  // Devolve foco
+              setSearchingEan(false);
+              return; // Para o fluxo aqui
+          }
+      }
+    } catch (error) {
+        console.warn("Busca local falhou (ignorando):", error);
+    }
+
+    // 2. BUSCA EXTERNA (Se não achou no banco local)
+    if (!encontradoLocalmente) {
+        try {
+            const toastId = toast.loading("Consultando base externa...");
+
+            const dExt = await produtoService.consultarEan(ean);
+
+            toast.dismiss(toastId);
+
+            if (dExt && (dExt.nome || dExt.descricao)) {
+                setFormData(prev => ({
+                  ...prev,
+                  descricao: dExt.nome || dExt.descricao || prev.descricao,
+                  urlImagem: dExt.urlImagem || dExt.thumbnail || prev.urlImagem,
+                  marca: dExt.marca || prev.marca,
+                  categoria: dExt.categoria || prev.categoria,
+                  ncm: dExt.ncm || prev.ncm,
+                  cest: dExt.cest || prev.cest,
+                  cst: dExt.cst || prev.cst,
+                  monofasico: dExt.monofasico !== undefined ? dExt.monofasico : prev.monofasico,
+                }));
+
+                if (dExt.urlImagem) setPreviewImagem(dExt.urlImagem);
+                toast.success("Dados preenchidos via API!");
+            } else {
+                toast.info("Código livre. Preencha manualmente.");
+            }
+        } catch (extError) {
+            // TRATAMENTO DE ERRO 500 DA API EXTERNA
+            // Se a API externa falhar ou o backend der 500 ao tentar chamá-la,
+            // nós capturamos o erro aqui para não travar a tela.
+            toast.dismiss();
+            console.error("Erro na busca externa:", extError);
+            toast.info("Novo cadastro liberado.");
+        }
+
+        // Foca no próximo campo (SKU) para continuar o cadastro
+        setTimeout(() => skuInputRef.current?.focus(), 100);
+    }
+
+    setSearchingEan(false);
+  };
+
+  const handleEanKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      handleBuscarEan();
+    }
   };
 
   const handleFileChange = (e) => {
@@ -314,8 +339,12 @@ const ProdutoForm = () => {
     if (file) { setArquivoImagem(file); setPreviewImagem(URL.createObjectURL(file)); }
   };
 
-  const handleSubmit = async (e, stay = false) => {
-    if (e) e.preventDefault();
+  const saveProduct = async (stay = false) => {
+    if (formRef.current && !formRef.current.checkValidity()) {
+        formRef.current.reportValidity();
+        return;
+    }
+
     setLoading(true);
     try {
       const p = {
@@ -352,7 +381,7 @@ const ProdutoForm = () => {
           {loading && isEditMode && !formData.descricao ? (
             <div className="loading-form"><div className="spinner"></div> Carregando...</div>
           ) : (
-            <form onSubmit={(e) => handleSubmit(e, false)}>
+            <form ref={formRef} onSubmit={(e) => e.preventDefault()}>
               <div className="form-section">
                 <h3 className="section-title"><Package size={20} /> Informações Básicas</h3>
                 <div className="form-row">
@@ -367,12 +396,26 @@ const ProdutoForm = () => {
                       <div className="form-group flex-1">
                         <label><Barcode size={16} /> EAN / Código de Barras</label>
                         <div className="input-action-group">
-                          <input ref={eanInputRef} type="text" name="codigoBarras" value={formData.codigoBarras || ''} onChange={handleChange} placeholder="789..." onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleBuscarEan())} />
+                          <input
+                            ref={eanInputRef}
+                            type="text"
+                            name="codigoBarras"
+                            value={formData.codigoBarras || ''}
+                            onChange={handleChange}
+                            placeholder="789..."
+                            onKeyDown={handleEanKeyDown}
+                          />
                           <button type="button" className="btn-magic" onClick={handleGerarEanInterno} data-label="Gerar EAN Interno"><Wand2 size={18} /></button>
-                          <button type="button" className="btn-search-icon" onClick={handleBuscarEan} disabled={searchingEan} data-label="Buscar Dados Externos">{searchingEan ? <div className="spinner-small" /> : <DownloadCloud size={16} />}</button>
+
+                          <button type="button" className="btn-search-icon" onClick={handleBuscarEan} disabled={searchingEan} data-label="Buscar Dados Externos">
+                            {searchingEan ? <div className="spinner-small" /> : <DownloadCloud size={16} />}
+                          </button>
                         </div>
                       </div>
-                      <div className="form-group flex-1"><label>Referência / SKU</label><input type="text" placeholder="Cód. Interno" /></div>
+                      <div className="form-group flex-1">
+                        <label>Referência / SKU</label>
+                        <input ref={skuInputRef} type="text" placeholder="Cód. Interno" />
+                      </div>
                     </div>
                     <div className="form-row">
                       <div className="form-group"><label>Marca</label><input type="text" name="marca" value={formData.marca || ''} onChange={handleChange} /></div>
@@ -404,6 +447,7 @@ const ProdutoForm = () => {
                 </div>
               </div>
 
+              {/* DADOS FISCAIS */}
               <div className="form-section" style={{ borderLeft: '4px solid #f22998' }}>
                 <h3 className="section-title">
                   <Landmark size={20} /> Dados Fiscais
@@ -478,73 +522,42 @@ const ProdutoForm = () => {
                 </div>
               </div>
 
+              {/* PRECIFICAÇÃO */}
               <div className="form-section">
                 <h3 className="section-title"><DollarSign size={20} /> Precificação Inteligente</h3>
                 <div className="form-row" style={{ alignItems: 'flex-start' }}>
-
-                  {/* CUSTO: Bloqueado (Read-Only) */}
                   <div className="form-group">
                     <label>Preço Médio (Custo)</label>
                     <div className="input-prefix-group">
                       <span className="prefix" style={{ color: '#64748b' }}>R$</span>
-                      <input
-                        type="text"
-                        name="precoCusto"
-                        value={formData.precoCusto}
-                        disabled={true}
-                        style={{ backgroundColor: '#f1f5f9', color: '#64748b', cursor: 'not-allowed' }}
-                      />
+                      <input type="text" name="precoCusto" value={formData.precoCusto} disabled={true} style={{ backgroundColor: '#f1f5f9', color: '#64748b', cursor: 'not-allowed' }} />
                     </div>
                   </div>
-
-                  {/* MARKUP: Editável */}
                   <div className="form-group" style={{ maxWidth: '140px' }}>
                     <label>Markup %</label>
                     <div className="input-prefix-group">
-                      <input
-                        type="text"
-                        name="markup"
-                        value={formData.markup}
-                        onChange={handleMarkupChange}
-                        style={{ fontWeight: 'bold', color: '#059669' }}
-                        autoComplete="off"
-                      />
+                      <input type="text" name="markup" value={formData.markup} onChange={handleMarkupChange} style={{ fontWeight: 'bold', color: '#059669' }} autoComplete="off" />
                       <span className="suffix">%</span>
                     </div>
                   </div>
-
-                  {/* VENDA: Editável (Calcula o Markup reverso) */}
                   <div className="form-group">
                     <label className="label-highlight">Preço de Venda</label>
                     <div className="input-prefix-group highlight-group">
                       <span className="prefix">R$</span>
-                      <input
-                        type="text"
-                        name="precoVenda"
-                        value={formData.precoVenda}
-                        onChange={handlePrecoVendaChange}
-                        required
-                        className="input-highlight"
-                      />
+                      <input type="text" name="precoVenda" value={formData.precoVenda} onChange={handlePrecoVendaChange} required className="input-highlight" />
                     </div>
                   </div>
-
-                  {/* MARGEM: Calculada (Apenas leitura) */}
                   <div className="form-group" style={{ maxWidth: '140px' }}>
                     <label><Percent size={14} /> Margem Real</label>
                     <div className="input-prefix-group">
-                      <input
-                        type="text"
-                        disabled
-                        value={formData.margemLucro}
-                        style={{ backgroundColor: '#f1f5f9', fontWeight: 'bold' }}
-                      />
+                      <input type="text" disabled value={formData.margemLucro} style={{ backgroundColor: '#f1f5f9', fontWeight: 'bold' }} />
                       <span className="suffix">%</span>
                     </div>
                   </div>
                 </div>
               </div>
 
+              {/* ESTOQUE */}
               <div className="form-section">
                 <h3 className="section-title"><Layers size={20} /> Controle de Estoque</h3>
                 <div className="form-row" style={{ backgroundColor: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
@@ -552,16 +565,7 @@ const ProdutoForm = () => {
                   <div className="form-group"><label><Lock size={14} data-label="Estoque de vendas sem nota" /> Estoque S/ Nota</label><input type="text" value={formData.estoqueNaoFiscal} disabled /></div>
                   <div className="form-group">
                     <label>Total Disponível</label>
-                    <input
-                      type="text"
-                      value={formData.quantidadeEmEstoque}
-                      disabled
-                      style={{
-                        backgroundColor: '#e0e7ff',
-                        fontWeight: 'bold',
-                        color: Number(formData.quantidadeEmEstoque) < Number(formData.estoqueMinimo) ? '#ef4444' : '#312e81'
-                      }}
-                    />
+                    <input type="text" value={formData.quantidadeEmEstoque} disabled style={{ backgroundColor: '#e0e7ff', fontWeight: 'bold', color: Number(formData.quantidadeEmEstoque) < Number(formData.estoqueMinimo) ? '#ef4444' : '#312e81' }} />
                   </div>
                   <div className="form-group" style={{ justifyContent: 'center' }}><small style={{ display: 'flex', gap: 6, color: '#d97706' }}><AlertCircle size={16} /><span>Ajuste via Entrada de Notas ou Inventário.</span></small></div>
                 </div>
@@ -573,8 +577,8 @@ const ProdutoForm = () => {
               </div>
 
               <div className="form-actions">
-                {!isEditMode && <button type="button" className="btn-secondary" onClick={(e) => handleSubmit(e, true)} disabled={loading} data-label="Salvar e abrir formulário limpo"><PlusCircle size={18} /> Salvar e Novo</button>}
-                <button id="btn-submit-form" type="submit" className="action-btn-primary" disabled={loading} data-label="Finalizar e voltar"><Save size={18} />{loading ? 'Salvando...' : 'Salvar (Alt+S)'}</button>
+                {!isEditMode && <button type="button" className="btn-secondary" onClick={(e) => saveProduct(true)} disabled={loading} data-label="Salvar e abrir formulário limpo"><PlusCircle size={18} /> Salvar e Novo</button>}
+                <button id="btn-submit-form" type="button" className="action-btn-primary" onClick={() => saveProduct(false)} disabled={loading} data-label="Finalizar e voltar"><Save size={18} />{loading ? 'Salvando...' : 'Salvar (Alt+S)'}</button>
               </div>
             </form>
           )}

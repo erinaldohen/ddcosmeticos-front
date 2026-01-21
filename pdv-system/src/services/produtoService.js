@@ -176,7 +176,7 @@ export const produtoService = {
     try {
       // Endpoint ajustado para o padrão REST do controller (/produtos/123)
       // Se retornar 200, o produto existe.
-      const response = await api.get(`${RESOURCE_URL}/${ean}`);
+      const response = await api.get(`/produtos/ean/${ean}`);
       return response.data;
     } catch (error) {
       // Se der 404 (Not Found), significa que o produto NÃO existe (o que é bom para cadastrar novo)
