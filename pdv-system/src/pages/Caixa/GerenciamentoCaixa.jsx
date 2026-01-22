@@ -1,20 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
   Lock, Unlock, TrendingUp, TrendingDown, DollarSign,
-  AlertTriangle, Save, LogOut, FileText, X
+  AlertTriangle, LogOut, X, ArrowRight, Wallet
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import caixaService from '../../services/caixaService';
 import './GerenciamentoCaixa.css';
 
 const GerenciamentoCaixa = () => {
-  const [caixa, setCaixa] = useState(null); // null = fechado
+  const [caixa, setCaixa] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Form States
   const [valorInput, setValorInput] = useState('');
   const [descricao, setDescricao] = useState('');
-  const [modalMode, setModalMode] = useState(null); // 'ABRIR', 'SANGRIA', 'SUPRIMENTO', 'FECHAR'
+  const [modalMode, setModalMode] = useState(null);
 
   useEffect(() => {
     carregarStatus();
@@ -23,99 +22,94 @@ const GerenciamentoCaixa = () => {
   const carregarStatus = async () => {
     setLoading(true);
     try {
-      const res = await caixaService.verificarStatus();
-      // Backend retorna 204 (No Content) se fechado, ou 200 com objeto se aberto
-      if (res.status === 200 && res.data) {
+      const res = await caixaService.getStatus();
+      if (res.status === 200 && res.data && res.data.status === 'ABERTO') {
         setCaixa(res.data);
       } else {
         setCaixa(null);
       }
     } catch (error) {
-      // Se for 401, o MainLayout/App provavelmente já vai tratar, mas aqui garantimos que não quebra
-      console.error("Erro ao verificar caixa", error);
+      if (error.response?.status === 404) setCaixa(null);
+      else console.error(error);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleValorChange = (e) => {
+    let value = e.target.value.replace(/\D/g, "");
+    if (value === "") { setValorInput(""); return; }
+    const numero = parseFloat(value) / 100;
+    setValorInput(numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+  };
+
+  const getValorFloat = () => {
+      if (!valorInput) return 0;
+      const limpo = valorInput.replace(/[^\d,]/g, '').replace(',', '.');
+      return parseFloat(limpo) || 0;
+  };
+
   const handleAction = async () => {
-    // Converte vírgula para ponto
-    const valor = parseFloat(valorInput.replace(',', '.'));
-    if (isNaN(valor) || valor < 0) return toast.error("Valor inválido");
+    const valor = getValorFloat();
+
+    if (modalMode !== 'ABRIR' && (isNaN(valor) || valor <= 0)) {
+        return toast.warning("Informe um valor válido.");
+    }
 
     try {
       if (modalMode === 'ABRIR') {
-        const res = await caixaService.abrir(valor);
+        const res = await caixaService.abrir({ saldoInicial: valor });
         setCaixa(res.data);
-        toast.success("Caixa Aberto com Sucesso!");
+        toast.success("Caixa aberto com sucesso!");
       }
       else if (modalMode === 'FECHAR') {
-        const res = await caixaService.fechar(valor);
-        setCaixa(null); // Reseta tela visualmente
-
-        // Feedback detalhado do fechamento
-        const diff = res.data.diferenca;
-        if (diff === 0) toast.success("Caixa fechado! Valores batem perfeitamente.");
-        else if (diff > 0) toast.info(`Caixa fechado com SOBRA de ${formatMoney(diff)}`);
-        else toast.warning(`Caixa fechado com FALTA de ${formatMoney(Math.abs(diff))}`);
+        const res = await caixaService.fechar({ saldoFinalInformado: valor });
+        setCaixa(null);
+        const diff = res.data.diferenca || 0;
+        if (Math.abs(diff) < 0.01) toast.success("Caixa fechado. Valores conferem.");
+        else if (diff > 0) toast.info(`Sobra de ${formatMoney(diff)}`);
+        else toast.warning(`Falta de ${formatMoney(Math.abs(diff))}`);
       }
       else {
-        // Sangria ou Suprimento
-        const descFinal = descricao || (modalMode === 'SANGRIA' ? 'Retirada' : 'Aporte');
-        await caixaService.movimentar(modalMode, valor, descFinal);
-
-        toast.success(`${modalMode} realizada!`);
-        // Recarrega para tentar atualizar saldo e lista de movimentos
+        const descFinal = descricao || (modalMode === 'SANGRIA' ? 'Retirada Avulsa' : 'Aporte de Troco');
+        if (modalMode === 'SANGRIA') await caixaService.sangria({ valor, observacao: descFinal });
+        else await caixaService.suprimento({ valor, observacao: descFinal });
+        toast.success("Operação registrada.");
         carregarStatus();
       }
-
-      // Limpeza
       setModalMode(null);
       setValorInput('');
       setDescricao('');
-
     } catch (error) {
-      console.error("Erro na operação:", error);
-
-      let msg = "Erro na operação.";
-      // Tratamento robusto de erro vindo do Backend (ResponseStatusException)
-      if (error.response) {
-          if (error.response.data && error.response.data.message) {
-              msg = error.response.data.message;
-          } else if (typeof error.response.data === 'string') {
-              msg = error.response.data;
-          }
-      }
+      const msg = error.response?.data?.message || "Erro ao processar.";
       toast.error(msg);
     }
   };
 
-  const formatMoney = (val) => {
-    return val ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
-  };
+  const formatMoney = (val) => val ? val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
 
-  if (loading) return <div className="loading-screen">Verificando Caixa...</div>;
+  if (loading) return <div className="loading-screen"><div className="spinner"></div> Verificando...</div>;
 
   return (
     <div className="caixa-container fade-in">
-      {/* HEADER */}
       <header className={`caixa-header ${caixa ? 'open' : 'closed'}`}>
         <div className="status-icon">
-          {caixa ? <Unlock size={40} /> : <Lock size={40} />}
+          {caixa ? <Unlock size={32} /> : <Lock size={32} />}
         </div>
         <div className="status-info">
-          <h1>{caixa ? 'CAIXA ABERTO' : 'CAIXA FECHADO'}</h1>
-          {caixa && <p>Iniciado em: {new Date(caixa.dataAbertura).toLocaleString('pt-BR')}</p>}
+          <h1>{caixa ? 'Caixa Aberto' : 'Caixa Fechado'}</h1>
+          {caixa && <p>Sessão iniciada às {new Date(caixa.dataAbertura).toLocaleTimeString('pt-BR').substring(0,5)}</p>}
         </div>
       </header>
 
-      {/* CONTEÚDO PRINCIPAL */}
       <main className="caixa-main">
         {!caixa ? (
           <div className="empty-state-caixa">
-            <DollarSign size={64} className="text-gray-400" />
-            <h3>O terminal está fechado</h3>
-            <p>Para iniciar as vendas, é necessário informar o fundo de troco.</p>
+            <div style={{background:'#f1f5f9', width:80, height:80, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto'}}>
+                <DollarSign size={40} className="text-gray-400" />
+            </div>
+            <h3>Caixa Fechado</h3>
+            <p>Informe o valor inicial do caixa para começar.</p>
             <button className="btn-primary-large" onClick={() => setModalMode('ABRIR')}>
               ABRIR CAIXA
             </button>
@@ -124,110 +118,157 @@ const GerenciamentoCaixa = () => {
           <div className="dashboard-caixa">
             <div className="kpi-grid">
               <div className="kpi-card">
-                <label>Saldo Inicial (Fundo)</label>
+                <label>Saldo Inicial</label>
                 <strong>{formatMoney(caixa.saldoInicial)}</strong>
               </div>
               <div className="kpi-card highlight">
                 <label>Vendas (Dinheiro)</label>
-                {/* Se o backend ainda não calcula totais parciais no /status, isso ficará zerado ou desatualizado até fechar */}
-                <strong>{formatMoney(caixa.totalVendasDinheiro)}</strong>
-                <small>Acumulado na sessão</small>
+                <strong>{formatMoney(caixa.totalEntradas || 0)}</strong>
+              </div>
+              <div className="kpi-card danger">
+                <label>Saídas</label>
+                <strong>{formatMoney(caixa.totalSaidas || 0)}</strong>
               </div>
             </div>
 
             <div className="actions-grid">
               <button className="btn-action suprimento" onClick={() => setModalMode('SUPRIMENTO')}>
-                <TrendingUp size={24} />
-                <span>Suprimento (Entrada)</span>
+                <div className="mov-icon" style={{background:'#dcfce7', color:'#10b981'}}><TrendingUp size={24} /></div>
+                <span>Suprimento</span>
               </button>
               <button className="btn-action sangria" onClick={() => setModalMode('SANGRIA')}>
-                <TrendingDown size={24} />
-                <span>Sangria (Saída)</span>
+                <div className="mov-icon" style={{background:'#fee2e2', color:'#ef4444'}}><TrendingDown size={24} /></div>
+                <span>Sangria</span>
               </button>
               <button className="btn-action fechar" onClick={() => setModalMode('FECHAR')}>
-                <LogOut size={24} />
-                <span>FECHAR CAIXA</span>
+                <div className="mov-icon" style={{background:'#fee2e2', color:'#ef4444'}}><LogOut size={24} /></div>
+                <span>Fechar Caixa</span>
               </button>
             </div>
 
             <div className="history-section">
-               <h3>Movimentações do Turno</h3>
-               {(!caixa.movimentacoes || caixa.movimentacoes.length === 0) && (
-                 <p className="text-muted">Nenhuma movimentação extra registrada.</p>
+               <h3>Histórico Recente</h3>
+               {(!caixa.movimentacoes || caixa.movimentacoes.length === 0) ? (
+                 <div className="empty-history">Sem movimentações manuais.</div>
+               ) : (
+                 <ul className="mov-list">
+                   {caixa.movimentacoes.map((m, idx) => (
+                     <li key={idx} className={`mov-item ${m.tipo?.toLowerCase()}`}>
+                        <div className="mov-icon">
+                            {m.tipo === 'SANGRIA' ? <TrendingDown size={20}/> : <TrendingUp size={20}/>}
+                        </div>
+                        <div className="mov-info">
+                          <span className="mov-type">{m.tipo}</span>
+                          <span className="mov-desc">{m.observacao}</span>
+                          <small>{new Date(m.dataMovimento || m.dataHora).toLocaleTimeString('pt-BR')}</small>
+                        </div>
+                        <strong className="mov-val">{formatMoney(m.valor)}</strong>
+                     </li>
+                   ))}
+                 </ul>
                )}
-               <ul className="mov-list">
-                 {caixa.movimentacoes?.map(m => (
-                   <li key={m.id} className={`mov-item ${m.tipo}`}>
-                      <div className="mov-info">
-                        <span className="mov-type">{m.tipo}</span>
-                        <span className="mov-desc">{m.descricao}</span>
-                        <small>{new Date(m.dataHora).toLocaleTimeString('pt-BR')}</small>
-                      </div>
-                      <strong className="mov-val">{formatMoney(m.valor)}</strong>
-                   </li>
-                 ))}
-               </ul>
             </div>
           </div>
         )}
       </main>
 
-      {/* MODAL GENÉRICO */}
+      {/* --- RENDERIZAÇÃO DO MODAL --- */}
       {modalMode && (
         <div className="modal-overlay">
-          <div className="modal-content">
-            <div className="modal-header">
-                <h2>
-                {modalMode === 'ABRIR' && 'Abertura de Caixa'}
-                {modalMode === 'FECHAR' && 'Fechamento de Caixa'}
-                {modalMode === 'SANGRIA' && 'Realizar Sangria'}
-                {modalMode === 'SUPRIMENTO' && 'Realizar Suprimento'}
-                </h2>
-                <button className="btn-close-modal" onClick={() => {setModalMode(null); setValorInput('');}}><X /></button>
+
+          {/* SELEÇÃO DO TIPO DE MODAL: 'modal-ai' PARA ABERTURA, 'modal-standard' PARA O RESTO */}
+          <div className={`modal-content ${modalMode === 'ABRIR' ? 'modal-ai' : 'modal-standard'}`}>
+
+            {/* === LAYOUT IA / SMART (ABRIR) === */}
+            {modalMode === 'ABRIR' ? (
+                <>
+                    <div className="modal-header">
+                        <button className="btn-close-abs" onClick={() => {setModalMode(null); setValorInput('');}}><X size={20}/></button>
+                        <div className="ai-icon-bubble">
+                            <Unlock size={36} strokeWidth={2} />
+                        </div>
+                        <h2>Abertura de Caixa</h2>
+                        <p className="subtitle">Informe o fundo de troco disponível.</p>
+                    </div>
+
+            <div className="modal-body">
+                <div className="input-smart-wrapper">
+                    <input
+                        type="text"
+                        autoFocus
+                        placeholder="R$ 0,00"
+                        // CORREÇÃO: Mostra o valor completo (Ex: R$ 150,00)
+                        value={valorInput}
+                        onChange={handleValorChange}
+                        onKeyDown={e => e.key === 'Enter' && handleAction()}
+                        className="input-smart"
+                    />
+                </div>
             </div>
 
-            {modalMode === 'FECHAR' && (
-              <div className="alert-box warning">
-                <AlertTriangle size={20}/>
-                <p>Conte o dinheiro físico na gaveta e informe abaixo. O sistema calculará a diferença (quebra) automaticamente.</p>
-              </div>
+                    <div className="modal-footer">
+                        <button className="btn-smart-primary" onClick={handleAction}>
+                            INICIAR OPERAÇÃO <ArrowRight size={20}/>
+                        </button>
+                    </div>
+                </>
+            ) : (
+                /* === LAYOUT PADRÃO (FECHAR, SANGRIA, SUPRIMENTO) === */
+                <>
+                    <div className="modal-header">
+                        <h2>
+                            {modalMode === 'FECHAR' && 'Fechamento de Caixa'}
+                            {modalMode === 'SANGRIA' && 'Realizar Sangria'}
+                            {modalMode === 'SUPRIMENTO' && 'Realizar Suprimento'}
+                        </h2>
+                        <button className="btn-close-modal" onClick={() => {setModalMode(null); setValorInput('');}}><X size={20}/></button>
+                    </div>
+
+                    <div className="modal-body">
+                        {modalMode === 'FECHAR' && (
+                          <div className="alert-box warning" style={{marginBottom: 20}}>
+                            <AlertTriangle size={20}/>
+                            <p>Conte o dinheiro físico na gaveta e informe abaixo.</p>
+                          </div>
+                        )}
+
+                        <div className="form-group">
+                          <label>Valor (R$)</label>
+                          <input
+                            type="text"
+                            autoFocus
+                            placeholder="R$ 0,00"
+                            value={valorInput}
+                            onChange={handleValorChange}
+                            onKeyDown={e => e.key === 'Enter' && handleAction()}
+                          />
+                        </div>
+
+                        {(modalMode === 'SANGRIA' || modalMode === 'SUPRIMENTO') && (
+                          <div className="form-group">
+                            <label>Motivo</label>
+                            <input
+                              type="text"
+                              placeholder={modalMode === 'SANGRIA' ? "Ex: Pagamento Fornecedor" : "Ex: Adição de Troco"}
+                              value={descricao}
+                              onChange={e => setDescricao(e.target.value)}
+                              onKeyDown={e => e.key === 'Enter' && handleAction()}
+                            />
+                          </div>
+                        )}
+                    </div>
+
+                    <div className="modal-footer">
+                        <button className="btn-std-cancel" onClick={() => {setModalMode(null); setValorInput('');}}>Cancelar</button>
+                        <button
+                            className={`btn-std-confirm ${modalMode === 'FECHAR' || modalMode === 'SANGRIA' ? 'danger' : 'success'}`}
+                            onClick={handleAction}
+                        >
+                            Confirmar
+                        </button>
+                    </div>
+                </>
             )}
-
-            <div className="form-group">
-              <label>Valor (R$)</label>
-              <input
-                type="number"
-                step="0.01"
-                autoFocus
-                placeholder="0.00"
-                value={valorInput}
-                onChange={e => setValorInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAction()}
-              />
-            </div>
-
-            {(modalMode === 'SANGRIA' || modalMode === 'SUPRIMENTO') && (
-              <div className="form-group">
-                <label>Motivo / Descrição</label>
-                <input
-                  type="text"
-                  placeholder={modalMode === 'SANGRIA' ? "Ex: Pagamento Fornecedor" : "Ex: Adição de Troco"}
-                  value={descricao}
-                  onChange={e => setDescricao(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAction()}
-                />
-              </div>
-            )}
-
-            <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => {setModalMode(null); setValorInput('');}}>Cancelar</button>
-              <button
-                className={`btn-confirm ${modalMode === 'FECHAR' || modalMode === 'SANGRIA' ? 'danger' : 'success'}`}
-                onClick={handleAction}
-              >
-                Confirmar
-              </button>
-            </div>
           </div>
         </div>
       )}

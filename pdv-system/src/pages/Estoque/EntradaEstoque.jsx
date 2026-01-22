@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 import FornecedorForm from '../Fornecedores/FornecedorForm';
-import ProdutoForm from '../Produtos/ProdutoForm'; // [UPDATE] Import para modal de produto
+import ProdutoForm from '../Produtos/ProdutoForm';
 import './EntradaEstoque.css';
 
 const EntradaEstoque = () => {
@@ -21,18 +21,17 @@ const EntradaEstoque = () => {
 
   // Dados de Apoio
   const [listaFornecedores, setListaFornecedores] = useState([]);
-  const [listaProdutosDb, setListaProdutosDb] = useState([]); // Cache para performance
+  const [listaProdutosDb, setListaProdutosDb] = useState([]); // Cache local
 
   // Dados da Nota
   const [itens, setItens] = useState([]);
   const [cabecalho, setCabecalho] = useState({
     fornecedorId: '',
     numeroDocumento: '',
-    // [FIX] Garante formato YYYY-MM-DD para o Java LocalDate
     dataEmissao: new Date().toISOString().split('T')[0]
   });
 
-  // Controle Visual
+  // Estados de Controle Visual/Lógico
   const [searchState, setSearchState] = useState({ rowIndex: null, term: '', results: [] });
   const [linhasEmModoBusca, setLinhasEmModoBusca] = useState({});
 
@@ -50,6 +49,15 @@ const EntradaEstoque = () => {
   const fileInputRef = useRef(null);
   const qtdInputRef = useRef(null);
 
+  // --- HELPER: Conversão Segura de Moeda ---
+  const parseCurrency = (value) => {
+    if (!value) return 0;
+    if (typeof value === 'number') return value;
+    // Remove pontos de milhar e troca vírgula por ponto
+    const cleanValue = value.replace(/\./g, '').replace(',', '.');
+    return parseFloat(cleanValue) || 0;
+  };
+
   // --- INICIALIZAÇÃO ---
   useEffect(() => {
     carregarDadosIniciais();
@@ -57,21 +65,22 @@ const EntradaEstoque = () => {
 
   const carregarDadosIniciais = async () => {
     try {
-      // Tenta buscar dropdown otimizado, fallback para lista paginada grande
+      // Tenta buscar dropdown otimizado, fallback para lista maior se falhar
       const resForn = await api.get('/fornecedores/dropdown').catch(() => api.get('/fornecedores?size=100'));
       const dadosForn = Array.isArray(resForn.data) ? resForn.data : (resForn.data.content || []);
       setListaFornecedores(dadosForn);
 
-      // Cache de produtos para match rápido
+      // Cache de produtos para match rápido do XML
+      // NOTA: Em produção com muitos produtos, isso deve mudar para busca sob demanda.
       const resProd = await api.get('/produtos?size=5000');
       setListaProdutosDb(resProd.data.content || []);
     } catch (e) {
-        console.error(e);
+        console.error("Erro init:", e);
         toast.error("Erro ao carregar dados de apoio.");
     }
   };
 
-  // --- BUSCA PRODUTO (MANUAL) ---
+  // --- BUSCA PRODUTO (MANUAL - TOPO) ---
   useEffect(() => {
     const delay = setTimeout(async () => {
       if (termoBusca.length >= 3 && !produtoSelecionado) {
@@ -86,7 +95,7 @@ const EntradaEstoque = () => {
     return () => clearTimeout(delay);
   }, [termoBusca, produtoSelecionado]);
 
-  // --- LÓGICA FISCAL XML ---
+  // --- LÓGICA FISCAL XML (Heurística Frontend) ---
   const inferirDadosFiscais = (xmlItem, fornecedorNome) => {
     let marca = "GENERICA";
     const nomeUpper = fornecedorNome?.toUpperCase() || "";
@@ -95,12 +104,15 @@ const EntradaEstoque = () => {
     else if (nomeUpper.includes("NATURA")) marca = "NATURA";
     else if (nomeUpper.includes("AVON")) marca = "AVON";
 
+    // Limpa pontuação do NCM
     const ncm = xmlItem.ncm ? xmlItem.ncm.replace(/\./g, '') : '00000000';
+
+    // Padrões fiscais
     let fiscal = { csosn: '102', pisCofins: '01' };
 
-    // Exemplo de regra inteligente (pode expandir)
-    if (ncm.startsWith('3401')) { // Sabonetes
-        fiscal = { csosn: '500', pisCofins: '04' }; // ST
+    // Exemplo de regra inteligente (Sabonetes -> ST)
+    if (ncm.startsWith('3401')) {
+        fiscal = { csosn: '500', pisCofins: '04' };
     }
 
     const prefixo = ncm.substring(0, 4);
@@ -115,7 +127,7 @@ const EntradaEstoque = () => {
     setProdutoSelecionado(prod);
     setTermoBusca(prod.descricao);
     setSugestoes([]);
-    // Formata para BR visualmente
+    // Formata visualmente para BR (com vírgula)
     setCustoItem(prod.precoCusto ? prod.precoCusto.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '');
     setQtdItem(1);
     setTimeout(() => qtdInputRef.current?.focus(), 100);
@@ -124,13 +136,8 @@ const EntradaEstoque = () => {
   const adicionarItem = () => {
     if (!produtoSelecionado) return;
 
-    // [FIX] Conversão segura de moeda BR para Float
-    let custo = 0;
-    if (typeof custoItem === 'string') {
-        custo = parseFloat(custoItem.replace(/\./g, '').replace(',', '.'));
-    } else {
-        custo = Number(custoItem);
-    }
+    // Usa o helper seguro para converter
+    const custo = parseCurrency(custoItem);
 
     setItens([...itens, {
         idProduto: produtoSelecionado.id,
@@ -140,12 +147,15 @@ const EntradaEstoque = () => {
         precoCusto: custo,
         total: Number(qtdItem) * custo,
         status: 'vinculado',
-        estoqueAtual: produtoSelecionado.estoqueAtual || 0,
-        origem: '0', cst: '102', ncm: produtoSelecionado.ncm || '00000000',
+        estoqueAtual: produtoSelecionado.quantidadeEmEstoque || 0,
+        origem: '0',
+        cst: '102',
+        ncm: produtoSelecionado.ncm || '00000000',
         marca: produtoSelecionado.marca || 'GENERICA',
         categoria: produtoSelecionado.categoria || 'GERAL'
     }]);
 
+    // Reset
     setProdutoSelecionado(null);
     setTermoBusca('');
     setQtdItem(1);
@@ -163,18 +173,21 @@ const EntradaEstoque = () => {
     const toastId = toast.loading("Analisando XML...");
 
     try {
-       const res = await api.post('/estoque/importar-xml', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+       const res = await api.post('/estoque/importar-xml', formData, {
+           headers: { 'Content-Type': 'multipart/form-data' }
+       });
+
        const { fornecedorId, razaoSocialFornecedor, numeroNota, itensXml, dataEmissao } = res.data;
 
        setCabecalho(prev => ({
          ...prev,
          fornecedorId: fornecedorId || prev.fornecedorId,
          numeroDocumento: numeroNota || prev.numeroDocumento,
-         // Se vier data do XML, usa. Senão mantém a de hoje.
+         // Garante formato YYYY-MM-DD mesmo se vier timestamp completo
          dataEmissao: dataEmissao ? dataEmissao.split('T')[0] : prev.dataEmissao
        }));
 
-       // Se o fornecedor veio do XML e não está na lista, adiciona visualmente
+       // Atualiza lista de fornecedores se vier um novo do XML
        if (fornecedorId && razaoSocialFornecedor) {
            setListaFornecedores(prev => {
                if (!prev.find(f => f.id === fornecedorId)) {
@@ -184,27 +197,33 @@ const EntradaEstoque = () => {
            });
        }
 
+       // Processamento de Match (Local)
        const novosItens = itensXml.map(xmlItem => {
            const dadosFiscais = inferirDadosFiscais(xmlItem, razaoSocialFornecedor);
 
-           // 1. Match Exato (EAN)
-           const matchExato = listaProdutosDb.find(db => String(db.codigoBarras) === String(xmlItem.codigoBarras));
+           // 1. Match Exato (Código de Barras)
+           const matchExato = listaProdutosDb.find(db =>
+               String(db.codigoBarras) === String(xmlItem.codigoBarras) && xmlItem.codigoBarras.length > 5
+           );
+
            if (matchExato) {
                return {
                    ...xmlItem,
                    idProduto: matchExato.id,
-                   descricao: matchExato.descricao,
+                   descricao: matchExato.descricao, // Usa a descrição do nosso sistema
                    status: 'vinculado',
                    match: matchExato,
-                   estoqueAtual: matchExato.estoqueAtual || 0,
+                   estoqueAtual: matchExato.quantidadeEmEstoque || 0,
                    ...dadosFiscais
                };
            }
 
            // 2. Match Semelhante (Nome)
            const matchSimilar = listaProdutosDb.find(db =>
+               db.descricao && xmlItem.descricao &&
                db.descricao.toUpperCase().includes(xmlItem.descricao.toUpperCase().substring(0, 10))
            );
+
            if (matchSimilar) {
                return {
                    ...xmlItem,
@@ -216,7 +235,7 @@ const EntradaEstoque = () => {
                };
            }
 
-           // 3. Novo
+           // 3. Novo Produto
            return {
                ...xmlItem,
                idProduto: null,
@@ -236,11 +255,11 @@ const EntradaEstoque = () => {
        toast.update(toastId, { render: msg, type: "error", isLoading: false, autoClose: 4000 });
     } finally {
       setLoading(false);
-      e.target.value = null; // Reseta input file
+      e.target.value = null; // Reseta o input file para permitir re-upload
     }
   };
 
-  // --- MANIPULAÇÃO DA TABELA ---
+  // --- FUNÇÕES DE MANIPULAÇÃO DA TABELA ---
 
   const atualizarCampoItem = (index, campo, valor) => {
       const lista = [...itens];
@@ -252,9 +271,9 @@ const EntradaEstoque = () => {
     try {
       const novoEan = await produtoService.gerarEanInterno();
       atualizarCampoItem(index, 'codigoBarras', novoEan);
-      toast.info("EAN gerado!");
+      toast.info("Código EAN gerado!");
     } catch (err) {
-      toast.error("Erro ao gerar EAN.");
+      toast.error("Erro ao gerar código.");
     }
   };
 
@@ -278,8 +297,8 @@ const EntradaEstoque = () => {
       }
       const termoUpper = valor.toUpperCase();
       const matches = listaProdutosDb.filter(db =>
-          db.descricao.includes(termoUpper) || String(db.codigoBarras).includes(valor)
-      ).slice(0, 5);
+          db.descricao.toUpperCase().includes(termoUpper) || String(db.codigoBarras).includes(valor)
+      ).slice(0, 5); // Limita resultados
       setSearchState(prev => ({ ...prev, results: matches }));
   };
 
@@ -288,11 +307,13 @@ const EntradaEstoque = () => {
       lista[index].idProduto = produtoDb.id;
       lista[index].descricao = produtoDb.descricao;
       lista[index].codigoBarras = produtoDb.codigoBarras;
-      lista[index].ncm = produtoDb.ncm || lista[index].ncm; // Mantém NCM se o DB não tiver
+      // Se o produto do banco tem NCM, usa ele. Senão mantém o do XML.
+      lista[index].ncm = produtoDb.ncm || lista[index].ncm;
       lista[index].status = 'vinculado';
-      lista[index].estoqueAtual = produtoDb.estoqueAtual || 0;
+      lista[index].estoqueAtual = produtoDb.quantidadeEmEstoque || 0;
       setItens(lista);
 
+      // Limpa estados de busca
       setSearchState({ rowIndex: null, term: '', results: [] });
       const novaListaBusca = { ...linhasEmModoBusca };
       delete novaListaBusca[index];
@@ -310,7 +331,7 @@ const EntradaEstoque = () => {
 
     // Validações
     if (itens.some(i => i.status === 'semelhante')) {
-        return toast.warn("Você tem itens marcados como 'ATENÇÃO'. Vincule-os ou confirme que são novos.");
+        return toast.warn("Existem itens marcados como 'ATENÇÃO'. Vincule-os ou confirme que são novos.");
     }
     if (itens.some(i => i.status === 'novo' && (!i.codigoBarras || i.codigoBarras.length < 3))) {
         return toast.warn("Existem produtos novos sem Código de Barras válido.");
@@ -319,7 +340,7 @@ const EntradaEstoque = () => {
     const payload = {
         fornecedorId: cabecalho.fornecedorId,
         numeroDocumento: cabecalho.numeroDocumento || "S/N",
-        dataVencimento: cabecalho.dataEmissao, // Envia YYYY-MM-DD
+        dataVencimento: cabecalho.dataEmissao, // O Backend usa dataVencimento como data base para financeiro
         itens: itens.map(i => ({
             produtoId: i.idProduto,
             codigoBarras: i.codigoBarras || "SEM GTIN",
@@ -339,16 +360,16 @@ const EntradaEstoque = () => {
     try {
         await api.post('/estoque/entrada', payload);
         toast.success("Entrada registrada com sucesso!");
-        navigate('/estoque'); // Vai para o dashboard ou histórico
+        navigate('/estoque'); // Redireciona para listagem/histórico
     } catch(e) {
         console.error(e);
-        toast.error("Erro ao registrar entrada. Verifique os dados.");
+        const msg = e.response?.data?.message || "Erro ao registrar entrada.";
+        toast.error(msg);
     } finally { setLoading(false); }
   };
 
   const totalGeral = itens.reduce((a, b) => a + (Number(b.total) || 0), 0);
 
-  // Estilos Condicionais
   const getRowStyle = (status) => {
       const base = { transition: 'all 0.2s ease' };
       switch(status) {
