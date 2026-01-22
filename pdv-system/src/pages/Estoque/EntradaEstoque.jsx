@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
-import produtoService from '../../services/produtoService'; // Importação do Serviço
+import produtoService from '../../services/produtoService';
 import { toast } from 'react-toastify';
 import {
   Truck, Save, Plus, Search, Trash2, ArrowLeft, Package, Check,
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 import FornecedorForm from '../Fornecedores/FornecedorForm';
+import ProdutoForm from '../Produtos/ProdutoForm'; // [UPDATE] Import para modal de produto
 import './EntradaEstoque.css';
 
 const EntradaEstoque = () => {
@@ -20,19 +21,20 @@ const EntradaEstoque = () => {
 
   // Dados de Apoio
   const [listaFornecedores, setListaFornecedores] = useState([]);
-  const [listaProdutosDb, setListaProdutosDb] = useState([]); // Cache local para buscas rápidas
+  const [listaProdutosDb, setListaProdutosDb] = useState([]); // Cache para performance
 
   // Dados da Nota
   const [itens, setItens] = useState([]);
   const [cabecalho, setCabecalho] = useState({
     fornecedorId: '',
     numeroDocumento: '',
+    // [FIX] Garante formato YYYY-MM-DD para o Java LocalDate
     dataEmissao: new Date().toISOString().split('T')[0]
   });
 
-  // Estados de Controle Visual/Lógico
-  const [searchState, setSearchState] = useState({ rowIndex: null, term: '', results: [] }); // Autocomplete
-  const [linhasEmModoBusca, setLinhasEmModoBusca] = useState({}); // Controla quais linhas "Novas" estão sendo vinculadas manualmente
+  // Controle Visual
+  const [searchState, setSearchState] = useState({ rowIndex: null, term: '', results: [] });
+  const [linhasEmModoBusca, setLinhasEmModoBusca] = useState({});
 
   // Modais
   const [showModalFornecedor, setShowModalFornecedor] = useState(false);
@@ -55,18 +57,21 @@ const EntradaEstoque = () => {
 
   const carregarDadosIniciais = async () => {
     try {
-      const resForn = await api.get('/fornecedores/dropdown').catch(async () => await api.get('/fornecedores?size=100'));
-      setListaFornecedores(Array.isArray(resForn.data) ? resForn.data : (resForn.data.content || []));
+      // Tenta buscar dropdown otimizado, fallback para lista paginada grande
+      const resForn = await api.get('/fornecedores/dropdown').catch(() => api.get('/fornecedores?size=100'));
+      const dadosForn = Array.isArray(resForn.data) ? resForn.data : (resForn.data.content || []);
+      setListaFornecedores(dadosForn);
 
-      // Carrega base de produtos para conferência (Cache)
+      // Cache de produtos para match rápido
       const resProd = await api.get('/produtos?size=5000');
       setListaProdutosDb(resProd.data.content || []);
     } catch (e) {
-        toast.error("Erro ao carregar dados iniciais.");
+        console.error(e);
+        toast.error("Erro ao carregar dados de apoio.");
     }
   };
 
-  // --- BUSCA PRODUTO (MANUAL - TOPO) ---
+  // --- BUSCA PRODUTO (MANUAL) ---
   useEffect(() => {
     const delay = setTimeout(async () => {
       if (termoBusca.length >= 3 && !produtoSelecionado) {
@@ -81,7 +86,7 @@ const EntradaEstoque = () => {
     return () => clearTimeout(delay);
   }, [termoBusca, produtoSelecionado]);
 
-  // --- HELPER: LÓGICA FISCAL XML ---
+  // --- LÓGICA FISCAL XML ---
   const inferirDadosFiscais = (xmlItem, fornecedorNome) => {
     let marca = "GENERICA";
     const nomeUpper = fornecedorNome?.toUpperCase() || "";
@@ -90,12 +95,12 @@ const EntradaEstoque = () => {
     else if (nomeUpper.includes("NATURA")) marca = "NATURA";
     else if (nomeUpper.includes("AVON")) marca = "AVON";
 
-    const ncm = xmlItem.ncm ? xmlItem.ncm.replace(/\./g, '') : '';
+    const ncm = xmlItem.ncm ? xmlItem.ncm.replace(/\./g, '') : '00000000';
     let fiscal = { csosn: '102', pisCofins: '01' };
 
-    // Regra Sabonete (Exemplo)
-    if (ncm === '34011190') {
-        fiscal = { csosn: '500', pisCofins: '04' };
+    // Exemplo de regra inteligente (pode expandir)
+    if (ncm.startsWith('3401')) { // Sabonetes
+        fiscal = { csosn: '500', pisCofins: '04' }; // ST
     }
 
     const prefixo = ncm.substring(0, 4);
@@ -110,6 +115,7 @@ const EntradaEstoque = () => {
     setProdutoSelecionado(prod);
     setTermoBusca(prod.descricao);
     setSugestoes([]);
+    // Formata para BR visualmente
     setCustoItem(prod.precoCusto ? prod.precoCusto.toLocaleString('pt-BR', {minimumFractionDigits: 2}) : '');
     setQtdItem(1);
     setTimeout(() => qtdInputRef.current?.focus(), 100);
@@ -117,7 +123,14 @@ const EntradaEstoque = () => {
 
   const adicionarItem = () => {
     if (!produtoSelecionado) return;
-    const custo = parseFloat(custoItem.replace(/\./g, '').replace(',', '.'));
+
+    // [FIX] Conversão segura de moeda BR para Float
+    let custo = 0;
+    if (typeof custoItem === 'string') {
+        custo = parseFloat(custoItem.replace(/\./g, '').replace(',', '.'));
+    } else {
+        custo = Number(custoItem);
+    }
 
     setItens([...itens, {
         idProduto: produtoSelecionado.id,
@@ -128,7 +141,9 @@ const EntradaEstoque = () => {
         total: Number(qtdItem) * custo,
         status: 'vinculado',
         estoqueAtual: produtoSelecionado.estoqueAtual || 0,
-        origem: '0', cst: '102', marca: produtoSelecionado.marca || 'GENERICA', categoria: produtoSelecionado.categoria || 'GERAL'
+        origem: '0', cst: '102', ncm: produtoSelecionado.ncm || '00000000',
+        marca: produtoSelecionado.marca || 'GENERICA',
+        categoria: produtoSelecionado.categoria || 'GERAL'
     }]);
 
     setProdutoSelecionado(null);
@@ -155,9 +170,11 @@ const EntradaEstoque = () => {
          ...prev,
          fornecedorId: fornecedorId || prev.fornecedorId,
          numeroDocumento: numeroNota || prev.numeroDocumento,
-         dataEmissao: dataEmissao || prev.dataEmissao
+         // Se vier data do XML, usa. Senão mantém a de hoje.
+         dataEmissao: dataEmissao ? dataEmissao.split('T')[0] : prev.dataEmissao
        }));
 
+       // Se o fornecedor veio do XML e não está na lista, adiciona visualmente
        if (fornecedorId && razaoSocialFornecedor) {
            setListaFornecedores(prev => {
                if (!prev.find(f => f.id === fornecedorId)) {
@@ -170,7 +187,7 @@ const EntradaEstoque = () => {
        const novosItens = itensXml.map(xmlItem => {
            const dadosFiscais = inferirDadosFiscais(xmlItem, razaoSocialFornecedor);
 
-           // 1. Match Exato
+           // 1. Match Exato (EAN)
            const matchExato = listaProdutosDb.find(db => String(db.codigoBarras) === String(xmlItem.codigoBarras));
            if (matchExato) {
                return {
@@ -184,9 +201,9 @@ const EntradaEstoque = () => {
                };
            }
 
-           // 2. Match Semelhante
+           // 2. Match Semelhante (Nome)
            const matchSimilar = listaProdutosDb.find(db =>
-               db.descricao.includes(xmlItem.descricao.substring(0, 10))
+               db.descricao.toUpperCase().includes(xmlItem.descricao.toUpperCase().substring(0, 10))
            );
            if (matchSimilar) {
                return {
@@ -211,38 +228,36 @@ const EntradaEstoque = () => {
        });
 
        setItens(prev => [...prev, ...novosItens]);
-       toast.update(toastId, { render: "XML Importado!", type: "success", isLoading: false, autoClose: 3000 });
+       toast.update(toastId, { render: "XML Importado com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
 
     } catch (error) {
-       const msg = error.response?.data?.message || "Erro ao ler XML";
+       console.error(error);
+       const msg = error.response?.data?.message || "Erro ao processar o arquivo XML.";
        toast.update(toastId, { render: msg, type: "error", isLoading: false, autoClose: 4000 });
     } finally {
       setLoading(false);
-      e.target.value = null;
+      e.target.value = null; // Reseta input file
     }
   };
 
-  // --- FUNÇÕES DE MANIPULAÇÃO DA TABELA ---
+  // --- MANIPULAÇÃO DA TABELA ---
 
-  // 1. Atualizar Campos de Edição (Novo)
   const atualizarCampoItem = (index, campo, valor) => {
       const lista = [...itens];
       lista[index][campo] = campo === 'descricao' ? valor.toUpperCase() : valor;
       setItens(lista);
   };
 
-  // 2. Gerar EAN Interno (Service)
   const handleGerarEanInterno = async (index) => {
     try {
       const novoEan = await produtoService.gerarEanInterno();
       atualizarCampoItem(index, 'codigoBarras', novoEan);
-      toast.info("Código gerado!");
+      toast.info("EAN gerado!");
     } catch (err) {
-      toast.error("Erro ao gerar código.");
+      toast.error("Erro ao gerar EAN.");
     }
   };
 
-  // 3. Ativar/Desativar Modo de Busca Manual (Correção de Vínculo)
   const ativarModoBusca = (index) => {
       setLinhasEmModoBusca(prev => ({ ...prev, [index]: true }));
       setSearchState({ rowIndex: index, term: '', results: [] });
@@ -255,7 +270,6 @@ const EntradaEstoque = () => {
       setSearchState({ rowIndex: null, term: '', results: [] });
   };
 
-  // 4. Lógica de Pesquisa (Autocomplete)
   const handleSearchCorrecao = (index, valor) => {
       setSearchState(prev => ({ ...prev, rowIndex: index, term: valor }));
       if(!valor || valor.length < 2) {
@@ -265,22 +279,20 @@ const EntradaEstoque = () => {
       const termoUpper = valor.toUpperCase();
       const matches = listaProdutosDb.filter(db =>
           db.descricao.includes(termoUpper) || String(db.codigoBarras).includes(valor)
-      ).slice(0, 5); // Limita a 5 resultados
+      ).slice(0, 5);
       setSearchState(prev => ({ ...prev, results: matches }));
   };
 
-  // 5. Vincular Produto (Ação Final)
   const vincularSugestao = (index, produtoDb) => {
       const lista = [...itens];
       lista[index].idProduto = produtoDb.id;
       lista[index].descricao = produtoDb.descricao;
       lista[index].codigoBarras = produtoDb.codigoBarras;
-      lista[index].ncm = produtoDb.ncm; // Assume NCM do cadastro correto
+      lista[index].ncm = produtoDb.ncm || lista[index].ncm; // Mantém NCM se o DB não tiver
       lista[index].status = 'vinculado';
       lista[index].estoqueAtual = produtoDb.estoqueAtual || 0;
       setItens(lista);
 
-      // Limpa estados
       setSearchState({ rowIndex: null, term: '', results: [] });
       const novaListaBusca = { ...linhasEmModoBusca };
       delete novaListaBusca[index];
@@ -291,23 +303,23 @@ const EntradaEstoque = () => {
 
   const removerItem = (idx) => setItens(itens.filter((_, i) => i !== idx));
 
-  // --- FINALIZAR ---
+  // --- FINALIZAR ENTRADA ---
   const finalizarEntrada = async (e) => {
     if(e) e.preventDefault();
-    if (!cabecalho.fornecedorId) return toast.warn("Selecione o Fornecedor.");
+    if (!cabecalho.fornecedorId) return toast.warn("Selecione o Fornecedor no topo.");
 
+    // Validações
     if (itens.some(i => i.status === 'semelhante')) {
-        return toast.warn("Resolva os itens em 'ATENÇÃO' antes de salvar.");
+        return toast.warn("Você tem itens marcados como 'ATENÇÃO'. Vincule-os ou confirme que são novos.");
     }
-
-    if (itens.some(i => i.status === 'novo' && !i.codigoBarras)) {
-        return toast.warn("Existem produtos novos sem EAN. Gere um código ou preencha.");
+    if (itens.some(i => i.status === 'novo' && (!i.codigoBarras || i.codigoBarras.length < 3))) {
+        return toast.warn("Existem produtos novos sem Código de Barras válido.");
     }
 
     const payload = {
         fornecedorId: cabecalho.fornecedorId,
-        numeroDocumento: cabecalho.numeroDocumento || "MANUAL",
-        dataVencimento: cabecalho.dataEmissao,
+        numeroDocumento: cabecalho.numeroDocumento || "S/N",
+        dataVencimento: cabecalho.dataEmissao, // Envia YYYY-MM-DD
         itens: itens.map(i => ({
             produtoId: i.idProduto,
             codigoBarras: i.codigoBarras || "SEM GTIN",
@@ -315,30 +327,34 @@ const EntradaEstoque = () => {
             quantidade: i.quantidade,
             valorUnitario: i.precoCusto,
             ncm: i.ncm || "00000000",
-            origem: i.origem || '0', cst: i.fiscal?.csosn || i.cst || '102',
-            marca: i.marca || 'GENERICA', categoria: i.categoria || 'GERAL', unidade: 'UN'
+            origem: i.origem || '0',
+            cst: i.fiscal?.csosn || i.cst || '102',
+            marca: i.marca || 'GENERICA',
+            categoria: i.categoria || 'GERAL',
+            unidade: 'UN'
         }))
     };
 
     setLoading(true);
     try {
         await api.post('/estoque/entrada', payload);
-        toast.success("Entrada registrada!");
-        navigate('/estoque');
+        toast.success("Entrada registrada com sucesso!");
+        navigate('/estoque'); // Vai para o dashboard ou histórico
     } catch(e) {
-        toast.error("Erro ao registrar entrada.");
+        console.error(e);
+        toast.error("Erro ao registrar entrada. Verifique os dados.");
     } finally { setLoading(false); }
   };
 
   const totalGeral = itens.reduce((a, b) => a + (Number(b.total) || 0), 0);
 
-  // --- ESTILOS DINÂMICOS ---
+  // Estilos Condicionais
   const getRowStyle = (status) => {
       const base = { transition: 'all 0.2s ease' };
       switch(status) {
-          case 'vinculado': return { ...base, borderLeft: '4px solid #10b981', backgroundColor: '#f0fdf4' }; // Verde
-          case 'semelhante': return { ...base, borderLeft: '4px solid #f59e0b', backgroundColor: '#fffbeb' }; // Amarelo
-          case 'novo': return { ...base, borderLeft: '4px solid #3b82f6', backgroundColor: '#eff6ff' }; // Azul
+          case 'vinculado': return { ...base, borderLeft: '4px solid #10b981', backgroundColor: '#f0fdf4' };
+          case 'semelhante': return { ...base, borderLeft: '4px solid #f59e0b', backgroundColor: '#fffbeb' };
+          case 'novo': return { ...base, borderLeft: '4px solid #3b82f6', backgroundColor: '#eff6ff' };
           default: return base;
       }
   };
@@ -346,7 +362,7 @@ const EntradaEstoque = () => {
   return (
     <div className="entrada-container">
 
-      {/* HEADER */}
+      {/* --- HEADER --- */}
       <div className="page-header">
         <div className="page-title">
             <h1>Entrada de Mercadoria</h1>
@@ -359,38 +375,53 @@ const EntradaEstoque = () => {
             <button className="btn-std btn-secondary" onClick={() => fileInputRef.current.click()}>
                 <UploadCloud size={18}/> Importar XML
             </button>
-            <input type="file" style={{display:'none'}} ref={fileInputRef} onChange={handleFileChange} />
+            <input type="file" style={{display:'none'}} ref={fileInputRef} onChange={handleFileChange} accept=".xml"/>
         </div>
       </div>
 
-      {/* DADOS DA NOTA */}
+      {/* --- DADOS DA NOTA --- */}
       <div className="bloco-entrada">
         <div className="titulo-sessao"><FileText size={16}/> Dados da Nota Fiscal</div>
         <div className="form-grid">
             <div className="col-6">
-                <label>Fornecedor</label>
+                <label>Fornecedor *</label>
                 <div className="input-group">
-                    <select value={cabecalho.fornecedorId} onChange={e => setCabecalho({...cabecalho, fornecedorId: e.target.value})}>
+                    <select
+                        value={cabecalho.fornecedorId}
+                        onChange={e => setCabecalho({...cabecalho, fornecedorId: e.target.value})}
+                        style={{ border: !cabecalho.fornecedorId ? '1px solid #f87171' : '1px solid #e2e8f0' }}
+                    >
                         <option value="">Selecione o Fornecedor...</option>
                         {listaFornecedores.map(f => (<option key={f.id} value={f.id}>{f.razaoSocial || f.nomeFantasia}</option>))}
                     </select>
                     <button className="btn-addon" onClick={() => setShowModalFornecedor(true)}><Plus size={18}/></button>
                 </div>
             </div>
-            <div className="col-3"><label>Nº Documento</label><input value={cabecalho.numeroDocumento} onChange={e => setCabecalho({...cabecalho, numeroDocumento: e.target.value})} /></div>
+            <div className="col-3">
+                <label>Nº Documento</label>
+                <input
+                    value={cabecalho.numeroDocumento}
+                    onChange={e => setCabecalho({...cabecalho, numeroDocumento: e.target.value})}
+                    placeholder="S/N"
+                />
+            </div>
             <div className="col-3">
                 <label>Data Emissão</label>
                 <div className="date-input-wrapper">
-                    <input type="date" value={cabecalho.dataEmissao} onChange={e => setCabecalho({...cabecalho, dataEmissao: e.target.value})} />
+                    <input
+                        type="date"
+                        value={cabecalho.dataEmissao}
+                        onChange={e => setCabecalho({...cabecalho, dataEmissao: e.target.value})}
+                    />
                     <Calendar size={18} className="icon-calendar"/>
                 </div>
             </div>
         </div>
       </div>
 
-      {/* ADICIONAR MANUAL */}
+      {/* --- ADICIONAR MANUAL --- */}
       <div className="bloco-entrada" style={{borderLeft: '4px solid #6366f1'}}>
-         <div className="titulo-sessao" style={{color:'#6366f1'}}><Package size={16}/> Adicionar Produto</div>
+         <div className="titulo-sessao" style={{color:'#6366f1'}}><Package size={16}/> Adicionar Produto Avulso</div>
          <div className="form-grid">
              <div className="col-6" style={{position:'relative'}}>
                  <label>Buscar Produto</label>
@@ -404,18 +435,22 @@ const EntradaEstoque = () => {
                             onChange={e => { setTermoBusca(e.target.value); setProdutoSelecionado(null); }}
                          />
                      </div>
-                     <button className="btn-addon" onClick={() => setShowModalProduto(true)}><Plus size={18}/></button>
+                     <button className="btn-addon" onClick={() => setShowModalProduto(true)} title="Novo Cadastro Rápido"><Plus size={18}/></button>
                  </div>
+
+                 {/* Sugestões Dropdown */}
                  {sugestoes.length > 0 && !produtoSelecionado && (
                      <div className="dropdown-busca">
                          {sugestoes.map(s => (
                              <div key={s.id} className="item-busca" onClick={() => selecionarProduto(s)}>
-                                 <span>{s.descricao}</span><strong>R$ {s.precoVenda?.toFixed(2)}</strong>
+                                 <span style={{flex:1}}>{s.descricao}</span>
+                                 <strong style={{color:'#16a34a'}}>R$ {s.precoVenda?.toFixed(2)}</strong>
                              </div>
                          ))}
                      </div>
                  )}
              </div>
+
              <div className="col-2"><label>Quantidade</label><input type="number" ref={qtdInputRef} value={qtdItem} onChange={e => setQtdItem(e.target.value)} min="1"/></div>
              <div className="col-2"><label>Custo Unit. (R$)</label><input value={custoItem} onChange={e => setCustoItem(e.target.value)} placeholder="0,00"/></div>
              <div className="col-2">
@@ -426,7 +461,7 @@ const EntradaEstoque = () => {
          </div>
       </div>
 
-      {/* TABELA DE ITENS */}
+      {/* --- TABELA DE ITENS --- */}
       <div className="bloco-entrada" style={{padding:0, overflow:'hidden'}}>
 
           <div style={{padding: '20px 24px', borderBottom: '1px solid #e2e8f0', display:'flex', justifyContent:'space-between'}}>
@@ -448,25 +483,24 @@ const EntradaEstoque = () => {
                   </thead>
                   <tbody>
                       {itens.map((item, idx) => {
-                          const isSearching = linhasEmModoBusca[idx]; // Verifica se esta linha está buscando manual
+                          const isSearching = linhasEmModoBusca[idx];
 
                           return (
                               <tr key={idx} style={getRowStyle(item.status)}>
 
-                                  {/* COLUNA STATUS */}
+                                  {/* STATUS */}
                                   <td style={{paddingLeft: 24, verticalAlign: 'top', paddingTop: 16}}>
                                       {item.status === 'vinculado' && <span className="badge-status bg-green-100 text-green-800"><CheckCircle size={14}/> VINCULADO</span>}
                                       {item.status === 'semelhante' && <span className="badge-status bg-yellow-100 text-yellow-800"><AlertTriangle size={14}/> ATENÇÃO</span>}
                                       {item.status === 'novo' && <span className="badge-status bg-blue-100 text-blue-800"><Package size={14}/> NOVO</span>}
                                   </td>
 
-                                  {/* COLUNA PRODUTO */}
+                                  {/* PRODUTO */}
                                   <td style={{verticalAlign: 'top', paddingTop: 16}}>
-                                      {/* SE FOR NOVO E NÃO ESTIVER BUSCANDO: MOSTRA EDIÇÃO */}
                                       {item.status === 'novo' && !isSearching ? (
                                           <div style={{display:'flex', flexDirection:'column', gap:8}}>
                                               <div>
-                                                  <label className="label-mini">Descrição (XML: {item.descricao})</label>
+                                                  <label className="label-mini">Descrição (XML)</label>
                                                   <div className="input-icon-wrapper">
                                                       <Edit3 size={14} className="icon-left"/>
                                                       <input
@@ -485,13 +519,12 @@ const EntradaEstoque = () => {
                                                         className="input-elegante"
                                                         placeholder="Digite ou gere..."
                                                       />
-                                                      <button onClick={() => handleGerarEanInterno(idx)} className="btn-magic" title="Gerar 200..."><Wand2 size={16}/></button>
+                                                      <button onClick={() => handleGerarEanInterno(idx)} className="btn-magic" title="Gerar Código"><Wand2 size={16}/></button>
                                                   </div>
                                               </div>
                                               <div className="label-mini text-gray-400">NCM: {item.ncm}</div>
                                           </div>
                                       ) : (
-                                          // SE FOR VINCULADO, SEMELHANTE OU BUSCANDO
                                           <div>
                                               <strong style={{color:'#1e293b', display:'block', marginBottom:4}}>
                                                   {isSearching ? 'Buscando vínculo...' : item.descricao}
@@ -506,20 +539,18 @@ const EntradaEstoque = () => {
                                       )}
                                   </td>
 
-                                  {/* COLUNA FINANCEIRO */}
+                                  {/* FINANCEIRO */}
                                   <td style={{verticalAlign: 'top', paddingTop: 16}}>
                                       <div style={{color:'#475569', fontSize:'0.9rem'}}>{item.quantidade} x R$ {Number(item.precoCusto).toFixed(2)}</div>
                                       <div style={{color:'#4f46e5', fontWeight:800, fontSize:'1rem'}}>Total: R$ {item.total.toFixed(2)}</div>
                                   </td>
 
-                                  {/* COLUNA AÇÕES INTELIGENTES (AQUI ESTÁ A LÓGICA DE CORREÇÃO) */}
+                                  {/* AÇÕES */}
                                   <td style={{verticalAlign: 'top', paddingTop: 16}}>
-
-                                      {/* CASO 1: MODO BUSCA ATIVO (Seja em amarelo ou azul) */}
                                       {(item.status === 'semelhante' || isSearching) && (
                                           <div style={{display:'flex', flexDirection:'column', gap:8}}>
 
-                                              {/* Se for Semelhante, mostra sugestão */}
+                                              {/* Sugestão Automática */}
                                               {item.status === 'semelhante' && !isSearching && (
                                                   <div className="card-sugestao">
                                                       <div style={{fontSize:'0.7rem', color:'#854d0e', fontWeight:'bold', marginBottom:4}}>SUGESTÃO:</div>
@@ -530,7 +561,7 @@ const EntradaEstoque = () => {
                                                   </div>
                                               )}
 
-                                              {/* Input de Busca com Autocomplete */}
+                                              {/* Busca de Correção */}
                                               <div style={{position:'relative'}}>
                                                   <div className="input-icon-wrapper">
                                                       <Search size={14} className="icon-left text-gray-400"/>
@@ -548,7 +579,6 @@ const EntradaEstoque = () => {
                                                       )}
                                                   </div>
 
-                                                  {/* LISTA SUSPENSA DE RESULTADOS */}
                                                   {searchState.rowIndex === idx && searchState.results.length > 0 && (
                                                       <div className="dropdown-correcao">
                                                           {searchState.results.map(res => (
@@ -556,7 +586,6 @@ const EntradaEstoque = () => {
                                                                   <span className="desc">{res.descricao}</span>
                                                                   <div style={{display:'flex', justifyContent:'space-between'}}>
                                                                       <span className="ean">{res.codigoBarras}</span>
-                                                                      {res.estoqueAtual !== undefined && <span className="ean">Estoque: {res.estoqueAtual}</span>}
                                                                   </div>
                                                               </div>
                                                           ))}
@@ -566,7 +595,7 @@ const EntradaEstoque = () => {
                                           </div>
                                       )}
 
-                                      {/* CASO 2: NOVO (Botão para ativar busca) */}
+                                      {/* Opção para Vincular em Novo */}
                                       {item.status === 'novo' && !isSearching && (
                                           <div style={{display:'flex', flexDirection:'column', gap:6}}>
                                               <div style={{fontSize:'0.8rem', color:'#3b82f6', background:'#eff6ff', padding:8, borderRadius:6}}>
@@ -581,7 +610,6 @@ const EntradaEstoque = () => {
                                           </div>
                                       )}
 
-                                      {/* CASO 3: VINCULADO */}
                                       {item.status === 'vinculado' && (
                                           <div style={{fontSize:'0.8rem', color:'#166534', display:'flex', alignItems:'center', gap:4}}>
                                               <CheckCircle size={14}/> Tudo certo. Estoque será atualizado.
@@ -616,7 +644,7 @@ const EntradaEstoque = () => {
           </div>
       </div>
 
-      {/* MODAL FORNECEDOR */}
+      {/* --- MODAL FORNECEDOR --- */}
       {showModalFornecedor && (
           <div className="modal-overlay">
               <div className="modal-card" style={{ maxWidth: '800px', padding: '0' }}>
@@ -631,17 +659,23 @@ const EntradaEstoque = () => {
           </div>
       )}
 
-      {/* MODAL PRODUTO */}
+      {/* --- MODAL PRODUTO (NOVO) --- */}
       {showModalProduto && (
          <div className="modal-overlay">
-             <div className="modal-card">
-                  <div className="modal-header">
+             {/* O ProdutoForm já tem estilo próprio, encapsulamos aqui */}
+             <div className="modal-card" style={{ maxWidth: '900px', padding: '0', maxHeight: '90vh', overflowY: 'auto' }}>
+                  <div className="modal-header" style={{ position: 'sticky', top: 0, zIndex: 10, background: '#fff', borderBottom: '1px solid #eee' }}>
                       <h3>Novo Produto Rápido</h3>
                       <button onClick={() => setShowModalProduto(false)}><X size={20}/></button>
                   </div>
-                  <div className="modal-actions">
-                      <button className="btn-std btn-secondary" onClick={() => setShowModalProduto(false)}>Cancelar</button>
-                      <button className="btn-std btn-primary">Salvar</button>
+                  <div style={{ padding: '10px' }}>
+                      {/* Passamos isModal para ajustar layout se necessário */}
+                      <ProdutoForm isModal={true} onSuccess={(prod) => {
+                          setListaProdutosDb(prev => [...prev, prod]);
+                          // Já seleciona o produto criado
+                          selecionarProduto(prod);
+                          setShowModalProduto(false);
+                      }} />
                   </div>
              </div>
          </div>
@@ -663,7 +697,6 @@ const EntradaEstoque = () => {
         .btn-aceitar-sugestao { width: 100%; background: #facc15; border: none; border-radius: 6px; padding: 6px; color: #713f12; font-weight: 700; font-size: 0.75rem; display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; transition: background 0.2s; }
         .btn-aceitar-sugestao:hover { background: #eab308; }
 
-        /* Dropdown de Correção */
         .dropdown-correcao { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); z-index: 50; max-height: 200px; overflow-y: auto; margin-top: 4px; }
         .item-dropdown-correcao { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9; display: flex; flex-direction: column; }
         .item-dropdown-correcao:hover { background: #f8fafc; }
