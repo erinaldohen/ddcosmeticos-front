@@ -1,185 +1,79 @@
-/* Container que segura tudo */
-.layout-container {
+/* =========================================
+   MAIN LAYOUT (Estrutura da Página)
+   ========================================= */
+
+/* Wrapper que segura tudo */
+.layout-wrapper {
   display: flex;
-  height: 100vh;
-  width: 100vw;
-  background-color: #f1f5f9; /* Fundo levemente azulado para reduzir fadiga visual */
-}
-
-/* Barra Lateral - Tema Dark */
-.layout-sidebar {
-  width: 260px;
-  background-color: #1e293b; /* Azul ardósia escuro */
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-  box-shadow: 4px 0 10px rgba(0, 0, 0, 0.1);
-  z-index: 10;
-}
-
-.sidebar-logo {
-  height: 70px;
-  display: flex;
-  align-items: center;
-  padding: 0 20px;
-  gap: 12px;
-  border-bottom: 1px solid #334155;
-}
-
-.logo-icon {
-  background: #2563eb;
-  color: white;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 0.8rem;
-}
-
-.sidebar-logo h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  color: #f8fafc;
-  letter-spacing: 0.5px;
-}
-
-/* Menu Navegação */
-.sidebar-menu {
-  flex: 1;
-  padding: 20px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  overflow-y: auto;
-}
-
-.menu-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  text-decoration: none;
-  color: #94a3b8; /* Cinza suave para itens inativos */
-  border-radius: 8px;
-  transition: all 0.2s ease;
-  font-size: 0.95rem;
-}
-
-.menu-item svg {
-  color: #64748b;
-  transition: color 0.2s;
-}
-
-.menu-item:hover {
-  background-color: rgba(255, 255, 255, 0.05);
-  color: #f8fafc;
-}
-
-.menu-item:hover svg {
-  color: #3b82f6;
-}
-
-.menu-item.active {
-  background-color: #2563eb;
-  color: #ffffff;
-  font-weight: 500;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-}
-
-.menu-item.active svg {
-  color: #ffffff;
-}
-
-/* Rodapé do Menu e Info de Usuário */
-.sidebar-footer {
-  padding: 20px 15px;
-  border-top: 1px solid #334155;
-  background-color: #0f172a; /* Tom ainda mais escuro para o rodapé */
-}
-
-.user-info-sidebar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 10px;
-  margin-bottom: 15px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.user-avatar {
-  background: #334155;
-  color: #94a3b8;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.user-details {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.user-name {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #f1f5f9;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.user-role {
-  font-size: 0.7rem;
-  color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.btn-logout {
+  min-height: 100vh;
   width: 100%;
-  border: 1px solid rgba(220, 38, 38, 0.2);
-  background-color: rgba(220, 38, 38, 0.05);
-  color: #f87171;
-  padding: 10px;
+  background-color: #f1f5f9; /* Fundo geral da aplicação */
+  font-family: 'Inter', sans-serif;
+  position: relative;
+  overflow-x: hidden; /* Evita rolagem horizontal acidental */
+}
+
+/* Área de Conteúdo Principal
+   É aqui que as páginas (Dashboard, PDV, etc) são renderizadas via <Outlet />
+*/
+.main-content {
+  flex: 1;
+
+  /* LÓGICA DE EMPURRAR O CONTEÚDO */
+  margin-left: 260px; /* Igual à largura da Sidebar Aberta */
+
+  padding: 30px; /* Espaçamento interno */
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 0; /* Previne que tabelas largas quebrem o flexbox */
   display: flex;
+  flex-direction: column;
+}
+
+/* Quando a sidebar está recolhida (Desktop) */
+.main-content.expanded {
+  margin-left: 80px; /* Igual à largura da Sidebar Recolhida */
+}
+
+/* BOTÃO MENU FLUTUANTE (MOBILE)
+   Só aparece quando a tela é pequena
+*/
+.mobile-menu-btn {
+  display: none; /* Escondido no Desktop */
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  z-index: 900; /* Abaixo do overlay da sidebar (999), mas acima do conteúdo */
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  cursor: pointer;
+  color: #64748b;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  cursor: pointer;
-  border-radius: 8px;
-  font-weight: 600;
   transition: all 0.2s;
 }
 
-.btn-logout:hover {
-  background-color: #dc2626;
-  color: #ffffff;
-  border-color: #dc2626;
+.mobile-menu-btn:active {
+  background-color: #f1f5f9;
+  transform: scale(0.95);
 }
 
-/* Área Principal */
-.layout-content {
-  flex: 1;
-  padding: 30px;
-  overflow-y: auto;
-  scroll-behavior: smooth;
-}
+/* =========================================
+   RESPONSIVIDADE
+   ========================================= */
+@media (max-width: 768px) {
 
-/* Scrollbar Personalizada para a Sidebar */
-.sidebar-menu::-webkit-scrollbar {
-  width: 4px;
-}
+  /* No mobile, a sidebar flutua por cima, então a margem é zero */
+  .main-content {
+    margin-left: 0 !important;
+    padding: 20px;
+    padding-top: 70px; /* Espaço extra no topo para não ficar atrás do botão de menu */
+  }
 
-.sidebar-menu::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 10px;
+  /* Mostra o botão de abrir menu */
+  .mobile-menu-btn {
+    display: flex;
+  }
 }

@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// Layout
+// Layout (Agora contém o <Outlet /> e a Sidebar)
 import MainLayout from './components/Layout/MainLayout';
 
 // Páginas
@@ -13,10 +13,8 @@ import PDV from './pages/PDV/PDV';
 import ProdutoList from './pages/Produtos/ProdutoList';
 import ProdutoForm from './pages/Produtos/ProdutoForm';
 import EntradaEstoque from './pages/Estoque/EntradaEstoque';
-// --- NOVOS IMPORTS FORNECEDORES ---
 import FornecedorList from './pages/Fornecedores/FornecedorList';
 import FornecedorForm from './pages/Fornecedores/FornecedorForm';
-// ----------------------------------
 import GerenciamentoCaixa from './pages/Caixa/GerenciamentoCaixa';
 import HistoricoCaixa from './pages/Caixa/HistoricoCaixa';
 import RelatorioImpostos from './pages/Fiscal/RelatorioImpostos';
@@ -38,7 +36,7 @@ const AdminRoute = ({ children }) => {
 
   if (!token) return <Navigate to="/login" replace />;
 
-  // Se o usuário não for ADMIN, manda para o PDV em vez de deslogar
+  // Se o usuário não for ADMIN, manda para o PDV
   if (usuario.perfil !== 'ROLE_ADMIN') {
     return <Navigate to="/pdv" replace />;
   }
@@ -52,107 +50,75 @@ function App() {
   return (
     <Router>
       <ToastContainer position="top-right" autoClose={3000} theme="colored" />
+
       <Routes>
-        {/* PÚBLICO */}
+        {/* 1. ROTAS PÚBLICAS (Fora do Layout) */}
         <Route path="/login" element={<Login />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
 
-        {/* --- ROTAS GERAIS (Operadores e Admins) --- */}
-        <Route path="/pdv" element={
-          <PrivateRoute>
-            <MainLayout><PDV /></MainLayout>
-          </PrivateRoute>
-        } />
+        {/* 2. LAYOUT PRINCIPAL (Persistente) */}
+        {/* O MainLayout fica aqui como pai. Ele não recarrega ao mudar as rotas filhas. */}
+        <Route element={<MainLayout />}>
 
-        <Route path="/caixa" element={
-          <PrivateRoute>
-            <MainLayout><GerenciamentoCaixa /></MainLayout>
-          </PrivateRoute>
-        } />
+          {/* --- ROTAS GERAIS (Operadores e Admins) --- */}
+          <Route path="/pdv" element={
+            <PrivateRoute><PDV /></PrivateRoute>
+          } />
 
-        {/* --- ROTAS RESTRITAS A ADMIN (ROLE_ADMIN) --- */}
+          <Route path="/caixa" element={
+            <PrivateRoute><GerenciamentoCaixa /></PrivateRoute>
+          } />
 
-        <Route path="/dashboard" element={
-          <AdminRoute>
-            <MainLayout><Dashboard /></MainLayout>
-          </AdminRoute>
-        } />
+          {/* --- ROTAS RESTRITAS A ADMIN (ROLE_ADMIN) --- */}
+          <Route path="/dashboard" element={
+            <AdminRoute><Dashboard /></AdminRoute>
+          } />
 
-        <Route path="/historico-caixa" element={
-          <AdminRoute>
-            <MainLayout><HistoricoCaixa /></MainLayout>
-          </AdminRoute>
-        } />
+          <Route path="/historico-caixa" element={
+            <AdminRoute><HistoricoCaixa /></AdminRoute>
+          } />
 
-        {/* PRODUTOS */}
-        <Route path="/produtos" element={
-          <AdminRoute>
-            <MainLayout><ProdutoList /></MainLayout>
-          </AdminRoute>
-        } />
+          {/* Produtos */}
+          <Route path="/produtos" element={
+            <AdminRoute><ProdutoList /></AdminRoute>
+          } />
+          <Route path="/produtos/novo" element={
+            <AdminRoute><ProdutoForm /></AdminRoute>
+          } />
+          <Route path="/produtos/editar/:id" element={
+            <AdminRoute><ProdutoForm /></AdminRoute>
+          } />
 
-        <Route path="/produtos/novo" element={
-          <AdminRoute>
-            <MainLayout><ProdutoForm /></MainLayout>
-          </AdminRoute>
-        } />
+          {/* Fornecedores */}
+          <Route path="/fornecedores" element={
+            <AdminRoute><FornecedorList /></AdminRoute>
+          } />
+          <Route path="/fornecedores/novo" element={
+            <AdminRoute><FornecedorForm /></AdminRoute>
+          } />
+          <Route path="/fornecedores/editar/:id" element={
+            <AdminRoute><FornecedorForm /></AdminRoute>
+          } />
 
-        <Route path="/produtos/editar/:id" element={
-          <AdminRoute>
-            <MainLayout><ProdutoForm /></MainLayout>
-          </AdminRoute>
-        } />
+          {/* Estoque */}
+          <Route path="/estoque" element={
+            <AdminRoute><ProdutoList /></AdminRoute>
+          } />
+          <Route path="/estoque/entrada" element={
+            <AdminRoute><EntradaEstoque /></AdminRoute>
+          } />
 
-        {/* --- NOVAS ROTAS DE FORNECEDORES --- */}
-        <Route path="/fornecedores" element={
-          <AdminRoute>
-            <MainLayout><FornecedorList /></MainLayout>
-          </AdminRoute>
-        } />
+          {/* Fiscal e Auditoria */}
+          <Route path="/fiscal" element={
+            <AdminRoute><RelatorioImpostos /></AdminRoute>
+          } />
+          <Route path="/auditoria" element={
+            <AdminRoute><Auditoria /></AdminRoute>
+          } />
 
-        <Route path="/fornecedores/novo" element={
-          <AdminRoute>
-            <MainLayout><FornecedorForm /></MainLayout>
-          </AdminRoute>
-        } />
+        </Route> {/* Fim do MainLayout */}
 
-        <Route path="/fornecedores/editar/:id" element={
-          <AdminRoute>
-            <MainLayout><FornecedorForm /></MainLayout>
-          </AdminRoute>
-        } />
-        {/* ----------------------------------- */}
-
-        {/* ESTOQUE */}
-
-        {/* CORREÇÃO CRÍTICA: Rota /estoque adicionada.
-            Sem ela, o navigate('/estoque') caía no path="*" e deslogava o usuário.
-            Estou apontando para ProdutoList, pois geralmente é onde se vê o estoque. */}
-        <Route path="/estoque" element={
-          <AdminRoute>
-            <MainLayout><ProdutoList /></MainLayout>
-          </AdminRoute>
-        } />
-
-        <Route path="/estoque/entrada" element={
-          <AdminRoute>
-            <MainLayout><EntradaEstoque /></MainLayout>
-          </AdminRoute>
-        } />
-
-        <Route path="/fiscal" element={
-          <AdminRoute>
-            <MainLayout><RelatorioImpostos /></MainLayout>
-          </AdminRoute>
-        } />
-
-        <Route path="/auditoria" element={
-          <AdminRoute>
-            <MainLayout><Auditoria /></MainLayout>
-          </AdminRoute>
-        } />
-
-        {/* Rota Curinga: Qualquer endereço não listado acima redireciona para login */}
+        {/* Rota Curinga */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>
