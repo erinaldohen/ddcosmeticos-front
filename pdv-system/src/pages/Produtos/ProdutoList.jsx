@@ -586,54 +586,47 @@ const ProdutoList = () => {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
-                  <TableSkeleton />
-                ) : produtos.length === 0 ? (
-                  <tr><td colSpan="7" className="text-center"><div className="empty-state"><Box size={48} strokeWidth={1} /><h3>Nenhum produto encontrado</h3><p>Tente ajustar os filtros.</p></div></td></tr>
-                ) : (
-                  produtos.map((prod) => {
-                    const isSelected = selectedIds.includes(prod.id);
-                    return (
-                      <tr key={prod.id} className={`fade-in ${isSelected ? 'row-selected' : ''}`} onClick={() => handleSelectOne(prod.id)}>
-                        <td className="td-checkbox" onClick={(e) => e.stopPropagation()}>
-                          <div className="checkbox-wrapper"><input type="checkbox" checked={isSelected} onChange={() => handleSelectOne(prod.id)} /></div>
-                        </td>
-                        <td>
-                          <div className="product-item">
-                            <ProductImage src={getImageUrl(prod.urlImagem)} alt={prod.descricao} />
-                            <div className="product-meta">
-                              <span className="product-name" title={prod.descricao.length > 30 ? prod.descricao : ''}>{prod.descricao}</span>
-                              <CopyableCode code={prod.codigoBarras} />
-                            </div>
-                          </div>
-                        </td>
-                        <td>{prod.marca || '-'}</td>
-                        <td className="font-numeric">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(prod.precoVenda)}</td>
-                        <td>
-                          <div className="stock-pill">
-                            <span className={prod.quantidadeEmEstoque < (prod.estoqueMinimo || 5) ? 'text-red' : ''}>{prod.quantidadeEmEstoque}</span>
-                            <small>un</small>
-                          </div>
-                        </td>
-                        <td><StatusIndicator prod={prod} /></td>
-                        <td onClick={(e) => e.stopPropagation()}>
-                          <div className="actions-flex">
-                            {modoLixeira ? (
-                              <button className="btn-icon-soft green" onClick={() => handleSingleAction('restore', prod)} data-label="Restaurar"><RotateCcw size={18} /></button>
-                            ) : (
-                              <>
-                                <button className="btn-icon-soft blue" onClick={() => navigate(`/produtos/editar/${prod.id}`)} data-label="Editar"><Edit3 size={18} /></button>
-                                <button className="btn-icon-soft red" onClick={() => handleSingleAction('delete', prod)} data-label="Inativar"><Trash2 size={18} /></button>
-                                <ActionMenu onHistory={() => handleOpenHistorico(prod.id, prod.descricao)} onPrint={() => handlePrint(prod.id)} loadingPrint={loadingPrint === prod.id} />
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
+                              {loading ? (
+                                <TableSkeleton />
+                              ) : produtos.length === 0 ? (
+                                <tr><td colSpan="7" className="text-center"><div className="empty-state"><Box size={48} /><h3>Nenhum produto encontrado</h3><p>Tente ajustar os filtros.</p></div></td></tr>
+                              ) : (
+                                produtos.map((prod) => {
+                                  const isSelected = selectedIds.includes(prod.id);
+                                  return (
+                                    <tr key={prod.id} className={`fade-in ${isSelected ? 'row-selected' : ''}`} onClick={() => handleSelectOne(prod.id)}>
+                                      <td className="td-checkbox" onClick={(e) => e.stopPropagation()}><div className="checkbox-wrapper"><input type="checkbox" checked={isSelected} onChange={() => handleSelectOne(prod.id)} /></div></td>
+                                      <td>
+                                        <div className="product-item">
+                                          <ProductImage src={getImageUrl(prod.urlImagem)} alt={prod.descricao} />
+                                          <div className="product-meta"><span className="product-name">{prod.descricao}</span><CopyableCode code={prod.codigoBarras} /></div>
+                                        </div>
+                                      </td>
+
+                                      {/* AQUI ESTÃO OS DATA-LABELS NECESSÁRIOS PARA O MOBILE */}
+                                      <td data-label="Marca">{prod.marca || '-'}</td>
+                                      <td data-label="Preço" className="font-numeric">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(prod.precoVenda)}</td>
+                                      <td data-label="Estoque"><div className="stock-pill"><span className={prod.quantidadeEmEstoque < (prod.estoqueMinimo || 5) ? 'text-red' : ''}>{prod.quantidadeEmEstoque}</span><small>un</small></div></td>
+                                      <td data-label="Status"><StatusIndicator prod={prod} /></td>
+
+                                      <td className="td-actions" onClick={(e) => e.stopPropagation()}>
+                                        <div className="actions-flex">
+                                          {modoLixeira ? (
+                                            <button className="btn-icon-soft green" onClick={() => handleSingleAction('restore', prod)} data-label="Restaurar"><RotateCcw size={18} /></button>
+                                          ) : (
+                                            <>
+                                              <button className="btn-icon-soft blue" onClick={() => navigate(`/produtos/editar/${prod.id}`)} data-label="Editar"><Edit3 size={18} /></button>
+                                              <button className="btn-icon-soft red" onClick={() => handleSingleAction('delete', prod)} data-label="Inativar"><Trash2 size={18} /></button>
+                                              <ActionMenu onHistory={() => handleOpenHistorico(prod.id, prod.descricao)} onPrint={() => handlePrint(prod.id)} loadingPrint={loadingPrint === prod.id} />
+                                            </>
+                                          )}
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  );
+                                })
+                              )}
+                            </tbody>
             </table>
           </div>
 
