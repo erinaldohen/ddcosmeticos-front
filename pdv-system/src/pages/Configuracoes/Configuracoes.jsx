@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
   Store, Save, Upload, Search, Globe,
-  AlertCircle, CheckCircle2, Smartphone, Mail,
-  FileText, Server, Download, RefreshCw, Trash2,
-  Lock, Eye, EyeOff, DollarSign, Printer,
-  Clock, HardDrive, FileCheck, QrCode, CreditCard,
-  Building, MapPin, ShieldCheck
+  Smartphone, Mail, FileText, Server,
+  Download, RefreshCw, Trash2, Lock,
+  Eye, EyeOff, DollarSign, Printer,
+  Clock, HardDrive, FileCheck, QrCode,
+  Building, MapPin
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
 import './Configuracoes.css';
 
-// --- UTILITÁRIOS ---
-const clean = (v) => v.replace(/\D/g, '');
+// --- UTILITÁRIOS E MÁSCARAS ---
+const clean = (v) => v ? v.replace(/\D/g, '') : '';
+
 const masks = {
   cnpj: (v) => clean(v).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5').substr(0, 18),
   cep: (v) => clean(v).replace(/^(\d{5})(\d{3})/, '$1-$2').substr(0, 9),
@@ -22,8 +23,30 @@ const masks = {
     else if (r.length > 5) r = r.replace(/^(\d{2})(\d{4})(\d{0,4})/, '($1) $2-$3');
     else if (r.length > 2) r = r.replace(/^(\d{2})(\d{0,5})/, '($1) $2');
     return r.substr(0, 15);
-  }
+  },
+  numbers: (v) => clean(v)
 };
+
+// --- COMPONENTES AUXILIARES (DEFINIDOS FORA PARA NÃO PERDER O FOCO) ---
+const TabButton = ({ id, label, icon: Icon, activeTab, setActiveTab }) => (
+  <button
+    type="button"
+    onClick={() => setActiveTab(id)}
+    className={`tab-btn ${activeTab === id ? 'active' : ''}`}
+  >
+    <Icon size={18} /> {label}
+  </button>
+);
+
+const InputGroup = ({ label, icon: Icon, children, className = '' }) => (
+  <div className={`form-group ${className}`}>
+    <label>{label}</label>
+    <div className="input-wrapper">
+      {Icon && <div className="input-icon-left"><Icon size={18} /></div>}
+      {children}
+    </div>
+  </div>
+);
 
 const Configuracoes = () => {
   // --- STATES ---
@@ -65,13 +88,19 @@ const Configuracoes = () => {
 
   // --- INIT ---
   useEffect(() => {
-    // Simulação de carga
-    setTimeout(() => setIsLoading(false), 800);
+    setTimeout(() => setIsLoading(false), 500);
   }, []);
 
   // --- HANDLERS ---
+  // Função otimizada para atualizar o estado sem perder a referência
   const update = (section, field, value) => {
-    setForm(prev => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
+    setForm(prev => ({
+      ...prev,
+      [section]: {
+        ...prev[section],
+        [field]: value
+      }
+    }));
   };
 
   const updateMask = (section, field, value, type) => {
@@ -83,7 +112,10 @@ const Configuracoes = () => {
       ...prev,
       financeiro: {
         ...prev.financeiro,
-        pagamentos: { ...prev.financeiro.pagamentos, [key]: !prev.financeiro.pagamentos[key] }
+        pagamentos: {
+          ...prev.financeiro.pagamentos,
+          [key]: !prev.financeiro.pagamentos[key]
+        }
       }
     }));
   };
@@ -144,27 +176,7 @@ const Configuracoes = () => {
     setTimeout(() => { setIsSaving(false); toast.success("Configurações salvas com sucesso!"); }, 1000);
   };
 
-  // --- COMPONENTS ---
-  const TabButton = ({ id, label, icon: Icon }) => (
-    <button
-      onClick={() => setActiveTab(id)}
-      className={`tab-btn ${activeTab === id ? 'active' : ''}`}
-    >
-      <Icon size={18} /> {label}
-    </button>
-  );
-
-  const InputGroup = ({ label, icon: Icon, children, className = '' }) => (
-    <div className={`form-group ${className}`}>
-      <label>{label}</label>
-      <div className="input-wrapper">
-        {Icon && <div className="input-icon-left"><Icon size={18} /></div>}
-        {children}
-      </div>
-    </div>
-  );
-
-  if (isLoading) return <div className="loader-container"><div className="spinner"></div><p>Carregando configurações...</p></div>;
+  if (isLoading) return <div className="loader-container"><div className="spinner"></div><p>Carregando...</p></div>;
 
   return (
     <div className="config-container">
@@ -183,11 +195,11 @@ const Configuracoes = () => {
 
       {/* TABS */}
       <nav className="config-tabs">
-        <TabButton id="geral" label="Geral e Loja" icon={Store} />
-        <TabButton id="fiscal" label="Fiscal" icon={FileText} />
-        <TabButton id="financeiro" label="Financeiro" icon={DollarSign} />
-        <TabButton id="vendas" label="Vendas (PDV)" icon={Printer} />
-        <TabButton id="sistema" label="Sistema" icon={Server} />
+        <TabButton id="geral" label="Geral e Loja" icon={Store} activeTab={activeTab} setActiveTab={setActiveTab} />
+        <TabButton id="fiscal" label="Fiscal" icon={FileText} activeTab={activeTab} setActiveTab={setActiveTab} />
+        <TabButton id="financeiro" label="Financeiro" icon={DollarSign} activeTab={activeTab} setActiveTab={setActiveTab} />
+        <TabButton id="vendas" label="Vendas (PDV)" icon={Printer} activeTab={activeTab} setActiveTab={setActiveTab} />
+        <TabButton id="sistema" label="Sistema" icon={Server} activeTab={activeTab} setActiveTab={setActiveTab} />
       </nav>
 
       {/* BODY */}
@@ -196,7 +208,6 @@ const Configuracoes = () => {
         {/* === ABA GERAL === */}
         {activeTab === 'geral' && (
           <div className="grid-layout">
-            {/* LOGO */}
             <div className="card sidebar-card">
               <h3>Identidade</h3>
               <div className="logo-upload-area">
@@ -213,12 +224,10 @@ const Configuracoes = () => {
               </div>
             </div>
 
-            {/* DADOS CADASTRAIS */}
             <div className="card main-card">
               <h3>Dados da Empresa</h3>
               <div className="form-grid">
 
-                {/* Linha 1: CNPJ e Telefone */}
                 <div className="form-group col-half">
                   <label>CNPJ</label>
                   <div className="input-action-group">
@@ -226,10 +235,16 @@ const Configuracoes = () => {
                       value={form.loja.cnpj}
                       onChange={e => updateMask('loja', 'cnpj', e.target.value, 'cnpj')}
                       placeholder="00.000.000/0000-00"
-                      className={form.loja.cnpj.length > 0 && form.loja.cnpj.length < 18 ? 'input-error' : ''}
                     />
-                    <button onClick={searchCNPJ} disabled={isSearching}>
-                      {isSearching ? <div className="spinner-mini"/> : <Search size={18}/>}
+                    <button
+                      type="button"
+                      className="btn-search-highlight" /* CLASSE NOVA */
+                      onClick={searchCNPJ}
+                      disabled={isSearching}
+                      title="Consultar dados na Receita Federal" /* TOOLTIP */
+                    >
+                      {/* Adicionei a classe 'white' no spinner para ele ficar visível no fundo azul */}
+                      {isSearching ? <div className="spinner-mini white"/> : <Search size={18}/>}
                     </button>
                   </div>
                 </div>
@@ -238,7 +253,6 @@ const Configuracoes = () => {
                   <input value={form.loja.telefone} onChange={e => updateMask('loja', 'telefone', e.target.value, 'phone')} placeholder="(00) 00000-0000"/>
                 </InputGroup>
 
-                {/* Linha 2 e 3: Full Width */}
                 <InputGroup label="Razão Social" icon={Building} className="col-full">
                   <input value={form.loja.razaoSocial} onChange={e => update('loja', 'razaoSocial', e.target.value)}/>
                 </InputGroup>
@@ -247,7 +261,6 @@ const Configuracoes = () => {
                   <input value={form.loja.nomeFantasia} onChange={e => update('loja', 'nomeFantasia', e.target.value)} className="font-bold"/>
                 </InputGroup>
 
-                {/* Linha 4: Email e Site */}
                 <InputGroup label="E-mail Corporativo" icon={Mail} className="col-half">
                   <input type="email" value={form.loja.email} onChange={e => update('loja', 'email', e.target.value)}/>
                 </InputGroup>
@@ -266,7 +279,7 @@ const Configuracoes = () => {
                   <label>CEP</label>
                   <div className="input-action-group">
                     <input value={form.endereco.cep} onChange={e => updateMask('endereco', 'cep', e.target.value, 'cep')} onBlur={searchCEP} placeholder="00000-000"/>
-                    <button onClick={searchCEP} disabled={isSearching}><Search size={18}/></button>
+                    <button type="button" onClick={searchCEP} disabled={isSearching}><Search size={18}/></button>
                   </div>
                 </div>
 
@@ -323,8 +336,8 @@ const Configuracoes = () => {
               <div className="card-header-row">
                 <h3>Emissão e Tributação</h3>
                 <div className="env-toggle">
-                  <button className={form.fiscal.ambiente === 'HOMOLOGACAO' ? 'active warning' : ''} onClick={() => update('fiscal', 'ambiente', 'HOMOLOGACAO')}>HOMOLOGAÇÃO</button>
-                  <button className={form.fiscal.ambiente === 'PRODUCAO' ? 'active success' : ''} onClick={() => update('fiscal', 'ambiente', 'PRODUCAO')}>PRODUÇÃO</button>
+                  <button type="button" className={form.fiscal.ambiente === 'HOMOLOGACAO' ? 'active warning' : ''} onClick={() => update('fiscal', 'ambiente', 'HOMOLOGACAO')}>HOMOLOGAÇÃO</button>
+                  <button type="button" className={form.fiscal.ambiente === 'PRODUCAO' ? 'active success' : ''} onClick={() => update('fiscal', 'ambiente', 'PRODUCAO')}>PRODUÇÃO</button>
                 </div>
               </div>
 
@@ -362,7 +375,7 @@ const Configuracoes = () => {
                       className="pl-icon"
                       readOnly
                     />
-                    <button onClick={() => setShowToken(!showToken)}>{showToken ? <EyeOff size={18}/> : <Eye size={18}/>}</button>
+                    <button type="button" onClick={() => setShowToken(!showToken)}>{showToken ? <EyeOff size={18}/> : <Eye size={18}/>}</button>
                   </div>
                 </div>
                 <div className="form-group col-third">
@@ -455,8 +468,8 @@ const Configuracoes = () => {
                 <div className="form-group col-full">
                   <label>Largura do Papel</label>
                   <div className="segment-control">
-                    <button className={form.sistema.larguraPapel === '58mm' ? 'active' : ''} onClick={() => update('sistema', 'larguraPapel', '58mm')}>58mm</button>
-                    <button className={form.sistema.larguraPapel === '80mm' ? 'active' : ''} onClick={() => update('sistema', 'larguraPapel', '80mm')}>80mm</button>
+                    <button type="button" className={form.sistema.larguraPapel === '58mm' ? 'active' : ''} onClick={() => update('sistema', 'larguraPapel', '58mm')}>58mm</button>
+                    <button type="button" className={form.sistema.larguraPapel === '80mm' ? 'active' : ''} onClick={() => update('sistema', 'larguraPapel', '80mm')}>80mm</button>
                   </div>
                 </div>
 
@@ -499,11 +512,11 @@ const Configuracoes = () => {
             <section className="card">
               <h3>Manutenção</h3>
               <div className="list-actions">
-                <button className="list-btn" onClick={() => toast.info("Cache limpo.")}>
+                <button type="button" className="list-btn" onClick={() => toast.info("Cache limpo.")}>
                   <div className="icon-bg blue"><RefreshCw size={20}/></div>
                   <div className="text"><strong>Limpar Cache</strong><span>Resolver problemas de lentidão</span></div>
                 </button>
-                <button className="list-btn" onClick={() => toast.success("Download iniciado.")}>
+                <button type="button" className="list-btn" onClick={() => toast.success("Download iniciado.")}>
                   <div className="icon-bg green"><Download size={20}/></div>
                   <div className="text"><strong>Backup Manual</strong><span>Baixar cópia atual do banco</span></div>
                 </button>
@@ -513,7 +526,7 @@ const Configuracoes = () => {
             <section className="card border-danger">
               <h3 className="text-danger">Zona de Perigo</h3>
               <p>Ações irreversíveis que podem causar perda de dados.</p>
-              <button className="btn-danger-block mt-4" onClick={() => window.confirm("Certeza?")}>
+              <button type="button" className="btn-danger-block mt-4" onClick={() => window.confirm("Certeza?")}>
                 <Trash2 size={18}/> Resetar para Padrão de Fábrica
               </button>
             </section>
@@ -522,7 +535,6 @@ const Configuracoes = () => {
 
       </main>
 
-      {/* MOBILE STICKY FOOTER */}
       <div className="mobile-footer mobile-only">
         <button className="btn-save full-width" onClick={handleSave} disabled={isSaving}>
           {isSaving ? 'Salvando...' : 'Salvar Alterações'}
