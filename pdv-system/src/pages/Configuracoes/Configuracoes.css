@@ -228,3 +228,67 @@ input:checked + .slider:before { transform: translateX(20px); }
 .input-action-group button.btn-search-highlight svg {
   stroke-width: 2.5px; /* Ícone um pouco mais grosso para leitura em fundo colorido */
 }
+
+/* --- LEGENDA INSTANTÂNEA (TOOLTIP) --- */
+
+/* Base para posicionamento */
+[data-tooltip] {
+  position: relative;
+  cursor: pointer;
+}
+
+/* O corpo da legenda (texto) */
+[data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%; /* Fica acima do elemento */
+  left: 50%;
+  transform: translateX(-50%); /* Centraliza */
+
+  background-color: #1e293b; /* Fundo escuro (Slate-800) */
+  color: #ffffff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap; /* Não quebra linha */
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+
+  margin-bottom: 8px; /* Distância do botão */
+  z-index: 1000;
+
+  /* Animação instantânea */
+  opacity: 0;
+  animation: tooltip-fade 0.15s ease-out forwards;
+}
+
+/* A setinha (triângulo) embaixo da legenda */
+[data-tooltip]:hover::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+
+  border-width: 6px;
+  border-style: solid;
+  border-color: #1e293b transparent transparent transparent; /* Triângulo apontando para baixo */
+
+  margin-bottom: -4px; /* Ajuste fino para colar no balão */
+  z-index: 1000;
+
+  opacity: 0;
+  animation: tooltip-fade 0.15s ease-out forwards;
+}
+
+/* Animação suave */
+@keyframes tooltip-fade {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}

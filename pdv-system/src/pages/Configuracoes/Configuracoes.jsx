@@ -238,12 +238,11 @@ const Configuracoes = () => {
                     />
                     <button
                       type="button"
-                      className="btn-search-highlight" /* CLASSE NOVA */
+                      className="btn-search-highlight"
                       onClick={searchCNPJ}
                       disabled={isSearching}
-                      title="Consultar dados na Receita Federal" /* TOOLTIP */
+                      data-tooltip="Consultar na Receita Federal" /* MUDANÇA AQUI: data-tooltip em vez de title */
                     >
-                      {/* Adicionei a classe 'white' no spinner para ele ficar visível no fundo azul */}
                       {isSearching ? <div className="spinner-mini white"/> : <Search size={18}/>}
                     </button>
                   </div>
