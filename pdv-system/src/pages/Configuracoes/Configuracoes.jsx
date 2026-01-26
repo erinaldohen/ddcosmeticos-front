@@ -8,10 +8,9 @@ import {
   Building, CheckCircle2, AlertTriangle,
   Briefcase, Calculator, ShieldCheck,
   Instagram, Moon, Sun, Cloud, UserCheck,
-  Percent, AlertOctagon, Ban, FileOutput
+  Percent, AlertOctagon, Scissors, Zap // Novos ícones
 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import api from '../../services/api';
 import './Configuracoes.css';
 
 // --- UTILITÁRIOS E MÁSCARAS ---
@@ -29,10 +28,7 @@ const masks = {
   },
   ie: (v) => clean(v).substr(0, 9),
   cnae: (v) => clean(v).replace(/^(\d{4})(\d{1})(\d{2})/, '$1-$2/$3').substr(0, 9),
-  percent: (v) => {
-    let r = v.replace(/\D/g, '');
-    return r ? (parseFloat(r) / 100).toFixed(2) : '';
-  }
+  numbers: (v) => clean(v)
 };
 
 // --- COMPONENTES AUXILIARES ---
@@ -58,7 +54,7 @@ const InputGroup = ({ label, icon: Icon, children, className = '' }) => (
 
 const Configuracoes = () => {
   // --- STATES ---
-  const [activeTab, setActiveTab] = useState('geral');
+  const [activeTab, setActiveTab] = useState('financeiro'); // Foco na aba Financeiro para visualização
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
@@ -71,8 +67,9 @@ const Configuracoes = () => {
     loja: {
       razaoSocial: '', nomeFantasia: '', cnpj: '',
       ie: '', im: '', cnae: '',
-      email: '', telefone: '', site: '', instagram: '', // Instagram Adicionado
-      isMatriz: true, horarioAbre: '08:00', horarioFecha: '18:00', // Novos campos operacionais
+      email: '', telefone: '', site: '', instagram: '',
+      isMatriz: true, horarioAbre: '09:00', horarioFecha: '18:00',
+      toleranciaMinutos: '30', bloqueioForaHorario: false,
       logo: null
     },
     endereco: {
@@ -87,45 +84,46 @@ const Configuracoes = () => {
       certificado: null, senhaCert: '',
       csrtId: '', csrtHash: '',
       ibptToken: '',
-      naturezaPadrao: 'Venda de Mercadorias',
+      naturezaPadrao: '5.102', // CFOP Padrão atualizado
       emailContabil: '', enviarXmlAutomatico: true,
-      // NOVOS CAMPOS FISCAIS
-      aliquotaInterna: '18.00', // Padrão PE
+      aliquotaInterna: '18.00',
       modoContingencia: false,
-      priorizarMonofasico: true // Crucial para cosméticos
+      priorizarMonofasico: true
     },
     financeiro: {
-      margem: 30, custoFixo: 10, imposto: 4,
-      descCaixa: 5, descGerente: 20,
+      // NOVOS CAMPOS DE COMISSÃO E DESCONTO
+      comissaoProdutos: '1.00',
+      comissaoServicos: '10.00',
+      alertaSangria: '500.00',
+
+      descCaixa: 5,
+      descGerente: 20,
+      descExtraPix: true, // Permitir desconto maior no PIX?
+      bloquearAbaixoCusto: true, // Proteção de lucro
+
       pixTipo: 'CNPJ', pixChave: '',
       pagamentos: { dinheiro: true, pix: true, credito: true, debito: true, crediario: false },
-      // NOVAS REGRAS DE NEGÓCIO
-      jurosMensal: '2.00', multaAtraso: '2.00', diasCarencia: 0,
-      comissaoPadrao: '1.00', alertaSangria: '500.00'
+      jurosMensal: '2.00', multaAtraso: '2.00', diasCarencia: 0
     },
-    vendas: { // NOVA SEÇÃO
-      comportamentoCpf: 'PERGUNTAR', // SEMPRE, NUNCA, PERGUNTAR
-      bloquearEstoque: true, // Não vende sem estoque
-      layoutCupom: 'DETALHADO', // RESUMIDO, DETALHADO
+    vendas: {
+      comportamentoCpf: 'PERGUNTAR',
+      bloquearEstoque: true,
+      layoutCupom: 'DETALHADO',
       imprimirVendedor: true
     },
     sistema: {
       impressaoAuto: true, larguraPapel: '80mm',
       backupAuto: false, backupHora: '23:00', rodape: '',
-      // NOVOS RECURSOS
-      tema: 'light',
-      backupNuvem: false,
-      senhaGerenteCancelamento: true
+      tema: 'light', backupNuvem: false, senhaGerenteCancelamento: true
     }
   });
 
-  // --- INIT ---
   useEffect(() => {
     setTimeout(() => setIsLoading(false), 600);
     document.documentElement.setAttribute('data-theme', form.sistema.tema);
   }, [form.sistema.tema]);
 
-  // --- HANDLERS ---
+  // --- HANDLERS GENÉRICOS ---
   const update = (section, field, value) => {
     setForm(prev => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
   };
@@ -165,7 +163,7 @@ const Configuracoes = () => {
     if (file) {
       update('fiscal', 'certificado', file);
       setCertValidade("31/12/2026");
-      toast.success("Certificado carregado!");
+      toast.success("Certificado identificado!");
     }
   };
 
@@ -178,7 +176,6 @@ const Configuracoes = () => {
       const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${doc}`);
       const data = await res.json();
       if(data.message) throw new Error();
-
       setForm(prev => ({
         ...prev,
         loja: {
@@ -189,16 +186,7 @@ const Configuracoes = () => {
           email: data.email || prev.loja.email,
           cnae: data.cnae_fiscal || ''
         },
-        endereco: {
-          ...prev.endereco,
-          cep: masks.cep(data.cep),
-          logradouro: data.logradouro,
-          numero: data.numero,
-          bairro: data.bairro,
-          cidade: data.municipio,
-          uf: data.uf,
-          complemento: data.complemento || ''
-        }
+        endereco: { ...prev.endereco, cep: masks.cep(data.cep), logradouro: data.logradouro, numero: data.numero, bairro: data.bairro, cidade: data.municipio, uf: data.uf, complemento: data.complemento || '' }
       }));
       toast.success("Dados importados!");
     } catch { toast.error("CNPJ não encontrado."); }
@@ -219,11 +207,7 @@ const Configuracoes = () => {
   };
 
   const handleSave = () => {
-    if(!form.loja.ie) {
-      toast.error("A Inscrição Estadual é obrigatória em PE!");
-      setActiveTab('geral');
-      return;
-    }
+    if(!form.loja.ie && form.loja.cnpj) { toast.error("Inscrição Estadual obrigatória em PE."); setActiveTab('geral'); return; }
     setIsSaving(true);
     setTimeout(() => { setIsSaving(false); toast.success("Configurações salvas!"); }, 1000);
   };
@@ -233,10 +217,9 @@ const Configuracoes = () => {
   return (
     <div className="config-container">
       <header className="config-header">
-        <div><h1>Configurações</h1><p>Gestão de Negócio e Fiscal</p></div>
+        <div><h1>Configurações</h1><p>Gestão Corporativa e Fiscal</p></div>
         <div className="header-right">
-          {/* TOGGLE TEMA */}
-          <button className="btn-icon-only" onClick={() => update('sistema', 'tema', form.sistema.tema === 'light' ? 'dark' : 'light')} title="Alternar Tema">
+          <button className="btn-icon-only" onClick={() => update('sistema', 'tema', form.sistema.tema === 'light' ? 'dark' : 'light')}>
             {form.sistema.tema === 'light' ? <Moon size={20}/> : <Sun size={20}/>}
           </button>
           <button className="btn-save desktop-only" onClick={handleSave} disabled={isSaving}>
@@ -266,8 +249,6 @@ const Configuracoes = () => {
                 {logoPreview && <button className="btn-text-danger" onClick={() => {setLogoPreview(null); update('loja', 'logo', null);}}>Remover logo</button>}
               </div>
               <div className="divider"></div>
-
-              {/* OPERAÇÃO */}
               <div className="form-group mt-2">
                 <label>Tipo de Unidade</label>
                 <div className="pill-selector">
@@ -278,14 +259,14 @@ const Configuracoes = () => {
               <div className="form-grid mt-2">
                 <div className="form-group col-half"><label>Abertura</label><input type="time" value={form.loja.horarioAbre} onChange={e => update('loja', 'horarioAbre', e.target.value)}/></div>
                 <div className="form-group col-half"><label>Fechamento</label><input type="time" value={form.loja.horarioFecha} onChange={e => update('loja', 'horarioFecha', e.target.value)}/></div>
+                <div className="form-group col-half"><label>Tolerância</label><div className="input-wrapper"><div className="input-icon-left"><Clock size={18}/></div><input type="number" value={form.loja.toleranciaMinutos} onChange={e => update('loja', 'toleranciaMinutos', e.target.value)} placeholder="30"/></div></div>
+                <div className="form-group col-half switch-container-vertical"><label>Bloquear após?</label><label className="switch small"><input type="checkbox" checked={form.loja.bloqueioForaHorario} onChange={e => update('loja', 'bloqueioForaHorario', e.target.checked)}/><span className="slider round danger"></span></label></div>
               </div>
             </div>
 
             <div className="card main-card">
               <h3>Dados da Empresa</h3>
               <div className="form-grid">
-
-                {/* Linha 1 */}
                 <div className="form-group col-half">
                   <label>CNPJ</label>
                   <div className="input-action-group">
@@ -295,26 +276,15 @@ const Configuracoes = () => {
                     </button>
                   </div>
                 </div>
-                <InputGroup label="Telefone / WhatsApp" icon={Smartphone} className="col-half"><input value={form.loja.telefone} onChange={e => updateMask('loja', 'telefone', e.target.value, 'phone')} placeholder="(00) 00000-0000"/></InputGroup>
-
-                {/* Linha 2 - Fiscal Básico */}
-                <InputGroup label="Inscrição Estadual (IE)" icon={FileText} className="col-half">
-                  <input value={form.loja.ie} onChange={e => updateMask('loja', 'ie', e.target.value, 'ie')} placeholder="Obrigatório em PE"/>
-                </InputGroup>
-                <InputGroup label="Inscrição Municipal (IM)" icon={Building} className="col-half">
-                  <input value={form.loja.im} onChange={e => update('loja', 'im', e.target.value)} placeholder="Serviços (Opcional)"/>
-                </InputGroup>
-
-                {/* Linha 3 */}
+                <InputGroup label="Telefone" icon={Smartphone} className="col-half"><input value={form.loja.telefone} onChange={e => updateMask('loja', 'telefone', e.target.value, 'phone')} placeholder="(00) 00000-0000"/></InputGroup>
+                <InputGroup label="Inscrição Estadual (IE)" icon={FileText} className="col-half"><input value={form.loja.ie} onChange={e => updateMask('loja', 'ie', e.target.value, 'ie')} placeholder="Obrigatório em PE"/></InputGroup>
+                <InputGroup label="Inscrição Municipal (IM)" icon={Building} className="col-half"><input value={form.loja.im} onChange={e => update('loja', 'im', e.target.value)} placeholder="Opcional"/></InputGroup>
                 <InputGroup label="Razão Social" icon={Building} className="col-full"><input value={form.loja.razaoSocial} onChange={e => update('loja', 'razaoSocial', e.target.value)}/></InputGroup>
                 <InputGroup label="Nome Fantasia" icon={Store} className="col-full"><input value={form.loja.nomeFantasia} onChange={e => update('loja', 'nomeFantasia', e.target.value)} className="font-bold"/></InputGroup>
-
-                {/* Linha 4 - Marketing e Contato */}
                 <InputGroup label="Instagram" icon={Instagram} className="col-half"><input value={form.loja.instagram} onChange={e => update('loja', 'instagram', e.target.value)} placeholder="@loja"/></InputGroup>
                 <InputGroup label="Site" icon={Globe} className="col-half"><input value={form.loja.site} onChange={e => update('loja', 'site', e.target.value)}/></InputGroup>
-                <InputGroup label="Email Corporativo" icon={Mail} className="col-full"><input type="email" value={form.loja.email} onChange={e => update('loja', 'email', e.target.value)}/></InputGroup>
+                <InputGroup label="Email" icon={Mail} className="col-full"><input type="email" value={form.loja.email} onChange={e => update('loja', 'email', e.target.value)}/></InputGroup>
               </div>
-
               <div className="divider"></div>
               <h3>Endereço</h3>
               <div className="form-grid">
@@ -334,7 +304,7 @@ const Configuracoes = () => {
         {activeTab === 'fiscal' && (
           <div className="grid-layout">
             <section className="card sidebar-card">
-              <h3>Certificado Digital A1</h3>
+              <h3>Certificado Digital</h3>
               <div className="cert-upload-box">
                 {certValidade ? (
                   <div className="cert-info-card fade-in">
@@ -350,15 +320,13 @@ const Configuracoes = () => {
                   </>
                 )}
                 <div className="form-group mt-4">
-                  <label>Senha do Certificado</label>
+                  <label>Senha</label>
                   <div className="input-action-group">
                     <input type={showToken ? "text" : "password"} className="text-center" value={form.fiscal.senhaCert} onChange={e => update('fiscal', 'senhaCert', e.target.value)}/>
                     <button type="button" onClick={() => setShowToken(!showToken)}>{showToken ? <EyeOff size={16}/> : <Eye size={16}/>}</button>
                   </div>
                 </div>
               </div>
-
-              {/* CONTINGÊNCIA - NOVO */}
               <div className="divider"></div>
               <div className="form-group col-full switch-container danger-border">
                 <div><strong>Contingência Offline</strong><p className="text-xs text-danger">Ativar se SEFAZ cair</p></div>
@@ -374,12 +342,11 @@ const Configuracoes = () => {
                   <button type="button" className={form.fiscal.ambiente === 'PRODUCAO' ? 'active success' : ''} onClick={() => update('fiscal', 'ambiente', 'PRODUCAO')}>PRODUÇÃO</button>
                 </div>
               </div>
-
               {form.fiscal.ambiente === 'PRODUCAO' && (<div className="alert-production fade-in"><AlertTriangle size={20}/><span><strong>ATENÇÃO:</strong> Modo de Produção Ativo. Notas com validade jurídica.</span></div>)}
 
               <div className="form-grid">
                 <div className="form-group col-half">
-                  <label>Regime Tributário (CRT)</label>
+                  <label>Regime Tributário</label>
                   <select value={form.fiscal.regime} onChange={e => update('fiscal', 'regime', e.target.value)}>
                     <option value="1">1 - Simples Nacional</option>
                     <option value="2">2 - Simples Nacional (Excesso)</option>
@@ -388,60 +355,62 @@ const Configuracoes = () => {
                   </select>
                 </div>
                 <div className="form-group col-half">
-                  <label>CFOP Padrão (Vendas)</label>
-                  <input value={form.fiscal.naturezaPadrao} onChange={e => update('fiscal', 'naturezaPadrao', e.target.value)} placeholder="Ex: 5.102"/>
+                  <label>Natureza Padrão (CFOP)</label>
+                  <select value={form.fiscal.naturezaPadrao} onChange={e => update('fiscal', 'naturezaPadrao', e.target.value)}>
+                    <option value="5.102">5.102 - Venda Mercadoria</option>
+                    <option value="5.405">5.405 - Venda c/ ST (Cosméticos)</option>
+                    <option value="5.101">5.101 - Venda Produção</option>
+                  </select>
+                  {form.fiscal.naturezaPadrao === '5.405' && <small className="text-xs text-success mt-1">Recomendado para produtos com ST retido.</small>}
                 </div>
 
-                {/* CAMPOS INTELIGENTES POR AMBIENTE */}
                 <div className="form-group col-quarter"><label>Série NFC-e</label><input type="number" value={form.fiscal[form.fiscal.ambiente.toLowerCase()].serie} onChange={e => updateFiscalEnv('serie', e.target.value)}/></div>
                 <div className="form-group col-quarter"><label>Próx. Nota</label><input type="number" value={form.fiscal[form.fiscal.ambiente.toLowerCase()].nfe} onChange={e => updateFiscalEnv('nfe', e.target.value)}/></div>
 
-                {/* ALÍQUOTA E MONOFÁSICO (COSMÉTICOS) */}
-                <div className="form-group col-quarter"><label>ICMS Interno (%)</label><input type="number" value={form.fiscal.aliquotaInterna} onChange={e => update('fiscal', 'aliquotaInterna', e.target.value)}/></div>
-                <div className="form-group col-quarter switch-container-vertical">
-                  <label>Priorizar Monofásico?</label>
-                  <label className="switch small"><input type="checkbox" checked={form.fiscal.priorizarMonofasico} onChange={e => update('fiscal', 'priorizarMonofasico', e.target.checked)}/><span className="slider round"></span></label>
-                </div>
+                <div className="form-group col-quarter"><label>Alíq. Fallback (%)</label><div className="input-wrapper" data-tooltip="Usado se NCM não for encontrado"><input type="number" value={form.fiscal.aliquotaInterna} onChange={e => update('fiscal', 'aliquotaInterna', e.target.value)} placeholder="18.00"/></div></div>
+                <div className="form-group col-quarter switch-container-vertical"><label>Segregar Monofásico</label><label className="switch small" data-tooltip="Separa PIS/COFINS (Cosméticos)"><input type="checkbox" checked={form.fiscal.priorizarMonofasico} onChange={e => update('fiscal', 'priorizarMonofasico', e.target.checked)}/><span className="slider round success"></span></label></div>
 
                 <div className="form-group col-full"><label>Token IBPT (Lei da Transparência)</label><div className="input-wrapper"><div className="input-icon-left"><Calculator size={18}/></div><input value={form.fiscal.ibptToken} onChange={e => update('fiscal', 'ibptToken', e.target.value)} placeholder="Token de impostos..."/></div></div>
               </div>
 
               <div className="divider"></div>
-              <h4>Credenciais CSC e Responsável Técnico</h4>
-
+              <h4>Credenciais CSC e Responsável</h4>
               <div className="form-grid">
-                <div className="form-group col-two-thirds">
-                  <label>Token CSC (Código Alfanumérico)</label>
-                  <div className="input-action-group">
-                    <div className="input-icon-left"><Lock size={18}/></div>
-                    <input className="pl-icon" type="text" value={form.fiscal[form.fiscal.ambiente.toLowerCase()].token} onChange={e => updateFiscalEnv('token', e.target.value)} placeholder={form.fiscal.ambiente === 'PRODUCAO' ? "Ex: A1B2-C3D4 (Produção)" : "Ex: 000001 (Homologação)"}/>
-                  </div>
-                </div>
-                <div className="form-group col-third"><label>ID Token (CSC)</label><input className="text-center" placeholder="Ex: 000001" value={form.fiscal[form.fiscal.ambiente.toLowerCase()].cscId} onChange={e => updateFiscalEnv('cscId', e.target.value)}/></div>
-
-                <div className="form-group col-half"><label>ID CSRT (Software House)</label><input value={form.fiscal.csrtId} onChange={e => update('fiscal', 'csrtId', e.target.value)} placeholder="Fornecido pelo sistema"/></div>
-                <div className="form-group col-half"><label>Hash CSRT</label><input type="password" value={form.fiscal.csrtHash} onChange={e => update('fiscal', 'csrtHash', e.target.value)} placeholder="Chave secreta"/></div>
-
-                <div className="form-group col-full">
-                  <label>E-mail do Contador (Envio XML)</label>
-                  <div className="input-wrapper"><div className="input-icon-left"><Mail size={18}/></div><input type="email" value={form.fiscal.emailContabil} onChange={e => update('fiscal', 'emailContabil', e.target.value)} placeholder="contador@escritorio.com"/></div>
-                </div>
+                <div className="form-group col-two-thirds"><label>Token CSC</label><div className="input-action-group"><div className="input-icon-left"><Lock size={18}/></div><input className="pl-icon" type="text" value={form.fiscal[form.fiscal.ambiente.toLowerCase()].token} onChange={e => updateFiscalEnv('token', e.target.value)} placeholder="Código alfanumérico..."/></div></div>
+                <div className="form-group col-third"><label>ID Token</label><input className="text-center" placeholder="Ex: 000001" value={form.fiscal[form.fiscal.ambiente.toLowerCase()].cscId} onChange={e => updateFiscalEnv('cscId', e.target.value)}/></div>
+                <div className="form-group col-half"><label>ID CSRT</label><input value={form.fiscal.csrtId} onChange={e => update('fiscal', 'csrtId', e.target.value)} placeholder="Opcional em PE"/></div>
+                <div className="form-group col-half"><label>Hash CSRT</label><input type="password" value={form.fiscal.csrtHash} onChange={e => update('fiscal', 'csrtHash', e.target.value)} placeholder="Chave de segurança"/></div>
+                <div className="form-group col-full"><label>E-mail Contador</label><div className="input-wrapper"><div className="input-icon-left"><Mail size={18}/></div><input type="email" value={form.fiscal.emailContabil} onChange={e => update('fiscal', 'emailContabil', e.target.value)} placeholder="contador@escritorio.com"/></div></div>
               </div>
             </section>
           </div>
         )}
 
-        {/* === ABA FINANCEIRO === */}
+        {/* === ABA FINANCEIRO (ATUALIZADA COM NOVAS REGRAS) === */}
         {activeTab === 'financeiro' && (
           <div className="grid-cards-equal">
-            {/* LADO ESQUERDO: GESTÃO */}
+
+            {/* Seção Esquerda: Regras e Limites */}
             <section className="card">
               <h3>Comissões e Alertas</h3>
               <div className="form-grid">
-                <InputGroup label="Comissão Padrão (%)" icon={Percent} className="col-half">
-                  <input type="number" value={form.financeiro.comissaoPadrao} onChange={e => update('financeiro', 'comissaoPadrao', e.target.value)}/>
-                </InputGroup>
-                <InputGroup label="Alerta de Sangria (R$)" icon={AlertOctagon} className="col-half">
+                {/* Comissão Separada: Produto vs Serviço */}
+                <div className="form-group col-half">
+                  <label>Comissão Produtos (%)</label>
+                  <div className="input-wrapper">
+                    <div className="input-icon-left"><Percent size={18}/></div>
+                    <input type="number" value={form.financeiro.comissaoProdutos} onChange={e => update('financeiro', 'comissaoProdutos', e.target.value)}/>
+                  </div>
+                </div>
+                <div className="form-group col-half">
+                  <label>Comissão Serviços (%)</label>
+                  <div className="input-wrapper">
+                    <div className="input-icon-left"><Scissors size={18}/></div>
+                    <input type="number" value={form.financeiro.comissaoServicos} onChange={e => update('financeiro', 'comissaoServicos', e.target.value)}/>
+                  </div>
+                </div>
+
+                <InputGroup label="Alerta de Sangria (R$)" icon={AlertOctagon} className="col-full">
                   <input type="number" value={form.financeiro.alertaSangria} onChange={e => update('financeiro', 'alertaSangria', e.target.value)}/>
                 </InputGroup>
               </div>
@@ -449,12 +418,29 @@ const Configuracoes = () => {
               <div className="divider"></div>
               <h3>Limites de Desconto</h3>
               <div className="form-grid">
-                <InputGroup label="Máx. Caixa (%)" className="col-half"><input type="number" value={form.financeiro.descCaixa} onChange={e => update('financeiro', 'descCaixa', e.target.value)}/></InputGroup>
+                <InputGroup label="Máx. Vendedor (%)" className="col-half"><input type="number" value={form.financeiro.descCaixa} onChange={e => update('financeiro', 'descCaixa', e.target.value)}/></InputGroup>
                 <InputGroup label="Máx. Gerente (%)" className="col-half"><input type="number" value={form.financeiro.descGerente} onChange={e => update('financeiro', 'descGerente', e.target.value)}/></InputGroup>
+
+                {/* NOVAS OPÇÕES DE DESCONTO */}
+                <div className="form-group col-full switch-container">
+                  <div>
+                    <strong>Desconto Extra no PIX/Dinheiro?</strong>
+                    <p>Permite dobrar o limite se for à vista</p>
+                  </div>
+                  <label className="switch small"><input type="checkbox" checked={form.financeiro.descExtraPix} onChange={e => update('financeiro', 'descExtraPix', e.target.checked)}/><span className="slider round success"></span></label>
+                </div>
+
+                <div className="form-group col-full switch-container danger-border">
+                  <div>
+                    <strong>Bloquear Venda no Prejuízo</strong>
+                    <p className="text-danger">Impede venda abaixo do custo de compra</p>
+                  </div>
+                  <label className="switch small"><input type="checkbox" checked={form.financeiro.bloquearAbaixoCusto} onChange={e => update('financeiro', 'bloquearAbaixoCusto', e.target.checked)}/><span className="slider round danger"></span></label>
+                </div>
               </div>
             </section>
 
-            {/* LADO DIREITO: PAGAMENTOS */}
+            {/* Seção Direita: Meios de Pagamento */}
             <section className="card">
               <h3>Meios de Pagamento</h3>
               <div className="payment-grid">
@@ -476,7 +462,6 @@ const Configuracoes = () => {
                 </div>
               )}
 
-              {/* REGRAS DE CREDIÁRIO (SÓ APARECE SE ATIVADO) */}
               {form.financeiro.pagamentos.crediario && (
                 <div className="pix-config-box fade-in mt-4 border-warning">
                   <h4>Regras do Crediário (Fiado)</h4>
@@ -491,7 +476,7 @@ const Configuracoes = () => {
           </div>
         )}
 
-        {/* === ABA VENDAS (PDV) === */}
+        {/* === ABA VENDAS === */}
         {activeTab === 'vendas' && (
           <div className="grid-cards-equal">
             <section className="card">
@@ -505,7 +490,6 @@ const Configuracoes = () => {
                     <option value="NUNCA">Não perguntar (Agilidade)</option>
                   </select>
                 </div>
-
                 <div className="form-group col-full switch-container danger-border">
                   <div><strong>Bloquear Venda Sem Estoque</strong><p>Impede venda negativa</p></div>
                   <label className="switch"><input type="checkbox" checked={form.vendas.bloquearEstoque} onChange={e => update('vendas', 'bloquearEstoque', e.target.checked)}/><span className="slider round danger"></span></label>
@@ -520,15 +504,13 @@ const Configuracoes = () => {
                   <div><strong>Impressão Automática</strong></div>
                   <label className="switch"><input type="checkbox" checked={form.sistema.impressaoAuto} onChange={e => update('sistema', 'impressaoAuto', e.target.checked)}/><span className="slider round"></span></label>
                 </div>
-
                 <div className="form-group col-half">
                   <label>Layout do Cupom</label>
                   <select value={form.vendas.layoutCupom} onChange={e => update('vendas', 'layoutCupom', e.target.value)}>
-                    <option value="DETALHADO">Detalhado (Produtos + Impostos)</option>
-                    <option value="RESUMIDO">Resumido (Ecônomico)</option>
+                    <option value="DETALHADO">Detalhado</option>
+                    <option value="RESUMIDO">Resumido</option>
                   </select>
                 </div>
-
                 <div className="form-group col-half"><label>Largura</label><div className="segment-control"><button type="button" className={form.sistema.larguraPapel === '58mm' ? 'active' : ''} onClick={() => update('sistema', 'larguraPapel', '58mm')}>58mm</button><button type="button" className={form.sistema.larguraPapel === '80mm' ? 'active' : ''} onClick={() => update('sistema', 'larguraPapel', '80mm')}>80mm</button></div></div>
                 <div className="form-group col-full"><label>Mensagem de Rodapé</label><textarea rows="3" value={form.sistema.rodape} onChange={e => update('sistema', 'rodape', e.target.value)} placeholder="Agradecemos a preferência!"/></div>
               </div>
@@ -557,7 +539,7 @@ const Configuracoes = () => {
               <h3 className="text-danger">Zona de Perigo</h3>
               <div className="danger-zone-content">
                 <p>Ações irreversíveis que afetam o funcionamento da loja.</p>
-                <button type="button" className="list-btn" onClick={() => toast.info("Cache limpo.")}><div className="icon-bg blue"><RefreshCw size={20}/></div><div className="text"><strong>Limpar Cache do Sistema</strong><span>Resolver lentidão ou bugs</span></div></button>
+                <button type="button" className="list-btn" onClick={() => toast.info("Cache limpo.")}><div className="icon-bg blue"><RefreshCw size={20}/></div><div className="text"><strong>Limpar Cache do Sistema</strong><span>Resolver lentidão</span></div></button>
                 <button type="button" className="btn-danger-block mt-4" onClick={() => window.confirm("Certeza? Isso apagará tudo.")}><Trash2 size={18}/> Resetar para Padrão de Fábrica</button>
               </div>
             </section>
