@@ -14,13 +14,14 @@
   --primary: #818cf8;
 }
 
-/* --- LAYOUT BASE --- */
+/* LAYOUT BASE */
 .config-container {
   max-width: 1100px; margin: 0 auto; padding: 40px 20px;
   font-family: 'Inter', sans-serif; color: var(--text-main);
   background: var(--bg-page); min-height: 100vh;
 }
 
+/* HEADER */
 .config-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
 .config-header h1 { font-size: 1.8rem; font-weight: 700; margin: 0; letter-spacing: -0.5px; }
 .config-header p { color: var(--text-muted); margin-top: 4px; font-size: 0.95rem; }
@@ -36,7 +37,7 @@
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
-/* --- TABS --- */
+/* TABS */
 .config-tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 32px; overflow-x: auto; }
 .tab-btn {
   background: transparent; border: none; padding: 10px 16px; font-size: 0.95rem; font-weight: 500;
@@ -46,7 +47,7 @@
 .tab-btn:hover { background: #f1f5f9; color: var(--text-main); }
 .tab-btn.active { background: var(--bg-card); color: var(--primary); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 
-/* --- GRID SYSTEM --- */
+/* GRID SYSTEM */
 .grid-layout { display: grid; grid-template-columns: 280px 1fr; gap: 24px; align-items: start; }
 .grid-cards-equal { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 
@@ -63,14 +64,14 @@
 .col-third { grid-column: span 4; }
 .col-quarter { grid-column: span 3; }
 
-/* --- CARDS --- */
+/* CARDS */
 .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 24px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 .card h3 { margin: 0 0 20px 0; font-size: 1.1rem; font-weight: 600; }
 .card-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .card-header-row h3 { margin: 0; }
 .divider { height: 1px; background: var(--border); margin: 24px 0; width: 100%; }
 
-/* --- INPUTS & GROUPS --- */
+/* INPUTS & GROUPS */
 .form-group { display: flex; flex-direction: column; gap: 6px; }
 .form-group label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
 
@@ -85,42 +86,36 @@ textarea { height: auto; padding: 10px; font-family: inherit; }
 .input-error { border-color: var(--danger); background-color: #fff5f5; }
 .font-bold { font-weight: 600; }
 .text-center { text-align: center; }
+.text-sm { font-size: 0.8rem; }
+.text-success { color: var(--success); }
 
-/* --- CORREÇÃO DO TEXTO SOBRE ÍCONE --- */
+/* CORREÇÃO DO TEXTO SOBRE ÍCONE */
 .input-wrapper { position: relative; width: 100%; }
+.input-icon-left { position: absolute; left: 0; top: 0; bottom: 0; width: 40px; display: flex; align-items: center; justify-content: center; color: #94a3b8; pointer-events: none; z-index: 5; }
+.input-wrapper input { padding-left: 42px !important; }
 
-/* Ícone Esquerdo Fixo */
-.input-icon-left {
-  position: absolute; left: 0; top: 0; bottom: 0; width: 40px;
-  display: flex; align-items: center; justify-content: center;
-  color: #94a3b8; pointer-events: none; z-index: 5;
-}
-
-/* OBRIGATÓRIO: Espaço para o ícone */
-.input-wrapper input {
-  padding-left: 42px !important;
-}
-
-/* --- INPUT COM BOTÃO (CNPJ/CEP) --- */
+/* INPUT ACTION GROUP (Input + Botão colado) */
 .input-action-group { display: flex; width: 100%; position: relative; }
-/* Input normal (sem ícone interno) no grupo de ação não precisa de padding extra */
-.input-action-group input {
-  border-radius: var(--radius) 0 0 var(--radius);
-  flex: 1; border-right: none;
-  padding-left: 12px !important;
-}
-.input-action-group input.pl-icon { padding-left: 42px !important; } /* Caso tenha ícone */
-
-.input-action-group button {
-  width: 48px; border: 1px solid var(--border); background: #f8fafc;
-  border-radius: 0 var(--radius) var(--radius) 0; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; color: var(--text-muted);
-  transition: 0.2s; height: var(--input-h);
-}
+.input-action-group input { border-radius: var(--radius) 0 0 var(--radius); flex: 1; border-right: none; padding-left: 12px !important; }
+.input-action-group input.pl-icon { padding-left: 42px !important; }
+.input-action-group button { width: 48px; border: 1px solid var(--border); background: #f8fafc; border-radius: 0 var(--radius) var(--radius) 0; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-muted); transition: 0.2s; height: var(--input-h); }
 .input-action-group button:hover:not(:disabled) { background: #e2e8f0; color: var(--text-main); }
 .input-action-group .input-icon-left { z-index: 2; }
 
-/* --- UPLOAD --- */
+/* BUTTON SEARCH HIGHLIGHT (CNPJ) */
+.input-action-group button.btn-search-highlight { background-color: var(--primary); border-color: var(--primary); color: #ffffff; z-index: 2; }
+.input-action-group button.btn-search-highlight:hover:not(:disabled) { background-color: var(--primary-hover); box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3); }
+.input-action-group button.btn-search-highlight:disabled { background-color: #a5a6f6; border-color: #a5a6f6; cursor: not-allowed; }
+.spinner-mini { width: 16px; height: 16px; border: 2px solid rgba(0,0,0,0.1); border-left-color: var(--text-muted); border-radius: 50%; animation: spin 1s linear infinite; }
+.spinner-mini.white { border-color: rgba(255,255,255,0.3); border-left-color: #ffffff; }
+
+/* TOOLTIP INSTANTÂNEO */
+[data-tooltip] { position: relative; cursor: pointer; }
+[data-tooltip]:hover::after { content: attr(data-tooltip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background-color: #1e293b; color: #ffffff; padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 500; white-space: nowrap; margin-bottom: 8px; z-index: 1000; animation: tooltip-fade 0.15s ease-out forwards; }
+[data-tooltip]:hover::before { content: ''; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); border-width: 6px; border-style: solid; border-color: #1e293b transparent transparent transparent; margin-bottom: -4px; z-index: 1000; animation: tooltip-fade 0.15s ease-out forwards; }
+@keyframes tooltip-fade { from { opacity: 0; transform: translateX(-50%) translateY(4px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+/* UPLOAD */
 .logo-upload-area { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .preview-box { width: 100px; height: 100px; border-radius: 50%; border: 2px dashed var(--border); display: flex; align-items: center; justify-content: center; background-size: cover; background-position: center; overflow: hidden; }
 .btn-outline { border: 1px solid var(--border); background: white; padding: 8px 16px; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 8px; color: var(--text-main); }
@@ -130,7 +125,7 @@ textarea { height: auto; padding: 10px; font-family: inherit; }
 .cert-icon { color: #94a3b8; margin-bottom: 10px; }
 .input-sm { height: 36px; font-size: 0.85rem; }
 
-/* --- TOGGLES & PILLS --- */
+/* TOGGLES & PILLS */
 .env-toggle { display: flex; background: #f1f5f9; padding: 3px; border-radius: 8px; gap: 2px; }
 .env-toggle button { flex: 1; border: none; background: transparent; padding: 6px 12px; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); cursor: pointer; border-radius: 6px; transition: 0.2s; }
 .env-toggle button.active { background: white; color: var(--text-main); box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
@@ -141,7 +136,7 @@ textarea { height: auto; padding: 10px; font-family: inherit; }
 .segment-control button { border: none; background: transparent; padding: 6px 16px; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); cursor: pointer; border-radius: 6px; }
 .segment-control button.active { background: white; color: var(--primary); box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
 
-/* --- SWITCH IOS --- */
+/* SWITCH IOS */
 .switch-container { flex-direction: row; justify-content: space-between; align-items: center; background: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid var(--border); }
 .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
 .switch input { opacity: 0; width: 0; height: 0; }
@@ -150,7 +145,7 @@ textarea { height: auto; padding: 10px; font-family: inherit; }
 input:checked + .slider { background-color: var(--primary); }
 input:checked + .slider:before { transform: translateX(20px); }
 
-/* --- PAYMENT CARDS --- */
+/* PAYMENT CARDS */
 .payment-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; margin-top: 8px; }
 .payment-card { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: 0.2s; background: white; }
 .payment-card:hover { border-color: var(--primary); }
@@ -160,7 +155,7 @@ input:checked + .slider:before { transform: translateX(20px); }
 
 .pix-config-box { margin-top: 16px; background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid var(--border); }
 
-/* --- SYSTEM ACTIONS --- */
+/* SYSTEM ACTIONS */
 .list-actions { display: flex; flex-direction: column; gap: 12px; }
 .list-btn { display: flex; align-items: center; gap: 16px; padding: 16px; background: white; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; text-align: left; transition: 0.2s; }
 .list-btn:hover { background: #f8fafc; border-color: var(--primary); }
@@ -174,8 +169,9 @@ input:checked + .slider:before { transform: translateX(20px); }
 .alert-info { display: flex; gap: 10px; background: #eff6ff; padding: 12px; border-radius: 8px; color: #1e40af; font-size: 0.85rem; align-items: center; }
 .full-width { width: 100%; }
 .mt-2 { margin-top: 8px; } .mt-4 { margin-top: 16px; } .mb-4 { margin-bottom: 16px; }
+.btn-row-tight { display: flex; gap: 8px; width: 100%; }
 
-/* --- RESPONSIVE --- */
+/* RESPONSIVE */
 .mobile-only { display: none; }
 @media (max-width: 900px) {
   .grid-layout, .grid-cards-equal { grid-template-columns: 1fr; gap: 20px; }
@@ -185,110 +181,4 @@ input:checked + .slider:before { transform: translateX(20px); }
   .mobile-only { display: block; }
   .mobile-footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 16px; background: white; border-top: 1px solid var(--border); z-index: 10; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
   .config-container { padding-bottom: 80px; }
-}
-
-/* ... Mantenha o CSS anterior e ADICIONE/ATUALIZE estas partes ... */
-
-/* Estilo Base do Spinner (para garantir que existe) */
-.spinner-mini {
-  width: 16px; height: 16px; border: 2px solid rgba(0,0,0,0.1);
-  border-left-color: var(--text-muted); border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-/* Spinner Branco (para usar dentro do botão colorido) */
-.spinner-mini.white {
-  border-color: rgba(255,255,255,0.3);
-  border-left-color: #ffffff;
-}
-
-/* --- NOVO ESTILO: BOTÃO DE BUSCA DESTAQUE (CNPJ) --- */
-.input-action-group button.btn-search-highlight {
-  background-color: var(--primary);
-  border-color: var(--primary);
-  color: #ffffff;
-  transition: all 0.2s ease;
-  position: relative;
-  z-index: 2; /* Garante que fique sobre a borda do input */
-}
-
-.input-action-group button.btn-search-highlight:hover:not(:disabled) {
-  background-color: var(--primary-hover);
-  border-color: var(--primary-hover);
-  box-shadow: 0 2px 4px rgba(79, 70, 229, 0.3); /* Sombra suave na cor primária */
-}
-
-.input-action-group button.btn-search-highlight:disabled {
-  background-color: #a5a6f6; /* Cor primária mais clara/desbotada */
-  border-color: #a5a6f6;
-  cursor: not-allowed;
-}
-
-/* Ajuste fino para o ícone dentro do botão destacado */
-.input-action-group button.btn-search-highlight svg {
-  stroke-width: 2.5px; /* Ícone um pouco mais grosso para leitura em fundo colorido */
-}
-
-/* --- LEGENDA INSTANTÂNEA (TOOLTIP) --- */
-
-/* Base para posicionamento */
-[data-tooltip] {
-  position: relative;
-  cursor: pointer;
-}
-
-/* O corpo da legenda (texto) */
-[data-tooltip]:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: 100%; /* Fica acima do elemento */
-  left: 50%;
-  transform: translateX(-50%); /* Centraliza */
-
-  background-color: #1e293b; /* Fundo escuro (Slate-800) */
-  color: #ffffff;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  white-space: nowrap; /* Não quebra linha */
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-
-  margin-bottom: 8px; /* Distância do botão */
-  z-index: 1000;
-
-  /* Animação instantânea */
-  opacity: 0;
-  animation: tooltip-fade 0.15s ease-out forwards;
-}
-
-/* A setinha (triângulo) embaixo da legenda */
-[data-tooltip]:hover::before {
-  content: '';
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-
-  border-width: 6px;
-  border-style: solid;
-  border-color: #1e293b transparent transparent transparent; /* Triângulo apontando para baixo */
-
-  margin-bottom: -4px; /* Ajuste fino para colar no balão */
-  z-index: 1000;
-
-  opacity: 0;
-  animation: tooltip-fade 0.15s ease-out forwards;
-}
-
-/* Animação suave */
-@keyframes tooltip-fade {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
 }
