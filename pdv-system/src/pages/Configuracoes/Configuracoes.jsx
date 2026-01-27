@@ -10,13 +10,15 @@ import {
   Instagram, Moon, Sun, Cloud, UserCheck,
   Percent, AlertOctagon, Scissors, MessageCircle,
   Sparkles, Gift, CreditCard, Barcode, Database, Monitor,
-  Truck, Scale, Heart, Eye as EyeIcon // Novos ícones
+  Truck, Scale, Heart, Palette, Layers, Image as ImageIcon
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+// import api from '../../services/api'; // Descomente ao conectar com o backend
 import './Configuracoes.css';
 
 // --- UTILITÁRIOS ---
 const clean = (v) => v ? v.replace(/\D/g, '') : '';
+
 const masks = {
   cnpj: (v) => clean(v).replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5').substr(0, 18),
   cep: (v) => clean(v).replace(/^(\d{5})(\d{3})/, '$1-$2').substr(0, 9),
@@ -57,6 +59,7 @@ const InputGroup = ({ label, icon: Icon, children, className = '' }) => (
 );
 
 const Configuracoes = () => {
+  // --- STATES ---
   const [activeTab, setActiveTab] = useState('loja');
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -65,16 +68,19 @@ const Configuracoes = () => {
   const [logoPreview, setLogoPreview] = useState(null);
   const [certData, setCertData] = useState({ validade: null, diasRestantes: 0 });
 
+  // --- FORM DATA (Estrutura DTO Java) ---
   const [form, setForm] = useState({
     loja: {
       razaoSocial: '', nomeFantasia: '', cnpj: '', ie: '', im: '', cnae: '',
       email: '', telefone: '', whatsapp: '', site: '', instagram: '', slogan: '',
+      corDestaque: '#ec4899', // Rosa Cosméticos
       isMatriz: true, horarioAbre: '09:00', horarioFecha: '18:00',
       toleranciaMinutos: '30', bloqueioForaHorario: false, logo: null,
-      // NOVO: Delivery
       taxaEntregaPadrao: '10.00', tempoEntregaMin: '40'
     },
-    endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '' },
+    endereco: {
+      cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: ''
+    },
     fiscal: {
       ambiente: 'HOMOLOGACAO', regime: '1',
       homologacao: { token: '', cscId: '', serie: '900', nfe: '0' },
@@ -82,7 +88,6 @@ const Configuracoes = () => {
       certificado: null, senhaCert: '', csrtId: '', csrtHash: '',
       ibptToken: '', naturezaPadrao: '5.102', emailContabil: '', enviarXmlAutomatico: true,
       aliquotaInterna: '18.00', modoContingencia: false, priorizarMonofasico: true,
-      // NOVO: Texto legal
       obsPadraoCupom: 'Trocas somente com etiqueta original e em até 7 dias.'
     },
     financeiro: {
@@ -90,26 +95,27 @@ const Configuracoes = () => {
       fundoTrocoPadrao: '100.00', metaDiaria: '2000.00',
       taxaDebito: '1.99', taxaCredito: '4.50',
       descCaixa: 5, descGerente: 20, descExtraPix: true, bloquearAbaixoCusto: true,
+      fechamentoCego: true,
       pixTipo: 'CNPJ', pixChave: '',
       pagamentos: { dinheiro: true, pix: true, credito: true, debito: true, crediario: false },
-      jurosMensal: '2.00', multaAtraso: '2.00', diasCarencia: 0,
-      // NOVO: Segurança
-      fechamentoCego: true
+      jurosMensal: '2.00', multaAtraso: '2.00', diasCarencia: 0
     },
     vendas: {
       comportamentoCpf: 'PERGUNTAR', bloquearEstoque: true, layoutCupom: 'DETALHADO',
       imprimirVendedor: true, imprimirTicketTroca: true, autoEnterScanner: true,
-      // NOVO: Fidelidade e Hardware
+      agruparItens: true, // Agrupar (2x Batom)
       fidelidadeAtiva: true, pontosPorReal: '1', usarBalanca: false
     },
     sistema: {
       impressaoAuto: true, larguraPapel: '80mm', backupAuto: false, backupHora: '23:00', rodape: '',
       tema: 'light', backupNuvem: false, senhaGerenteCancelamento: true,
-      nomeTerminal: 'CAIXA 01'
+      nomeTerminal: 'CAIXA 01', imprimirLogoCupom: true
     }
   });
 
+  // --- INIT ---
   useEffect(() => {
+    // Aqui viria o GET do backend: api.get('/configuracoes')...
     setTimeout(() => setIsLoading(false), 600);
     document.documentElement.setAttribute('data-theme', form.sistema.tema);
   }, [form.sistema.tema]);
@@ -145,6 +151,7 @@ const Configuracoes = () => {
     const file = e.target.files[0];
     if (file) {
       setLogoPreview(URL.createObjectURL(file));
+      // No backend real, usar FormData para enviar o arquivo separado
       update('loja', 'logo', file);
     }
   };
@@ -200,6 +207,9 @@ const Configuracoes = () => {
 
   const handleSave = () => {
     if(!form.loja.ie && form.loja.cnpj) { toast.error("Inscrição Estadual obrigatória."); setActiveTab('loja'); return; }
+
+    // Aqui conectaremos com o backend: api.put('/configuracoes', form)
+
     setIsSaving(true);
     setTimeout(() => { setIsSaving(false); toast.success("Configurações salvas!"); }, 1000);
   };
@@ -243,6 +253,14 @@ const Configuracoes = () => {
               <div className="divider"></div>
 
               <div className="form-group mt-2">
+                <label>Cor do Sistema</label>
+                <div className="input-wrapper flex-row items-center gap-2">
+                  <input type="color" className="h-10 w-16 p-1 cursor-pointer" value={form.loja.corDestaque} onChange={e => update('loja', 'corDestaque', e.target.value)}/>
+                  <span className="text-sm text-muted">Cor da Marca</span>
+                </div>
+              </div>
+
+              <div className="form-group mt-2">
                 <label>Estrutura</label>
                 <div className="pill-selector full-width">
                   <button className={form.loja.isMatriz ? 'active' : ''} onClick={() => update('loja', 'isMatriz', true)}>Matriz</button>
@@ -250,12 +268,11 @@ const Configuracoes = () => {
                 </div>
               </div>
 
-              {/* OPERAÇÃO E DELIVERY (NOVO) */}
+              {/* OPERAÇÃO E DELIVERY */}
               <div className="form-grid mt-2">
                 <div className="form-group col-half"><label>Abertura</label><input type="time" value={form.loja.horarioAbre} onChange={e => update('loja', 'horarioAbre', e.target.value)}/></div>
                 <div className="form-group col-half"><label>Fechamento</label><input type="time" value={form.loja.horarioFecha} onChange={e => update('loja', 'horarioFecha', e.target.value)}/></div>
 
-                {/* DELIVERY CONFIG */}
                 <div className="col-full divider"></div>
                 <div className="col-full"><strong className="text-muted text-sm flex-row"><Truck size={14}/> Delivery</strong></div>
                 <div className="form-group col-half"><label>Taxa Padrão (R$)</label><input type="number" value={form.loja.taxaEntregaPadrao} onChange={e => update('loja', 'taxaEntregaPadrao', e.target.value)}/></div>
@@ -354,8 +371,6 @@ const Configuracoes = () => {
                 <div className="form-group col-quarter"><label>Alíq. Fallback (%)</label><div className="input-wrapper" data-tooltip="Usado se NCM não encontrado"><input type="number" value={form.fiscal.aliquotaInterna} onChange={e => update('fiscal', 'aliquotaInterna', e.target.value)} placeholder="18.00"/></div></div>
                 <div className="form-group col-quarter switch-container-vertical"><label>Segregar Monofásico</label><label className="switch small" data-tooltip="Separa PIS/COFINS"><input type="checkbox" checked={form.fiscal.priorizarMonofasico} onChange={e => update('fiscal', 'priorizarMonofasico', e.target.checked)}/><span className="slider round success"></span></label></div>
                 <div className="form-group col-full"><label>Token IBPT (Lei da Transparência)</label><div className="input-wrapper"><div className="input-icon-left"><Calculator size={18}/></div><input value={form.fiscal.ibptToken} onChange={e => update('fiscal', 'ibptToken', e.target.value)} placeholder="Token de impostos..."/></div></div>
-
-                {/* NOVO: OBSERVAÇÃO PADRÃO */}
                 <div className="form-group col-full"><label>Observação Padrão (Lei da Troca)</label><textarea rows="2" value={form.fiscal.obsPadraoCupom} onChange={e => update('fiscal', 'obsPadraoCupom', e.target.value)} placeholder="Ex: Troca em até 7 dias com etiqueta intacta."/></div>
               </div>
               <div className="divider"></div>
@@ -365,6 +380,7 @@ const Configuracoes = () => {
                 <div className="form-group col-third"><label>ID CSC</label><input className="text-center" placeholder="Ex: 000001" value={form.fiscal[form.fiscal.ambiente.toLowerCase()].cscId} onChange={e => updateFiscalEnv('cscId', e.target.value)}/></div>
                 <div className="form-group col-half"><label>ID CSRT (Opcional)</label><input value={form.fiscal.csrtId} onChange={e => update('fiscal', 'csrtId', e.target.value)}/></div>
                 <div className="form-group col-half"><label>Hash CSRT (Chave)</label><input type="password" value={form.fiscal.csrtHash} onChange={e => update('fiscal', 'csrtHash', e.target.value)}/></div>
+                <div className="form-group col-full"><label>E-mail Contador (Envio XML)</label><div className="input-wrapper"><div className="input-icon-left"><Mail size={18}/></div><input type="email" value={form.fiscal.emailContabil} onChange={e => update('fiscal', 'emailContabil', e.target.value)} placeholder="contador@escritorio.com"/></div></div>
               </div>
             </section>
           </div>
@@ -386,7 +402,6 @@ const Configuracoes = () => {
 
               <div className="divider"></div>
               <h3>Segurança de Caixa</h3>
-              {/* NOVO: FECHAMENTO CEGO */}
               <div className="form-group col-full switch-container danger-border mb-4"><div><strong>Fechamento Cego</strong><p className="text-danger">Oculta totais no fechamento (Obrigatório contar)</p></div><label className="switch small"><input type="checkbox" checked={form.financeiro.fechamentoCego} onChange={e => update('financeiro', 'fechamentoCego', e.target.checked)}/><span className="slider round danger"></span></label></div>
 
               <h3>Limites de Desconto</h3>
@@ -422,7 +437,7 @@ const Configuracoes = () => {
             <section className="card">
               <h3>Experiência de Compra</h3>
 
-              {/* NOVO: FIDELIDADE */}
+              {/* FIDELIDADE - NOVO */}
               <div className="form-group col-full switch-container mb-4" style={{borderColor: '#eab308', background: '#fefce8'}}>
                 <div><div className="flex-row text-warning"><Heart size={18}/> <strong>Programa de Fidelidade</strong></div><p>Clientes ganham pontos por compra</p></div>
                 <label className="switch small"><input type="checkbox" checked={form.vendas.fidelidadeAtiva} onChange={e => update('vendas', 'fidelidadeAtiva', e.target.checked)}/><span className="slider round success"></span></label>
@@ -436,7 +451,8 @@ const Configuracoes = () => {
               <div className="form-grid">
                 <div className="form-group col-full"><label>Solicitação de CPF</label><select value={form.vendas.comportamentoCpf} onChange={e => update('vendas', 'comportamentoCpf', e.target.value)}><option value="PERGUNTAR">Perguntar no início</option><option value="SEMPRE">Exigir sempre</option><option value="NUNCA">Não perguntar</option></select></div>
                 <div className="form-group col-full switch-container danger-border"><div><strong>Bloquear Sem Estoque</strong><p>Impede venda negativa</p></div><label className="switch"><input type="checkbox" checked={form.vendas.bloquearEstoque} onChange={e => update('vendas', 'bloquearEstoque', e.target.checked)}/><span className="slider round danger"></span></label></div>
-                {/* NOVO: HARDWARE */}
+
+                {/* HARDWARE - NOVO */}
                 <div className="form-group col-full switch-container"><div><div className="flex-row"><Scale size={18}/> <strong>Venda por Balança</strong></div><p>Para essências/granel</p></div><label className="switch small"><input type="checkbox" checked={form.vendas.usarBalanca} onChange={e => update('vendas', 'usarBalanca', e.target.checked)}/><span className="slider round"></span></label></div>
               </div>
             </section>
@@ -444,7 +460,12 @@ const Configuracoes = () => {
               <h3>Impressão e Cupom</h3>
               <div className="form-grid">
                 <div className="form-group col-full switch-container"><div><strong>Impressão Automática</strong></div><label className="switch"><input type="checkbox" checked={form.sistema.impressaoAuto} onChange={e => update('sistema', 'impressaoAuto', e.target.checked)}/><span className="slider round"></span></label></div>
+                {/* TICKET DE TROCA */}
                 <div className="form-group col-full switch-container"><div><div className="flex-row"><Gift size={18}/> <strong>Ticket de Troca/Presente</strong></div><p>Imprimir comprovante sem valor</p></div><label className="switch"><input type="checkbox" checked={form.vendas.imprimirTicketTroca} onChange={e => update('vendas', 'imprimirTicketTroca', e.target.checked)}/><span className="slider round success"></span></label></div>
+
+                {/* AGRUPAR ITENS - NOVO */}
+                <div className="form-group col-full switch-container"><div><div className="flex-row"><Layers size={18}/> <strong>Agrupar Itens Iguais</strong></div><p>Ex: "2x Batom" em uma linha</p></div><label className="switch small"><input type="checkbox" checked={form.vendas.agruparItens} onChange={e => update('vendas', 'agruparItens', e.target.checked)}/><span className="slider round"></span></label></div>
+
                 <div className="form-group col-half"><label>Layout</label><select value={form.vendas.layoutCupom} onChange={e => update('vendas', 'layoutCupom', e.target.value)}><option value="DETALHADO">Detalhado</option><option value="RESUMIDO">Resumido</option></select></div>
                 <div className="form-group col-half"><label>Largura</label><div className="segment-control"><button type="button" className={form.sistema.larguraPapel === '58mm' ? 'active' : ''} onClick={() => update('sistema', 'larguraPapel', '58mm')}>58mm</button><button type="button" className={form.sistema.larguraPapel === '80mm' ? 'active' : ''} onClick={() => update('sistema', 'larguraPapel', '80mm')}>80mm</button></div></div>
                 <div className="form-group col-full"><label>Mensagem de Rodapé</label><textarea rows="3" value={form.sistema.rodape} onChange={e => update('sistema', 'rodape', e.target.value)} placeholder="Volte sempre!"/></div>
@@ -462,7 +483,10 @@ const Configuracoes = () => {
                  <InputGroup label="Nome deste Terminal" icon={Monitor} className="col-full"><input value={form.sistema.nomeTerminal} onChange={e => update('sistema', 'nomeTerminal', e.target.value)} placeholder="Ex: CAIXA 01"/></InputGroup>
               </div>
               <div className="divider"></div>
-              <h3>Segurança</h3>
+              <h3>Segurança e Visual</h3>
+              {/* IMPRIMIR LOGO - NOVO */}
+              <div className="form-group col-full switch-container"><div><div className="flex-row"><ImageIcon size={18}/> <strong>Imprimir Logo no Cupom</strong></div><p>Pode deixar impressão lenta</p></div><label className="switch"><input type="checkbox" checked={form.sistema.imprimirLogoCupom} onChange={e => update('sistema', 'imprimirLogoCupom', e.target.checked)}/><span className="slider round"></span></label></div>
+
               <div className="form-group col-full switch-container mb-4"><div><div className="flex-row"><Cloud size={18}/> <strong>Backup em Nuvem</strong></div><p>Sincronizar com Drive</p></div><label className="switch"><input type="checkbox" checked={form.sistema.backupNuvem} onChange={e => update('sistema', 'backupNuvem', e.target.checked)}/><span className="slider round success"></span></label></div>
               <div className="form-group col-full switch-container mb-4"><div><div className="flex-row"><UserCheck size={18}/> <strong>Senha de Gerente</strong></div><p>Para cancelar venda</p></div><label className="switch"><input type="checkbox" checked={form.sistema.senhaGerenteCancelamento} onChange={e => update('sistema', 'senhaGerenteCancelamento', e.target.checked)}/><span className="slider round"></span></label></div>
               <button type="button" className="list-btn" onClick={() => toast.success("Backup local realizado!")}><div className="icon-bg green"><Download size={20}/></div><div className="text"><strong>Backup Manual</strong><span>Baixar cópia .SQL</span></div></button>
