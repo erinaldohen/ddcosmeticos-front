@@ -44,16 +44,18 @@ const PDV = () => {
 
   // --- 1. VERIFICAÇÃO DE CAIXA ---
   useEffect(() => {
+    let isMounted = true;
     const verificarCaixa = async () => {
       try {
         const res = await caixaService.getStatus();
-        if (!res.data || res.data.status === 'FECHADO') {
+        if (isMounted && (!res.data || res.data.status === 'FECHADO')) {
           toast.warning("Caixa Fechado.", { toastId: 'caixa-fechado' });
           navigate('/caixa');
         }
       } catch (error) { /* silenciar erro de rede no mount */ }
     };
     verificarCaixa();
+    return () => { isMounted = false; };
   }, [navigate]);
 
   // --- CÁLCULOS ---
@@ -73,6 +75,30 @@ const PDV = () => {
     }, 2000);
     return () => clearInterval(manterFoco);
   }, [modalPagamento, showExitModal, buscaCliente, sugestoesProdutos]);
+
+  // --- FUNÇÕES AUXILIARES (Hoisteadas para uso no useCallback) ---
+  const carregarVendasSuspensas = useCallback(async () => {
+      try {
+          const res = await api.get('/vendas/suspensas');
+          setVendasPausadas(res.data || []);
+      } catch (e) {}
+  }, []);
+
+  const pausarVenda = useCallback(async () => {
+    if (carrinho.length === 0) return toast.info("Carrinho vazio.");
+    try {
+        await api.post('/vendas/suspender', { itens: carrinho.map(i => ({ idProduto: i.id, quantidade: i.quantidade })), observacao: "Suspensa PDV", descontoTotal: 0 });
+        toast.success("Venda pausada!");
+        setCarrinho([]);
+        carregarVendasSuspensas();
+    } catch (e) {
+        toast.error("Erro ao pausar.");
+    }
+  }, [carrinho, carregarVendasSuspensas]);
+
+  const confirmExit = useCallback(() => {
+      navigate('/dashboard'); // Sai da página perdendo os dados (ação consciente)
+  }, [navigate]);
 
   // --- ATALHOS DE TECLADO ---
   const handleKeyDownGlobal = useCallback((e) => {
@@ -95,7 +121,7 @@ const PDV = () => {
             setSelectedIndex(-1);
         }
     }
-  }, [carrinho, modalPagamento, showExitModal]);
+  }, [carrinho, modalPagamento, showExitModal, confirmExit, pausarVenda]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDownGlobal);
@@ -109,10 +135,6 @@ const PDV = () => {
       } else {
           navigate('/dashboard');
       }
-  };
-
-  const confirmExit = () => {
-      navigate('/dashboard'); // Sai da página perdendo os dados (ação consciente)
   };
 
   // ... (Lógica de Produtos, Busca, etc.) ...
@@ -150,14 +172,8 @@ const PDV = () => {
   const atualizarQtd = (id, delta) => setCarrinho(prev => prev.map(i => i.id === id ? { ...i, quantidade: Math.max(1, i.quantidade + delta) } : i));
   const removerItem = (id) => setCarrinho(prev => prev.filter(i => i.id !== id));
 
-  const pausarVenda = async () => {
-    if (carrinho.length === 0) return toast.info("Carrinho vazio.");
-    try { await api.post('/vendas/suspender', { itens: carrinho.map(i => ({ idProduto: i.id, quantidade: i.quantidade })), observacao: "Suspensa PDV", descontoTotal: 0 });
-    toast.success("Venda pausada!"); setCarrinho([]); carregarVendasSuspensas(); } catch (e) { toast.error("Erro ao pausar."); }
-  };
+  useEffect(() => { carregarVendasSuspensas(); }, [carregarVendasSuspensas]);
 
-  const carregarVendasSuspensas = async () => { try { const res = await api.get('/vendas/suspensas'); setVendasPausadas(res.data || []); } catch (e) {} };
-  useEffect(() => { carregarVendasSuspensas(); }, []);
   const retomarVenda = (v) => { if (carrinho.length > 0) return toast.warn("Finalize a atual.");
   setCarrinho(v.itens.map(i => ({ id: i.produtoId||i.id, descricao: i.produtoNome||i.descricao||"Item", precoVenda: i.precoUnitario, quantidade: i.quantidade, codigoBarras: i.codigoBarras||'' })));
   setVendasPausadas(p => p.filter(x => x.id !== v.id)); };

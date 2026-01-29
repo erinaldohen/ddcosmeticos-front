@@ -326,31 +326,66 @@ const ProdutoList = () => {
   const handleTriggerImport = () => { if (fileInputRef.current) fileInputRef.current.click(); };
 
   const handleImportar = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append("arquivo", file);
-      const toastId = toast.loading("Processando arquivo... Aguarde.");
-      e.target.value = null;
+        const file = e.target.files[0];
+        if (!file) return;
 
-      try {
-        const response = await api.post('/produtos/importar', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
-        const dados = response.data;
-        const msg = dados.mensagem || "Importação concluída.";
-        const isSuccess = (dados.sucesso === true) || msg.toLowerCase().startsWith('sucesso') || msg.toLowerCase().includes('0 erros');
+        // Limpa o input para permitir selecionar o mesmo arquivo novamente se falhar
+        e.target.value = null;
 
-        if (isSuccess) {
-           const hasPartialErrors = (dados.qtdErros > 0);
-           toast.update(toastId, { render: msg, type: hasPartialErrors ? "warning" : "success", isLoading: false, autoClose: 5000 });
-           carregarProdutos(page, debouncedSearch);
-        } else {
-           throw new Error(msg);
+        const formData = new FormData();
+        formData.append("arquivo", file);
+
+        const toastId = toast.loading("Enviando arquivo...");
+
+        try {
+          const response = await api.post('/produtos/importar', formData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+          });
+
+          const dados = response.data;
+
+          // Verifica sucesso lógico do backend
+          if (dados.sucesso) {
+             const msg = dados.mensagem || `Importados: ${dados.qtdImportados}`;
+
+             // Se houve importação parcial (alguns erros), avisa em amarelo
+             if (dados.qtdErros > 0) {
+                 console.warn("Erros na importação:", dados.listaErros);
+                 toast.update(toastId, {
+                     render: `${msg} (Verifique o console para ${dados.qtdErros} erros)`,
+                     type: "warning",
+                     isLoading: false,
+                     autoClose: 5000
+                 });
+             } else {
+                 toast.update(toastId, {
+                     render: "Importação concluída com sucesso!",
+                     type: "success",
+                     isLoading: false,
+                     autoClose: 3000
+                 });
+             }
+
+             // FORÇA A ATUALIZAÇÃO DA LISTA
+             setPage(0); // Volta pra primeira página
+             carregarProdutos(0, '');
+
+          } else {
+             // Backend retornou sucesso: false
+             throw new Error(dados.mensagem || "Erro desconhecido no processamento.");
+          }
+
+        } catch (error) {
+          console.error("Falha Importação:", error);
+          const errorMsg = error.response?.data?.mensagem || error.message || "Falha ao enviar arquivo.";
+          toast.update(toastId, {
+              render: `Erro: ${errorMsg}`,
+              type: "error",
+              isLoading: false,
+              autoClose: 5000
+          });
         }
-      } catch (error) {
-        const errorMsg = error.response?.data?.mensagem || "Falha crítica na importação.";
-        toast.update(toastId, { render: errorMsg, type: "error", isLoading: false, autoClose: 4000 });
-      }
-  };
+    };
 
   const handleCorrigirNcms = () => {
     setConfirmModal({
