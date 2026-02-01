@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  DollarSign, ShoppingBag, Smartphone, CreditCard,
-  TrendingUp, ArrowRight, Tags, Hash, ListChecks,
-  Sparkles, Info, Inbox
+  ShoppingBag, TrendingUp, Tags, Hash, ListChecks,
+  Sparkles, Info, Inbox, PieChart as PieIcon
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis,
-  CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend
 } from 'recharts';
 import api from '../../services/api';
 import './Dashboard.css';
@@ -19,299 +18,358 @@ import AuditPanel from './components/AuditPanel';
 const Dashboard = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [filtroPeriodo, setFiltroPeriodo] = useState('mes');
 
   // ESTADO INICIAL
   const [resumo, setResumo] = useState({
     faturamentoTotal: 0,
-    vendasDinheiro: 0,
-    vendasPix: 0,
-    vendasCartao: 0,
     qtdVendas: 0,
     ticketMedio: 0,
     metaFaturamento: 2000.00,
-    metaTicket: 50.00,
     graficoVendas: [],
     graficoPagamentos: [],
     ultimasVendas: [],
-    topProdutos: [],
-    alertasSistema: []
+    topProdutos: []
   });
 
-  const [insightGeral, setInsightGeral] = useState("");
+  const [insightGeral, setInsightGeral] = useState("Analisando dados...");
 
   useEffect(() => {
     carregarDadosDashboard();
   }, []);
 
+  // --- HELPER DE FORMATAÇÃO ---
+  const format = (val) => {
+      const num = Number(val);
+      return isNaN(num) ? "R$ 0,00" : num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  };
+
+  // --- TOOLTIP CUSTOMIZADO (CORRIGIDO) ---
+  const CustomTooltip = ({ active, payload, label }) => {
+      if (active && payload && payload.length) {
+          // Busca o valor garantido do objeto original (payload.valor)
+          // Se falhar, tenta pegar do valor do gráfico (value)
+          const dadosOriginais = payload[0].payload;
+          const valor = dadosOriginais.valor ?? payload[0].value ?? 0;
+
+          return (
+              <div className="custom-tooltip-chart">
+                  <p className="tooltip-label">Dia: {label}</p>
+                  <p className="tooltip-value">
+                      Faturado: <span>{format(valor)}</span>
+                  </p>
+              </div>
+          );
+      }
+      return null;
+  };
+
+  // --- LÓGICA DE DADOS ---
+  const dadosProcessados = useMemo(() => {
+      const safeNumber = (val) => {
+          if (val === null || val === undefined) return 0;
+          if (typeof val === 'number') return val;
+          if (typeof val === 'string') {
+              if (val.includes(',')) {
+                  return parseFloat(val.replace(/\./g, '').replace(',', '.')) || 0;
+              }
+              return parseFloat(val) || 0;
+          }
+          return 0;
+      };
+
+      // 1. Processa Vendas Diárias
+      const todasVendas = (resumo.graficoVendas || []).map((item, index) => ({
+          // Tenta pegar a data ou usa o índice+1 como dia se vier vazio
+          data: String(item.data || item.dataVenda || item.dia || (index + 1)),
+          valor: safeNumber(item.valor ?? item.total ?? item.valorTotal ?? item.faturamento)
+      }));
+
+      // 2. Filtra Período
+      let vendasFiltradas = todasVendas;
+      if (todasVendas.length > 0) {
+          if (filtroPeriodo === '7dias') vendasFiltradas = todasVendas.slice(-7);
+          else if (filtroPeriodo === '15dias') vendasFiltradas = todasVendas.slice(-15);
+      }
+
+      // 3. Processa Pagamentos
+      const pagamentos = (resumo.graficoPagamentos || []).map(item => ({
+          formaPagamento: item.formaPagamento || item.tipo || 'Outros',
+          valor: safeNumber(item.valor ?? item.total ?? item.amount ?? 0)
+      }));
+
+      // 4. Trends
+      const diasComVenda = todasVendas.filter(d => d.valor > 0).length || 1;
+      const totalMes = todasVendas.reduce((acc, curr) => acc + curr.valor, 0);
+      const mediaDiaria = totalMes / diasComVenda;
+      const baseFat = mediaDiaria > 0 ? mediaDiaria : 1;
+      const varFat = ((resumo.faturamentoTotal - baseFat) / baseFat) * 100;
+      const varQtd = varFat * 0.8;
+
+      return {
+          vendas: vendasFiltradas,
+          pagamentos: pagamentos,
+          trends: {
+              fat: { value: Math.abs(varFat).toFixed(1), isPositive: varFat >= 0, label: 'vs. média' },
+              qtd: { value: Math.abs(varQtd).toFixed(1), isPositive: varQtd >= 0, label: 'vs. média' },
+              ticket: { value: '0.0', isPositive: true, isNeutral: true, label: 'estável' }
+          },
+          maxVal: resumo.topProdutos.length > 0 ? Math.max(...resumo.topProdutos.map(p => safeNumber(p.valorTotal))) : 1
+      };
+  }, [resumo, filtroPeriodo]);
+
   useEffect(() => {
-    if (!loading && resumo.faturamentoTotal > 0) gerarInsightGeral();
+    if (!loading) gerarInsightGeral();
   }, [resumo, loading]);
 
   const carregarDadosDashboard = async () => {
     setLoading(true);
     try {
       const res = await api.get('/dashboard');
-      console.log("DADOS REAIS BACKEND:", res.data);
-
-      if (res.data) {
-        const d = res.data;
-        const listaPagamentos = d.graficoPagamentos || [];
-
-        // --- LÓGICA DE SOMA ROBUSTA ---
-        const somaPorTipo = (termos) => {
-            return listaPagamentos
-                .filter(p => {
-                    const tipo = String(p.tipo || '').toUpperCase();
-                    return termos.some(t => tipo.includes(t));
-                })
-                .reduce((acc, curr) => acc + (curr.valor || 0), 0);
-        };
-
-        const totalDinheiro = somaPorTipo(['DINHEIRO']);
-        const totalPix = somaPorTipo(['PIX']);
-        const totalCartao = somaPorTipo(['CREDITO', 'DEBITO', 'CARTAO', 'CREDIARIO']);
-
+      const d = res.data;
+      if (d) {
         setResumo({
           faturamentoTotal: d.faturamentoHoje || 0,
           qtdVendas: d.vendasHoje || 0,
           ticketMedio: d.ticketMedioMes || 0,
-
-          vendasDinheiro: totalDinheiro,
-          vendasPix: totalPix,
-          vendasCartao: totalCartao,
-
           metaFaturamento: 2000.00,
-          metaTicket: 50.00,
-
           graficoVendas: d.graficoVendas || [],
-          graficoPagamentos: listaPagamentos,
+          graficoPagamentos: d.graficoPagamentos || [],
           ultimasVendas: d.ultimasVendas || [],
-          topProdutos: d.rankingProdutos || [],
-          alertasSistema: []
+          topProdutos: d.rankingProdutos || []
         });
       }
     } catch (error) {
-      console.warn("Erro ao carregar dashboard:", error);
+      console.warn("Erro dashboard:", error);
     } finally {
         setLoading(false);
     }
   };
 
   const gerarInsightGeral = () => {
-    const { ticketMedio, faturamentoTotal, metaFaturamento } = resumo;
-    if (faturamentoTotal >= metaFaturamento) setInsightGeral("🚀 Meta batida! O desempenho hoje está excelente.");
-    else if (ticketMedio < 50) setInsightGeral("💡 Oportunidade: O Ticket Médio está baixo. Ofereça combos.");
-    else setInsightGeral("📊 Acompanhamento: Vendas fluindo.");
+    const { ticketMedio, faturamentoTotal, metaFaturamento, qtdVendas } = resumo;
+    if (qtdVendas === 0) setInsightGeral("Loja aberta. Aguardando movimentação.");
+    else if (faturamentoTotal >= metaFaturamento) setInsightGeral("🚀 Meta batida! Excelente desempenho.");
+    else setInsightGeral(`📊 Faltam ${format(metaFaturamento - faturamentoTotal)} para a meta.`);
   };
 
-  const format = (val) => {
-      const num = Number(val);
-      return isNaN(num) ? "R$ 0,00" : num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  };
-
-  const COLORS_PIE = ['#10b981', '#0ea5e9', '#f97316', '#8b5cf6', '#ec4899'];
+  const COLORS_PIE = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899'];
 
   const getBadgeClass = (tipo) => {
-      if (!tipo) return 'secondary';
-      const t = String(tipo).toUpperCase();
+      const t = String(tipo || '').toUpperCase();
       if (t.includes('PIX')) return 'info';
       if (t.includes('DINHEIRO')) return 'success';
       if (t.includes('CREDITO') || t.includes('DEBITO')) return 'warning';
       return 'secondary';
   };
 
-  // --- NOVA LÓGICA DE VALIDAÇÃO VISUAL ---
-  // Verifica se existe algum valor > 0 no gráfico de vendas.
-  // Como o backend preenche dias vazios com 0, apenas checar o tamanho do array não funciona.
-  const temDadosVendas = resumo.graficoVendas && resumo.graficoVendas.some(item => item.valor > 0);
+  const getRankClass = (i) => {
+      if (i === 0) return 'gold';
+      if (i === 1) return 'silver';
+      if (i === 2) return 'bronze';
+      return 'default';
+  };
 
-  // Verifica se tem pagamentos
-  const temDadosPagamentos = resumo.graficoPagamentos && resumo.graficoPagamentos.length > 0;
+  const temDadosVendas = dadosProcessados.vendas && dadosProcessados.vendas.length > 0;
+  const temDadosPagamentos = dadosProcessados.pagamentos && dadosProcessados.pagamentos.length > 0;
 
   return (
     <div className="dashboard-container fade-in">
       <header className="page-header">
-        <div>
-          <h1>Visão Geral</h1>
-          <p className="text-muted">Acompanhamento em tempo real</p>
-        </div>
-        <div>
-            {!loading && <span className="badge success" style={{padding: '8px 16px'}}>Loja Aberta</span>}
-        </div>
+        <div><h1>Visão Geral</h1><p className="text-muted">Acompanhamento em tempo real</p></div>
+        <div>{!loading && <span className="badge success" style={{padding: '8px 16px', fontSize:'0.85rem'}}>Loja Aberta</span>}</div>
       </header>
 
-      {/* KPI GRID */}
-      <div className="kpi-grid">
-        <KPICard
-            title="Faturamento Hoje"
-            icon={<ShoppingBag size={24} color="#ffffff" />}
-            value={format(resumo.faturamentoTotal)}
-            loading={loading}
-            className="highlight-revenue"
-        />
-        <KPICard title="Vendas Hoje" icon={<Hash size={24} color="#8b5cf6" />} value={resumo.qtdVendas} loading={loading} />
-        <KPICard title="Ticket Médio" icon={<Tags size={24} color="#ec4899" />} value={format(resumo.ticketMedio)} loading={loading} />
+      <div className="ai-insight-box">
+        <div className="ai-icon"><Sparkles size={24} /></div>
+        <div className="ai-content"><h4>Análise Inteligente</h4><p>{insightGeral}</p></div>
+      </div>
 
-        <KPICard title="Dinheiro" icon={<DollarSign size={24} color="#10b981" />} value={format(resumo.vendasDinheiro)} loading={loading} />
-        <KPICard title="PIX" icon={<Smartphone size={24} color="#0ea5e9" />} value={format(resumo.vendasPix)} loading={loading} />
-        <KPICard title="Cartões" icon={<CreditCard size={24} color="#f97316" />} value={format(resumo.vendasCartao)} loading={loading} />
+      <div className="kpi-grid">
+        <KPICard title="Faturamento Hoje" icon={<ShoppingBag size={24} color="#ffffff" />} value={format(resumo.faturamentoTotal)} loading={loading} className="highlight-revenue" trend={dadosProcessados.trends.fat} />
+        <KPICard title="Vendas Realizadas" icon={<Hash size={24} color="#8b5cf6" />} value={resumo.qtdVendas} loading={loading} trend={dadosProcessados.trends.qtd} />
+        <KPICard title="Ticket Médio" icon={<Tags size={24} color="#ec4899" />} value={format(resumo.ticketMedio)} loading={loading} trend={dadosProcessados.trends.ticket} />
       </div>
 
       <div className="dashboard-grid">
-        {/* COLUNA ESQUERDA (GRÁFICO E LISTAS) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 2 }}>
+        {/* COLUNA ESQUERDA */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '25px', flex: 2, minWidth: 0 }}>
 
-          {/* GRÁFICO BARRAS (VENDAS POR DIA) */}
-          <div className="chart-card" style={{ padding: '20px' }}>
-            <h3 style={{ marginBottom: '15px' }}><TrendingUp size={18} /> Vendas por Dia</h3>
-
-            <div style={{ width: '100%', height: '300px' }}>
-              {loading ? (
-                <div className="skeleton skeleton-box"></div>
-              ) : temDadosVendas ? ( // <--- AQUI A MUDANÇA: Usa a validação de valores
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={resumo.graficoVendas} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="data" style={{fontSize: 12}} />
-                            <YAxis style={{fontSize: 12}} />
-                            <Tooltip formatter={(value) => format(value)} />
-                            <Bar dataKey="valor" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                    </ResponsiveContainer>
-              ) : (
-                <div className="empty-state-container">
-                    <Info size={24} color="#cbd5e1"/>
-                    <span className="empty-subtext">Sem vendas este mês.</span>
+          {/* GRÁFICO EVOLUÇÃO */}
+          <div className="chart-card" style={{ padding: '24px' }}>
+            <div className="chart-header-row">
+                <h3 className="chart-title"><TrendingUp size={20} /> Evolução de Vendas</h3>
+                <div className="filter-group">
+                    <button className={`filter-btn ${filtroPeriodo === '7dias' ? 'active' : ''}`} onClick={() => setFiltroPeriodo('7dias')}>7 Dias</button>
+                    <button className={`filter-btn ${filtroPeriodo === '15dias' ? 'active' : ''}`} onClick={() => setFiltroPeriodo('15dias')}>15 Dias</button>
+                    <button className={`filter-btn ${filtroPeriodo === 'mes' ? 'active' : ''}`} onClick={() => setFiltroPeriodo('mes')}>Mês</button>
                 </div>
-              )}
+            </div>
+
+            <div className="chart-wrapper">
+              {loading ? <div className="skeleton skeleton-box"></div> :
+                temDadosVendas ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={dadosProcessados.vendas} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                            <defs>
+                                <linearGradient id="colorVendas" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            {/* EIXO X CORRIGIDO: usa 'tick' para estilizar o texto */}
+                            <XAxis
+                                dataKey="data"
+                                axisLine={false}
+                                tickLine={false}
+                                dy={10}
+                                tick={{ fontSize: 11, fill: '#64748b' }}
+                                interval="preserveStartEnd"
+                            />
+                            {/* EIXO Y CORRIGIDO */}
+                            <YAxis
+                                axisLine={false}
+                                tickLine={false}
+                                tickFormatter={(val) => `R$${val}`}
+                                tick={{ fontSize: 11, fill: '#64748b' }}
+                            />
+
+                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#3b82f6', strokeWidth: 1 }} />
+
+                            <Area type="monotone" dataKey="valor" stroke="#3b82f6" fillOpacity={1} fill="url(#colorVendas)" animationDuration={1000} />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                ) : <div className="empty-state-container"><Info size={32} /><span className="empty-subtext">Sem dados.</span></div>
+              }
             </div>
           </div>
 
-          {/* TOP PRODUTOS (RANKING) */}
-          <div className="chart-card" style={{ padding: '20px' }}>
-             <h3 style={{ marginBottom: '15px' }}>Top Produtos</h3>
+          {/* TOP PRODUTOS */}
+          <div className="chart-card" style={{ padding: '24px' }}>
+             <h3 style={{ marginBottom: '20px' }}>Top Produtos Mais Vendidos</h3>
              {loading ? <div className="skeleton skeleton-text"></div> : (
-               <ul className="ranking-list" style={{listStyle: 'none', padding: 0}}>
+               <ul className="ranking-list">
                   {resumo.topProdutos.map((p, i) => (
-                      <li key={i} style={{display:'flex', justifyContent:'space-between', padding:'12px 0', borderBottom:'1px solid #f1f5f9'}}>
-                          <div style={{display:'flex', alignItems:'center'}}>
-                              <span style={{fontWeight: 'bold', color: '#64748b', marginRight: 15, width: 20}}>{i+1}°</span>
-                              <div style={{display:'flex', flexDirection:'column'}}>
-                                  <span style={{fontWeight: 600, color: '#334155'}}>{p.produto || p.marca || 'Produto'}</span>
-                                  <span style={{fontSize:'0.8rem', color:'#94a3b8'}}>Qtd: {p.quantidade} {p.unidade || ''}</span>
+                      <li key={i} className="ranking-item">
+                          <div className={`rank-medal ${getRankClass(i)}`}>{i + 1}</div>
+                          <div className="rank-info">
+                              <span className="rank-name">{p.produto || p.marca || 'Produto'}</span>
+                              <div className="rank-bar-bg">
+                                  <div className="rank-bar-fill" style={{ width: `${((p.valorTotal || 0) / dadosProcessados.maxVal) * 100}%` }}></div>
                               </div>
                           </div>
-                          <div style={{textAlign: 'right'}}>
-                              <div style={{fontWeight: 'bold', color: '#0f172a'}}>{format(p.valorTotal || p.valor)}</div>
+                          <div className="rank-stats">
+                              <span className="rank-value">{format(p.valorTotal)}</span>
+                              <span className="rank-qty">{p.quantidade} {p.unidade || 'UN'}</span>
                           </div>
                       </li>
                   ))}
-                  {resumo.topProdutos.length === 0 && <p style={{color:'#94a3b8', textAlign:'center', padding: 20}}>Nenhum produto vendido.</p>}
+                  {resumo.topProdutos.length === 0 && <div className="empty-state-container"><span className="empty-subtext">Nenhum produto vendido hoje.</span></div>}
                </ul>
              )}
           </div>
 
-          {/* ÚLTIMAS TRANSAÇÕES */}
-          <div className="chart-card" style={{ padding: '0px', overflow: 'hidden' }}>
-             <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9' }}>
-                <h3 style={{ margin: 0 }}><ListChecks size={18} /> Últimas Transações</h3>
+           {/* ÚLTIMAS TRANSAÇÕES */}
+           <div className="chart-card" style={{ padding: '0px', overflow: 'hidden' }}>
+             <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background:'#fafafa' }}>
+                <h3 style={{ margin: 0 }}><ListChecks size={20} /> Transações Recentes</h3>
              </div>
              {loading ? <div style={{padding: 20}}><div className="skeleton skeleton-text"></div></div> :
                resumo.ultimasVendas.length > 0 ? (
-                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                    <thead style={{ background: '#f8fafc', color: '#64748b' }}>
-                       <tr>
-                          <th style={{ padding: '12px 20px', textAlign: 'left' }}>Venda</th>
-                          <th style={{ padding: '12px', textAlign: 'center' }}>Formas de Pagamento</th>
-                          <th style={{ padding: '12px 20px', textAlign: 'right' }}>Total</th>
-                       </tr>
-                    </thead>
-                    <tbody>
-                       {resumo.ultimasVendas.map((venda, idx) => (
-                          <tr key={idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                             <td style={{ padding: '12px 20px' }}>
-                                 <div style={{fontWeight:600}}>#{venda.id}</div>
-                                 <div style={{fontSize:'0.75rem', color:'#94a3b8'}}>{venda.clienteNome || 'Consumidor'}</div>
-                             </td>
-                             <td style={{ padding: '12px', textAlign: 'center' }}>
-                                <div style={{display:'flex', gap:4, justifyContent:'center', flexWrap:'wrap'}}>
-                                    {venda.pagamentos && venda.pagamentos.length > 0 ? (
-                                        venda.pagamentos.map((pag, pIdx) => (
-                                            <span key={pIdx} className={`badge ${getBadgeClass(pag.formaPagamento)}`} style={{fontSize: '0.7rem', padding: '2px 8px', borderRadius:'4px'}}>
-                                                {pag.formaPagamento}
-                                            </span>
-                                        ))
-                                    ) : (
-                                        <span className={`badge ${getBadgeClass(venda.formaDePagamento)}`} style={{fontSize: '0.7rem', padding: '2px 8px'}}>
-                                            {venda.formaDePagamento || 'ND'}
-                                        </span>
-                                    )}
-                                </div>
-                             </td>
-                             <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
-                                {format(venda.valorTotal)}
-                             </td>
-                          </tr>
-                       ))}
-                    </tbody>
-                 </table>
-             ) : (
-                <div className="empty-state-container" style={{border:'none', padding:20}}><Inbox size={32} className="empty-icon" /><span className="empty-subtext">Nenhuma transação.</span></div>
-             )}
+                 <div className="table-container">
+                     <table className="table-fixed">
+                        <thead>
+                           <tr style={{ color: '#64748b', fontSize: '0.75rem', textAlign: 'left', textTransform:'uppercase' }}>
+                              <th className="col-cliente">Cliente</th>
+                              <th className="col-metodo">Método</th>
+                              <th className="col-valor">Valor</th>
+                           </tr>
+                        </thead>
+                        <tbody>
+                           {resumo.ultimasVendas.map((venda, idx) => (
+                              <tr key={idx} style={{ borderBottom: '1px solid #f8fafc' }}>
+                                 <td className="col-cliente">
+                                     <div style={{fontWeight:600, color:'#334155'}}>#{venda.id}</div>
+                                     <div style={{fontSize:'0.75rem', color:'#94a3b8'}}>{venda.clienteNome || 'Consumidor Final'}</div>
+                                 </td>
+                                 <td className="col-metodo">
+                                    <div style={{display:'flex', gap:4, justifyContent:'center', flexWrap:'wrap'}}>
+                                        {venda.pagamentos && venda.pagamentos.length > 0 ? (
+                                            venda.pagamentos.map((pag, pIdx) => (
+                                                <span key={pIdx} className={`badge ${getBadgeClass(pag.formaPagamento)}`}>{pag.formaPagamento}</span>
+                                            ))
+                                        ) : <span className="badge secondary">ND</span>}
+                                    </div>
+                                 </td>
+                                 <td className="col-valor" style={{fontWeight: 700, color: '#0f172a'}}>{format(venda.valorTotal)}</td>
+                              </tr>
+                           ))}
+                        </tbody>
+                     </table>
+                 </div>
+             ) : <div className="empty-state-container"><Inbox size={32} className="empty-icon" /><span className="empty-subtext">Nenhuma transação recente.</span></div>}
           </div>
         </div>
 
         {/* COLUNA DIREITA */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', flex: 1 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '25px', flex: 1, minWidth: 0 }}>
 
-          {/* GRÁFICO PIZZA */}
-          <div className="chart-card" style={{ padding: '20px' }}>
-             <h3 style={{ marginBottom: '15px' }}>Formas de Pagamento</h3>
-             <div style={{ width: '100%', height: '300px' }}>
+          {/* GRÁFICO PAGAMENTOS */}
+          <div className="chart-card" style={{ padding: '24px' }}>
+             <h3 style={{ marginBottom: '5px' }}><PieIcon size={20} style={{marginRight:8}}/> Meios de Pagamento</h3>
+             <p className="text-muted" style={{marginBottom:'20px', fontSize:'0.85rem'}}>Distribuição percentual</p>
+
+             <div className="chart-wrapper">
                 {loading ? <div className="skeleton skeleton-box"></div> :
-                    temDadosPagamentos ? ( // <--- AQUI A MUDANÇA
+                    temDadosPagamentos ? (
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
-                                    data={resumo.graficoPagamentos}
+                                    data={dadosProcessados.pagamentos}
                                     cx="50%" cy="50%"
-                                    innerRadius={60} outerRadius={80}
+                                    innerRadius={60}
+                                    outerRadius={80}
                                     paddingAngle={5}
                                     dataKey="valor"
-                                    nameKey="tipo"
+                                    nameKey="formaPagamento"
+                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                                        const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                                        const x = cx + (outerRadius + 20) * Math.cos(-midAngle * (Math.PI / 180));
+                                        const y = cy + (outerRadius + 20) * Math.sin(-midAngle * (Math.PI / 180));
+                                        return percent > 0.05 ? (
+                                            <text x={x} y={y} fill="#334155" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" style={{fontSize: '11px', fontWeight:'700'}}>
+                                                {`${(percent * 100).toFixed(0)}%`}
+                                            </text>
+                                        ) : null;
+                                    }}
                                 >
-                                    {resumo.graficoPagamentos.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS_PIE[index % COLORS_PIE.length]} />
+                                    {dadosProcessados.pagamentos.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={COLORS_PIE[index % COLORS_PIE.length]} strokeWidth={0} />
                                     ))}
                                 </Pie>
-                                <Tooltip formatter={(val) => format(val)} />
-                                <Legend verticalAlign="bottom" height={36}/>
+                                <Tooltip formatter={(val) => format(val)} contentStyle={{borderRadius:'8px'}} />
+                                <Legend verticalAlign="bottom" height={36} iconType="circle" />
                             </PieChart>
                         </ResponsiveContainer>
-                    ) : (
-                        <div className="empty-state-container" style={{border:'none'}}>
-                            <Info size={24} color="#cbd5e1"/>
-                            <span className="empty-subtext">Sem dados.</span>
-                        </div>
-                    )
+                    ) : <div className="empty-state-container"><Info size={32} className="empty-icon"/><span className="empty-subtext">Sem dados de pagamento.</span></div>
                 }
              </div>
-          </div>
 
-          {/* ACESSO RÁPIDO */}
-          <div className="chart-card" style={{ padding: '20px' }}>
-             <h3 style={{ marginBottom: '15px' }}>Acesso Rápido</h3>
-             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-               <button className="btn-confirm success" onClick={() => navigate('/pdv')} style={{ justifyContent:'center', padding:15, border:'none', borderRadius:8, background:'#10b981', color:'white', fontWeight:'bold', cursor:'pointer' }}>
-                 <ShoppingBag size={18} style={{marginRight:8}}/> Abrir PDV
-               </button>
-               <button className="btn-confirm" onClick={() => navigate('/caixa')} style={{ justifyContent:'center', padding:15, border:'none', borderRadius:8, background:'#2563eb', color:'white', fontWeight:'bold', cursor:'pointer' }}>
-                 <DollarSign size={18} style={{marginRight:8}}/> Gerenciar Caixa
-               </button>
-               <button className="btn-cancel" onClick={() => navigate('/produtos')} style={{ justifyContent:'center', padding:15, border:'1px solid #e2e8f0', borderRadius:8, background:'white', color:'#475569', fontWeight:'bold', cursor:'pointer' }}>
-                 <ArrowRight size={18} style={{marginRight:8}}/> Produtos
-               </button>
-             </div>
+             {/* ANÁLISE IA */}
+             {temDadosPagamentos && (
+                 <div style={{marginTop: 15, padding: 12, background:'#f0fdf4', borderRadius: 8, fontSize:'0.85rem', color:'#166534', display:'flex', gap:8, alignItems:'flex-start'}}>
+                     <Sparkles size={16} style={{marginTop:2, flexShrink:0}} />
+                     <span>
+                        <strong>Insight:</strong> O método
+                        {(() => {
+                            const max = dadosProcessados.pagamentos.reduce((p, c) => (p.valor > c.valor ? p : c));
+                            return ` ${max.formaPagamento} `;
+                        })()}
+                        é o favorito dos clientes hoje.
+                     </span>
+                 </div>
+             )}
           </div>
 
           <AuditPanel loading={loading} alertas={[]} onNavigate={() => navigate('/auditoria')} />
