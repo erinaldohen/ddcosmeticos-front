@@ -6,6 +6,7 @@
   margin: 0 auto;
   font-family: 'Inter', sans-serif;
   color: #1e293b;
+  animation: fadeIn 0.5s ease-in-out;
 }
 
 /* --- HEADER --- */
@@ -16,27 +17,31 @@
   margin-bottom: 32px;
   border-bottom: 1px solid #e2e8f0;
   padding-bottom: 20px;
+  flex-wrap: wrap; /* Permite quebrar em mobile */
+  gap: 20px;
 }
 
 .header-title h1 {
   font-size: 1.8rem;
-  font-weight: 700;
+  font-weight: 800;
   display: flex;
   align-items: center;
   gap: 12px;
   color: #0f172a;
   margin: 0;
+  letter-spacing: -0.5px;
 }
 
 .header-title p {
   margin: 4px 0 0 44px; /* Alinha com o texto do h1 */
   color: #64748b;
   font-size: 0.95rem;
+  font-weight: 500;
 }
 
 .header-tabs {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   background: #f1f5f9;
   padding: 4px;
   border-radius: 12px;
@@ -53,7 +58,8 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
 }
 
 .tab-btn.active {
@@ -63,8 +69,8 @@
 }
 
 .tab-btn:hover:not(.active) {
-  background: #e2e8f0;
-  color: #1e293b;
+  background: rgba(255,255,255,0.5);
+  color: #334155;
 }
 
 /* --- TOOLBAR --- */
@@ -72,17 +78,18 @@
   display: flex;
   gap: 16px;
   margin-bottom: 32px;
+  flex-wrap: wrap;
 }
 
 .search-box {
   flex: 1;
   position: relative;
-  max-width: 500px;
+  min-width: 280px;
 }
 
 .search-box svg {
   position: absolute;
-  left: 12px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
   color: #94a3b8;
@@ -90,12 +97,14 @@
 
 .search-box input {
   width: 100%;
-  padding: 12px 12px 12px 40px;
+  padding: 12px 12px 12px 44px;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   font-size: 0.95rem;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  color: #334155;
+  background: #ffffff;
 }
 
 .search-box input:focus {
@@ -120,24 +129,26 @@
 .btn-filter:hover {
   background: #f8fafc;
   border-color: #cbd5e1;
+  color: #334155;
 }
 
 /* --- TIMELINE --- */
 .timeline-wrapper {
   position: relative;
-  padding-left: 20px;
+  padding-left: 10px;
 }
 
 .timeline-item {
   position: relative;
-  padding-left: 30px;
+  padding-left: 36px;
   margin-bottom: 24px;
 }
 
+/* Linha conectora vertical */
 .timeline-line {
   position: absolute;
-  left: 19px; /* Ajuste fino */
-  top: 30px;
+  left: 19px; /* Centraliza com o ícone de 40px */
+  top: 40px;
   bottom: -30px;
   width: 2px;
   background: #e2e8f0;
@@ -162,6 +173,12 @@
   justify-content: center;
   z-index: 1;
   color: #64748b;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  transition: transform 0.2s;
+}
+
+.timeline-item:hover .timeline-icon {
+    transform: scale(1.1);
 }
 
 .timeline-icon.warning {
@@ -179,32 +196,35 @@
 .timeline-card {
   background: white;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: 16px;
+  padding: 20px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-  transition: transform 0.2s;
+  transition: all 0.2s ease;
+  position: relative;
 }
 
 .timeline-card:hover {
   transform: translateX(4px);
   border-color: #cbd5e1;
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05);
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .action-tag {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   background: #f1f5f9;
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
   color: #475569;
+  letter-spacing: 0.5px;
 }
 
 .time-tag {
@@ -213,13 +233,21 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  font-weight: 500;
 }
 
 .card-details {
   font-size: 1rem;
+  font-weight: 600;
   color: #1e293b;
-  margin: 0 0 12px 0;
-  line-height: 1.5;
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.card-subtext {
+    font-size: 0.9rem;
+    color: #64748b;
+    margin-bottom: 16px;
 }
 
 .card-footer {
@@ -229,25 +257,31 @@
   color: #64748b;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  font-weight: 500;
 }
 
 /* --- LIXEIRA --- */
 .trash-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 24px;
 }
 
 .trash-card {
   background: white;
   border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: 16px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: 16px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.trash-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05);
 }
 
 .trash-icon {
@@ -255,31 +289,34 @@
   height: 48px;
   background: #fef2f2;
   color: #ef4444;
-  border-radius: 50%;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 1.2rem;
 }
 
 .trash-info h4 {
-  margin: 0 0 4px 0;
+  margin: 0 0 6px 0;
   font-size: 1.1rem;
+  font-weight: 700;
   color: #1e293b;
 }
 
 .trash-info p {
   margin: 0;
-  font-size: 0.85rem;
-  color: #94a3b8;
+  font-size: 0.9rem;
+  color: #64748b;
+  line-height: 1.4;
 }
 
 .btn-restore {
   width: 100%;
   background: white;
   border: 1px solid #22c55e;
-  color: #22c55e;
-  padding: 10px;
-  border-radius: 8px;
+  color: #16a34a;
+  padding: 12px;
+  border-radius: 10px;
   font-weight: 600;
   cursor: pointer;
   display: flex;
@@ -287,6 +324,7 @@
   justify-content: center;
   gap: 8px;
   transition: all 0.2s;
+  margin-top: auto; /* Empurra para o rodapé do card */
 }
 
 .btn-restore:hover {
@@ -297,10 +335,13 @@
 
 /* --- UTILITÁRIOS --- */
 .empty-state {
-  text-align: center;
-  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
   color: #94a3b8;
-  font-size: 1.1rem;
+  gap: 16px;
 }
 
 .spin {
@@ -311,3 +352,116 @@
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 .fade-in { animation: fadeIn 0.4s ease-out; }
+
+/* Responsividade */
+@media (max-width: 768px) {
+    .auditoria-container { padding: 20px; }
+    .auditoria-header { flex-direction: column; align-items: flex-start; gap: 20px; }
+    .header-tabs { width: 100%; justify-content: space-between; }
+    .tab-btn { flex: 1; justify-content: center; }
+    .search-box { max-width: 100%; }
+}
+
+/* ... MANTENHA O CSS ANTERIOR E ADICIONE/SUBSTITUA AS SEÇÕES ABAIXO ... */
+
+/* --- TOOLBAR (ATUALIZADO PARA DATAS) --- */
+.auditoria-toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.search-box {
+  flex: 2; /* Ocupa mais espaço */
+  position: relative;
+  min-width: 250px;
+}
+
+/* Grupo de Datas */
+.date-filter-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 4px 8px;
+}
+
+.date-input {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  padding: 8px;
+  outline: none;
+  cursor: pointer;
+}
+
+.date-separator { color: #cbd5e1; }
+
+.btn-filter {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0 16px;
+  height: 44px; /* Altura fixa para alinhar com inputs */
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-filter:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #334155;
+}
+
+/* --- CARREGAR MAIS --- */
+.load-more-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 30px;
+  padding-bottom: 20px;
+}
+
+.btn-load-more {
+  background: white;
+  border: 1px dashed #cbd5e1;
+  color: #64748b;
+  padding: 12px 30px;
+  border-radius: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.btn-load-more:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #334155;
+  transform: translateY(-2px);
+}
+
+.btn-load-more:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Ajuste Mobile */
+@media (max-width: 768px) {
+    .auditoria-toolbar { flex-direction: column; align-items: stretch; }
+    .date-filter-group { justify-content: space-between; }
+    .btn-filter { justify-content: center; }
+}
