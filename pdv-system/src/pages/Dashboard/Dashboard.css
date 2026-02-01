@@ -81,13 +81,30 @@
 .filter-btn.active { background: white; color: #3b82f6; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 
 /* Wrapper para isolar contexto de layout */
+/* WRAPPER PARA O GRÁFICO - CORREÇÃO CRÍTICA DO RECHARTS */
 .chart-wrapper {
+    /* Define uma altura fixa para o bloco do gráfico */
     height: 350px;
     width: 100%;
+    /* Correção do Flexbox que causa o erro width(-1) */
+    min-width: 0;
+    min-height: 350px;
+
+    /* Isolamento de contexto */
     position: relative;
-    /* Adiciona padding interno para evitar corte de labels */
+    display: block;
+
+    /* Padding interno para as labels não cortarem */
     padding: 0 10px;
     box-sizing: border-box;
+}
+
+/* Responsividade para evitar quebra no mobile */
+@media (max-width: 1024px) {
+    .chart-wrapper {
+        height: 300px;
+        min-height: 300px;
+    }
 }
 
 /* --- TABELAS (CORREÇÃO DE ROLAGEM) --- */
