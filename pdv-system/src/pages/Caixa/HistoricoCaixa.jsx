@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Archive, Calendar, Search, RefreshCw,
-    Eye, ArrowDownCircle, User, X,
+    Eye, ArrowDownCircle, User, X, Download,
     TrendingUp, TrendingDown, Minus, AlertTriangle, FileText
 } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -9,17 +9,17 @@ import api from '../../services/api';
 import './HistoricoCaixa.css';
 
 const HistoricoCaixa = () => {
-    // --- ESTADOS ---
+    // --- ESTADOS DE DADOS ---
     const [caixas, setCaixas] = useState([]);
     const [loading, setLoading] = useState(false);
     const [resumo, setResumo] = useState({ total: 0, qtd: 0 });
 
-    // Modal de Detalhes
+    // --- ESTADOS DO MODAL ---
     const [modalOpen, setModalOpen] = useState(false);
     const [caixaSelecionado, setCaixaSelecionado] = useState(null);
     const [loadingDetalhes, setLoadingDetalhes] = useState(false);
 
-    // Filtros
+    // --- FILTROS (Padrão: Últimos 30 dias) ---
     const [dataInicio, setDataInicio] = useState(() => {
         const d = new Date();
         d.setDate(d.getDate() - 30);
@@ -29,16 +29,17 @@ const HistoricoCaixa = () => {
         return new Date().toISOString().split('T')[0];
     });
 
+    // --- PAGINAÇÃO ---
     const [page, setPage] = useState(0);
     const [hasMore, setHasMore] = useState(true);
 
-    // --- EFEITOS ---
+    // --- INICIALIZAÇÃO ---
     useEffect(() => {
         carregarCaixas(0, true);
         // eslint-disable-next-line
     }, []);
 
-    // --- API ---
+    // --- CARREGAR LISTA ---
     const carregarCaixas = async (pagina = 0, reset = false) => {
         if (loading && pagina > 0) return;
         setLoading(true);
@@ -47,8 +48,8 @@ const HistoricoCaixa = () => {
             const params = {
                 page: pagina,
                 size: 20,
-                sort: 'id,desc',
-                inicio: dataInicio,
+                sort: 'id,desc', // Ordenação decrescente (mais recente primeiro)
+                inicio: dataInicio, // Parâmetro renomeado para bater com o Java
                 fim: dataFim
             };
 
@@ -62,29 +63,66 @@ const HistoricoCaixa = () => {
 
         } catch (error) {
             console.error("Erro histórico:", error);
-            toast.error("Erro ao carregar lista.");
+            toast.error("Erro ao carregar histórico.");
         } finally {
             setLoading(false);
         }
     };
 
-    // --- AÇÃO DO BOTÃO "OLHO" (DETALHES) ---
+    // --- CARREGAR DETALHES (MODAL) ---
     const handleVerDetalhes = async (id) => {
+        setModalOpen(true);
         setLoadingDetalhes(true);
-        setModalOpen(true); // Abre o modal imediatamente com loading
         try {
             const res = await api.get(`/caixas/${id}`);
             setCaixaSelecionado(res.data);
         } catch (error) {
-            toast.error("Erro ao carregar detalhes do caixa.");
+            console.error("Erro detalhes:", error);
+            toast.error("Não foi possível carregar os detalhes.");
             setModalOpen(false);
         } finally {
             setLoadingDetalhes(false);
         }
     };
 
+    // --- EXPORTAR PDF ---
+    const handleExportarPDF = async () => {
+        try {
+            const toastId = toast.loading("Gerando PDF...");
+
+            const params = { inicio: dataInicio, fim: dataFim };
+
+            const response = await api.get('/caixas/relatorio/pdf', {
+                params,
+                responseType: 'blob' // Importante para arquivos binários
+            });
+
+            // Cria link temporário
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Relatorio_Caixa_${dataInicio}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+
+            // Limpa memória
+            link.remove();
+            window.URL.revokeObjectURL(url);
+
+            toast.dismiss(toastId);
+            toast.success("Download concluído!");
+
+        } catch (error) {
+            console.error("Erro download:", error);
+            toast.dismiss();
+            toast.error("Erro ao gerar o PDF.");
+        }
+    };
+
+    // --- HELPER FUNCTIONS ---
     const calcularResumo = (lista) => {
         const fechados = lista.filter(c => c.status !== 'ABERTO');
+        // Usa o valor de fechamento ou o calculado se nulo
         const total = fechados.reduce((acc, c) => acc + (c.valorFechamento || c.valorCalculadoSistema || 0), 0);
         setResumo({ total, qtd: fechados.length });
     };
@@ -100,7 +138,6 @@ const HistoricoCaixa = () => {
         carregarCaixas(nextPage, false);
     };
 
-    // --- UTILS ---
     const formatMoeda = (val) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
     const formatData = (dataStr) => {
@@ -110,6 +147,7 @@ const HistoricoCaixa = () => {
         });
     };
 
+    // Função segura para evitar erro de objeto no React
     const getUsuarioNome = (user) => {
         if (!user) return 'Sistema';
         if (typeof user === 'string') return user;
@@ -142,6 +180,13 @@ const HistoricoCaixa = () => {
                         <Search size={18} /> Filtrar
                     </button>
                 </div>
+
+                <div style={{flex:1}}></div>
+
+                {/* BOTÃO EXPORTAR */}
+                <button className="btn-icon-text" onClick={handleExportarPDF} title="Baixar Relatório">
+                    <Download size={18} /> <span className="mobile-hide">Exportar PDF</span>
+                </button>
             </div>
 
             {/* TABELA */}
@@ -163,9 +208,11 @@ const HistoricoCaixa = () => {
                             <tr><td colSpan="7" className="empty-state">Nenhum registro encontrado.</td></tr>
                         ) : (
                             caixas.map((caixa) => {
+                                // Lógica de Valores
                                 const valorEsperado = caixa.valorCalculadoSistema || caixa.valorCalculado || (caixa.saldoInicial + (caixa.totalEntradas || 0)) || 0;
                                 const valorInformado = caixa.valorFechamento !== null ? caixa.valorFechamento : 0;
                                 const diferenca = valorInformado - valorEsperado;
+
                                 const statusClass = (caixa.status || 'FECHADO').toLowerCase();
                                 const isAberto = statusClass === 'aberto';
 
@@ -218,11 +265,10 @@ const HistoricoCaixa = () => {
                                         </td>
                                         <td>
                                             <div className="action-buttons">
-                                                {/* --- BOTÃO DE AÇÃO ATIVADO --- */}
                                                 <button
                                                     className="btn-icon-action view"
                                                     onClick={() => handleVerDetalhes(caixa.id)}
-                                                    title="Ver Detalhes Financeiros"
+                                                    title="Ver Detalhes"
                                                 >
                                                     <Eye size={18} />
                                                 </button>
@@ -260,7 +306,6 @@ const HistoricoCaixa = () => {
                                 <div style={{textAlign:'center', padding:30}}><RefreshCw className="spin"/> Carregando...</div>
                             ) : (
                                 <>
-                                    {/* GRID INFORMATIVO */}
                                     <div className="detail-grid">
                                         <div className="detail-item">
                                             <span className="detail-label">Operador</span>
@@ -282,12 +327,11 @@ const HistoricoCaixa = () => {
                                         </div>
                                     </div>
 
-                                    {/* RESUMO FINANCEIRO (CUPOM VIRTUAL) */}
                                     <div className="finance-summary">
                                         <h4 style={{margin:'0 0 15px 0', color:'#64748b', fontSize:'0.9rem', textTransform:'uppercase'}}>Resumo Financeiro</h4>
 
                                         <div className="finance-row">
-                                            <span>Saldo Inicial (Fundo de Caixa)</span>
+                                            <span>Saldo Inicial (Fundo)</span>
                                             <span>{formatMoeda(caixaSelecionado.saldoInicial)}</span>
                                         </div>
                                         <div className="finance-row" style={{color:'#16a34a'}}>
@@ -299,8 +343,8 @@ const HistoricoCaixa = () => {
                                             <span>{formatMoeda(caixaSelecionado.totalSaidas || 0)}</span>
                                         </div>
 
-                                        <div className="finance-row total" style={{marginTop:10, paddingTop:10, borderTop:'1px solid #e2e8f0'}}>
-                                            <span>(=) Valor Esperado no Sistema</span>
+                                        <div className="finance-row total">
+                                            <span>(=) Valor Esperado</span>
                                             <span>{formatMoeda(
                                                 (caixaSelecionado.valorCalculadoSistema ||
                                                 (caixaSelecionado.saldoInicial + (caixaSelecionado.totalEntradas||0) - (caixaSelecionado.totalSaidas||0)))
@@ -308,11 +352,10 @@ const HistoricoCaixa = () => {
                                         </div>
 
                                         <div className="finance-row" style={{marginTop:5, fontSize:'1.1rem', fontWeight:800, color:'#0f172a'}}>
-                                            <span>Valor Informado (Gaveta)</span>
+                                            <span>Valor em Gaveta</span>
                                             <span>{formatMoeda(caixaSelecionado.valorFechamento || 0)}</span>
                                         </div>
 
-                                        {/* EXIBIÇÃO DE QUEBRA */}
                                         {(() => {
                                             const sistema = caixaSelecionado.valorCalculadoSistema || 0;
                                             const gaveta = caixaSelecionado.valorFechamento || 0;
@@ -327,7 +370,7 @@ const HistoricoCaixa = () => {
                                                     display:'flex', alignItems:'center', gap: 10, fontWeight: 700
                                                 }}>
                                                     {diff > 0 ? <TrendingUp size={20}/> : <AlertTriangle size={20}/>}
-                                                    <span>{diff > 0 ? 'Sobra de Caixa:' : 'Quebra de Caixa:'} {formatMoeda(diff)}</span>
+                                                    <span>{diff > 0 ? 'Sobra:' : 'Quebra:'} {formatMoeda(diff)}</span>
                                                 </div>
                                             );
                                         })()}
