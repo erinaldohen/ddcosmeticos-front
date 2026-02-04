@@ -1,13 +1,17 @@
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
+// Flag para evitar múltiplos redirecionamentos simultâneos se várias requisições falharem ao mesmo tempo
+let isRedirecting = false;
+
 // Cria a instância do Axios
 const api = axios.create({
-  // Tenta pegar do arquivo .env, senão usa o localhost como fallback
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1',
   headers: {
     'Content-Type': 'application/json',
   },
+  // Timeout de 15 segundos (Evita telas travadas em conexões lentas)
+  timeout: 15000,
 });
 
 // --- INTERCEPTOR DE REQUISIÇÃO ---
@@ -15,7 +19,7 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
 
   if (token) {
-    // Garante que o token vá limpo (sem aspas extras que o JSON.stringify possa ter deixado)
+    // Remove aspas duplas caso o token tenha sido salvo com JSON.stringify
     const cleanToken = token.replace(/['"]+/g, '').trim();
     config.headers.Authorization = `Bearer ${cleanToken}`;
   }
@@ -30,38 +34,61 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
 
-    // 1. Erro de Conexão (Servidor Offline / Sem Internet)
-    if (!error.response) {
-      toast.error("Erro de conexão: Servidor indisponível.");
+    // 1. Erro de Conexão ou Timeout
+    if (error.code === 'ECONNABORTED' || !error.response) {
+      toast.error("Servidor indisponível ou tempo limite excedido.");
       return Promise.reject(error);
     }
 
     const status = error.response.status;
     const originalRequest = error.config;
+    // Tenta pegar a mensagem amigável enviada pelo Spring Boot (ex: "Saldo insuficiente")
+    const backendMessage = error.response.data?.message || error.response.data?.error;
 
     // 2. Erro 401 (Não Autorizado / Token Expirado)
-    // Importante: Não redirecionar se o erro for na própria tentativa de login (evita loop)
     if (status === 401 && !originalRequest.url.includes('/auth/login')) {
-       console.warn("Sessão expirada ou token inválido.");
+       if (!isRedirecting) {
+           isRedirecting = true;
+           console.warn("Sessão expirada.");
 
-       // Limpa dados sensíveis
-       localStorage.removeItem('token');
-       localStorage.removeItem('user');
+           localStorage.removeItem('token');
+           localStorage.removeItem('user');
 
-       toast.error("Sessão expirada. Faça login novamente.");
+           toast.error("Sessão expirada. Faça login novamente.");
 
-       // Redireciona após breve delay para o usuário ler o toast
-       setTimeout(() => {
-           window.location.href = '/login';
-       }, 1000);
+           setTimeout(() => {
+               window.location.href = '/login';
+               isRedirecting = false; // Reseta flag (embora a página vá recarregar)
+           }, 1500);
+       }
+       return Promise.reject(error);
     }
 
-    // 3. Erro 403 (Proibido / Sem Permissão)
+    // 3. Erro 403 (Permissão)
     if (status === 403) {
-      toast.error("Acesso negado: Você não tem permissão para realizar esta ação.");
+      toast.error("Acesso negado: Perfil sem permissão.");
     }
 
-    // Retorna o erro para ser tratado no catch específico do componente se necessário
+    // 4. Erro 404 (Rota não encontrada - Útil para debug)
+    if (status === 404) {
+      console.error(`Rota não encontrada: ${originalRequest.url}`);
+      // Não damos toast aqui pois as vezes o frontend trata o 404 (ex: busca sem resultados)
+    }
+
+    // 5. Erro 500 (Erro no Java/Backend)
+    if (status === 500) {
+      toast.error("Erro interno no servidor. Contate o suporte.");
+      console.error("Erro 500 Detalhes:", error.response.data);
+    }
+
+    // 6. Erro 400 (Bad Request - Regra de Negócio)
+    // Se o backend mandou uma mensagem específica, mostramos ela no Toast para facilitar
+    if (status === 400 && backendMessage) {
+        // Evita mostrar toasts genéricos se o componente já for tratar
+        // Mas se quiser garantir que o erro apareça:
+        // toast.warning(backendMessage);
+    }
+
     return Promise.reject(error);
   }
 );

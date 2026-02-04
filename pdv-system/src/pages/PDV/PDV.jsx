@@ -46,19 +46,26 @@ const PDV = () => {
   const [pagamentos, setPagamentos] = useState([]);
   const [metodoAtual, setMetodoAtual] = useState('PIX');
   const [valorInputRaw, setValorInputRaw] = useState('');
-  const [descontoTotalRaw, setDescontoTotalRaw] = useState(0);
+  const [descontoTotalRaw, setDescontoTotalRaw] = useState(0); // Desconto Global
   const [cliente, setCliente] = useState(null);
   const [buscaCliente, setBuscaCliente] = useState('');
   const [sugestoesClientes, setSugestoesClientes] = useState([]);
   const [showClienteInput, setShowClienteInput] = useState(false);
 
   // --- CÁLCULOS ---
+  // Soma bruta dos itens (qtd * preco)
   const subtotalItens = carrinho.reduce((acc, item) => acc + (item.precoVenda * item.quantidade), 0);
+  // Soma dos descontos individuais aplicados em cada item
   const descontoItens = carrinho.reduce((acc, item) => acc + (item.desconto || 0), 0);
+
+  // Total a pagar = Subtotal - Descontos Itens - Desconto Global
   const totalPagar = Math.max(0, subtotalItens - descontoItens - descontoTotalRaw);
+
   const totalPago = pagamentos.reduce((acc, p) => acc + p.valor, 0);
-  const saldoDevedor = Math.max(0, totalPagar - totalPago);
-  const troco = Math.max(0, totalPago - totalPagar);
+
+  // Arredonda para 2 casas para evitar flutuação de ponto flutuante (ex: 0.0000001)
+  const saldoDevedor = Math.max(0, parseFloat((totalPagar - totalPago).toFixed(2)));
+  const troco = Math.max(0, parseFloat((totalPago - totalPagar).toFixed(2)));
 
   // --- SEGURANÇA: PREVENIR SAÍDA ACIDENTAL ---
   useEffect(() => {
@@ -83,20 +90,29 @@ const PDV = () => {
   useEffect(() => {
     carregarVendasSuspensas();
     verificarCaixa();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const verificarCaixa = async () => {
     try {
       const res = await caixaService.getStatus();
       if (!res.data || res.data.status === 'FECHADO') {
-        toast.warning("Caixa Fechado.");
+        toast.warning("Caixa Fechado. Abra o caixa para vender.");
         navigate('/caixa');
       }
-    } catch (error) {}
+    } catch (error) {
+        console.error("Erro ao verificar caixa", error);
+        toast.error("Erro de conexão ao verificar caixa.");
+    }
   };
 
   const carregarVendasSuspensas = useCallback(async () => {
-      try { const res = await api.get('/vendas/suspensas'); setVendasPausadas(res.data || []); } catch (e) {}
+      try {
+          const res = await api.get('/vendas/suspensas');
+          setVendasPausadas(res.data || []);
+      } catch (e) {
+          console.error("Erro ao carregar vendas suspensas", e);
+      }
   }, []);
 
   // --- AÇÕES ---
@@ -105,19 +121,19 @@ const PDV = () => {
   const pausarVenda = async () => {
     if (carrinho.length === 0) return toast.info("Carrinho vazio.");
 
-    // Toast no Topo Central
     const toastId = toast.loading("Pausando venda...", { position: "top-center" });
 
     try {
         const payload = {
             clienteId: cliente?.id || null,
+            // Envia o desconto global. O backend deve saber lidar com desconto itens + desconto global
             descontoTotal: Number(descontoTotalRaw) || 0,
             observacao: "Venda Suspensa",
-            formaDePagamento: "DINHEIRO",
+            formaDePagamento: "DINHEIRO", // Padrão para suspensão
             itens: carrinho.map(i => ({
                 produtoId: i.id,
                 quantidade: Number(i.quantidade),
-                precoUnitario: Number(i.precoVenda || 0), // Garante envio do preço
+                precoUnitario: Number(i.precoVenda || 0),
                 desconto: Number(i.desconto || 0)
             })),
             pagamentos: []
@@ -139,7 +155,7 @@ const PDV = () => {
     } catch (e) {
         console.error(e);
         toast.update(toastId, {
-            render: "Erro ao pausar.",
+            render: "Erro ao pausar venda.",
             type: "error",
             isLoading: false,
             autoClose: 3000,
@@ -150,19 +166,18 @@ const PDV = () => {
 
   // 2. RETOMAR VENDA (F6 / Click)
   const retomVenda = async (vendaSuspensa) => {
-      if (carrinho.length > 0) return toast.warn("Finalize a venda atual antes.");
+      if (carrinho.length > 0) return toast.warn("Finalize ou limpe a venda atual antes.");
       setLoading(true);
       try {
           await api.delete(`/vendas/${vendaSuspensa.id}`, { data: { motivo: "Retomada no PDV" } });
 
-          // Mapeamento Robusto
           const itensRecuperados = vendaSuspensa.itens.map(item => ({
               id: item.produtoId,
-              descricao: item.produtoDescricao || item.descricao || item.produtoNome || "Item sem nome",
-              precoVenda: item.precoUnitario || item.precoVenda || 0,
-              quantidade: item.quantidade,
+              descricao: item.produtoDescricao || item.descricao || item.produtoNome || "Item recuperado",
+              precoVenda: Number(item.precoUnitario || item.precoVenda || 0),
+              quantidade: Number(item.quantidade),
               codigoBarras: item.codigoBarras || '',
-              desconto: item.desconto || 0
+              desconto: Number(item.desconto || 0)
           }));
 
           setCarrinho(itensRecuperados);
@@ -173,13 +188,14 @@ const PDV = () => {
               setCliente(null);
           }
 
-          setDescontoTotalRaw(vendaSuspensa.descontoTotal || 0);
+          setDescontoTotalRaw(Number(vendaSuspensa.descontoTotal || 0));
 
           setShowListaEspera(false);
           carregarVendasSuspensas();
           toast.success("Venda recuperada!", { position: "top-center", theme: "colored", autoClose: 2000 });
           setTimeout(() => inputBuscaRef.current?.focus(), 100);
       } catch (error) {
+          console.error(error);
           toast.error("Erro ao recuperar venda.", { position: "top-center" });
       } finally {
           setLoading(false);
@@ -190,30 +206,57 @@ const PDV = () => {
   const abrirPagamento = () => {
       if (carrinho.length === 0) return toast.warn("Carrinho vazio.");
       setModalPagamento(true);
-      setValorInputRaw((saldoDevedor * 100).toFixed(0));
+
+      // Usa Math.round para garantir integridade dos centavos antes de converter para string
+      const valorCentavos = Math.round(saldoDevedor * 100);
+      setValorInputRaw(valorCentavos.toString());
+
       setTimeout(() => inputValorRef.current?.focus(), 100);
   };
 
   const handleAdicionarPagamento = () => {
-    let valor = parseInt(valorInputRaw || '0', 10) / 100;
+    // Parser seguro de inteiros
+    const rawVal = parseInt(valorInputRaw.replace(/\D/g, '') || '0', 10);
+    let valor = rawVal / 100;
+
+    // Se o usuário apertar enter sem digitar nada (0) e houver saldo, assume o saldo total
     if (valor === 0 && saldoDevedor > 0) valor = saldoDevedor;
+
     if (valor <= 0) return;
+    if (valor > saldoDevedor && metodoAtual !== 'DINHEIRO') {
+        // Bloqueia pagamento maior que a dívida para métodos que não geram troco (opcional, mas recomendado)
+        // toast.warn("Valor maior que o saldo devedor.");
+        // return;
+        // *Mantendo comportamento padrão: permite troco em qualquer método ou deixa passar*
+    }
 
     setPagamentos([...pagamentos, { id: Date.now(), tipo: metodoAtual, valor }]);
+
+    // Calcula novo saldo para UX do input
     const novoSaldo = Math.max(0, saldoDevedor - valor);
-    setValorInputRaw(novoSaldo > 0 ? (novoSaldo * 100).toFixed(0) : '');
-    if (novoSaldo > 0) setTimeout(() => inputValorRef.current?.focus(), 50);
+
+    if (novoSaldo > 0) {
+        setValorInputRaw((Math.round(novoSaldo * 100)).toString());
+        setTimeout(() => inputValorRef.current?.focus(), 50);
+    } else {
+        setValorInputRaw('');
+    }
   };
 
   const finalizarVenda = async () => {
+      // Pequena margem para erro de ponto flutuante
       if (saldoDevedor > 0.01) return toast.error(`Falta R$ ${saldoDevedor.toFixed(2)}`);
+
       setLoading(true);
       try {
-          const mapPgto = (t) => ({ 'CREDITO':'CREDITO', 'DEBITO':'DEBITO', 'PIX':'PIX', 'CREDIARIO':'CREDIARIO' }[t] || 'DINHEIRO');
+          const mapPgto = (t) => ({ 'CREDITO':'CREDITO', 'DEBITO':'DEBITO', 'PIX':'PIX', 'CREDIARIO':'CREDIARIO', 'DINHEIRO':'DINHEIRO' }[t] || 'DINHEIRO');
+
           const payload = {
               clienteId: cliente?.id || null,
+              // Backend deve esperar o desconto total da venda (soma dos descontos)
               descontoTotal: descontoTotalRaw + descontoItens,
               observacao: "PDV",
+              // Define forma de pagamento principal (opcional, dependendo do backend)
               formaDePagamento: pagamentos.length > 0 ? mapPgto(pagamentos[0].tipo) : 'DINHEIRO',
               itens: carrinho.map(i => ({
                   produtoId: i.id,
@@ -221,23 +264,43 @@ const PDV = () => {
                   precoUnitario: i.precoVenda,
                   desconto: i.desconto || 0
               })),
-              pagamentos: pagamentos.map(p => ({ formaPagamento: mapPgto(p.tipo), valor: p.valor, parcelas: 1 }))
+              pagamentos: pagamentos.map(p => ({
+                  formaPagamento: mapPgto(p.tipo),
+                  valor: p.valor,
+                  parcelas: 1
+              }))
           };
+
           await api.post('/vendas', payload);
           toast.success("Venda Finalizada!", { position: "top-center", theme: "colored" });
           limparEstadoVenda();
           setTimeout(() => inputBuscaRef.current?.focus(), 100);
-      } catch (e) { toast.error("Erro ao finalizar."); } finally { setLoading(false); }
+      } catch (e) {
+          console.error(e);
+          toast.error("Erro ao finalizar venda.");
+      } finally {
+          setLoading(false);
+      }
   };
 
   const handleLimparVenda = () => { if(carrinho.length > 0) setShowCleanModal(true); };
   const confirmarLimpeza = () => { limparEstadoVenda(); setShowCleanModal(false); inputBuscaRef.current?.focus(); };
-  const limparEstadoVenda = () => { setCarrinho([]); setPagamentos([]); setCliente(null); setDescontoTotalRaw(0); setModalPagamento(false); setShowExitModal(false); setBusca(''); };
+
+  const limparEstadoVenda = () => {
+      setCarrinho([]);
+      setPagamentos([]);
+      setCliente(null);
+      setDescontoTotalRaw(0);
+      setModalPagamento(false);
+      setShowExitModal(false);
+      setBusca('');
+  };
 
   // --- DESCONTOS ---
   const abrirModalDesconto = (tipo, itemId = null) => {
       setModalDesconto({ open: true, tipo, itemId });
-      setDescontoInput(''); setTipoDesconto('$');
+      setDescontoInput('');
+      setTipoDesconto('$');
       setTimeout(() => inputDescontoRef.current?.focus(), 100);
   };
 
@@ -246,6 +309,7 @@ const PDV = () => {
           const porcentagem = parseFloat(descontoInput.replace(',', '.') || 0);
           return (valorBase * porcentagem) / 100;
       } else {
+          // Input em centavos (formatação monetária)
           const centavos = parseInt(descontoInput.replace(/\D/g, '') || 0, 10);
           return centavos / 100;
       }
@@ -254,14 +318,20 @@ const PDV = () => {
   const aplicarDesconto = () => {
       if (modalDesconto.tipo === 'TOTAL') {
           const v = calcularValorDesconto(subtotalItens);
-          if (v > subtotalItens) return toast.error("Desconto inválido.");
+          if (v > subtotalItens) return toast.error("Desconto maior que o subtotal.");
           setDescontoTotalRaw(v);
       } else {
+          // Desconto Item
           setCarrinho(prev => prev.map(item => {
               if (item.id === modalDesconto.itemId) {
-                  const total = item.precoVenda * item.quantidade;
-                  const v = calcularValorDesconto(total);
-                  return v > total ? item : { ...item, desconto: v };
+                  const totalItem = item.precoVenda * item.quantidade;
+                  const v = calcularValorDesconto(totalItem);
+                  // Validação básica: desconto não pode ser maior que o item
+                  if (v >= totalItem) {
+                      toast.error("Desconto inválido p/ o item.");
+                      return item;
+                  }
+                  return { ...item, desconto: v };
               }
               return item;
           }));
@@ -272,56 +342,144 @@ const PDV = () => {
 
   // --- PRODUTOS ---
   const handleBuscaChange = async (e) => {
-    const termo = e.target.value; setBusca(termo); setSelectedIndex(-1);
-    if (/^\d{7,14}$/.test(termo) || termo.length <= 2) { setSugestoesProdutos([]); return; }
-    try { const res = await api.get(`/produtos`, { params: { termo, size: 6 } }); setSugestoesProdutos(res.data.content || []); } catch (err) {}
+    const termo = e.target.value;
+    setBusca(termo);
+    setSelectedIndex(-1);
+
+    // Evita busca com termos muito curtos ou códigos de barra incompletos
+    if (/^\d{7,14}$/.test(termo)) {
+        // Se parece código de barras, não busca sugestão, espera Enter
+        setSugestoesProdutos([]);
+        return;
+    }
+    if (termo.length <= 2) {
+        setSugestoesProdutos([]);
+        return;
+    }
+
+    try {
+        const res = await api.get(`/produtos`, { params: { termo, size: 6 } });
+        setSugestoesProdutos(res.data.content || []);
+    } catch (err) {
+        // Silent fail para busca typeahead
+    }
   };
 
   const adicionarProdutoPorObjeto = (prod) => {
     const itemExistente = carrinho.find(i => i.id === prod.id);
+
     setCarrinho(prev => itemExistente
         ? prev.map(i => i.id === prod.id ? { ...i, quantidade: i.quantidade + 1 } : i)
         : [...prev, { ...prod, quantidade: 1, desconto: 0 }]
     );
-    setUltimoItemAdicionadoId(prod.id); setBusca(''); setSugestoesProdutos([]); setSelectedIndex(-1);
+
+    setUltimoItemAdicionadoId(prod.id);
+    setBusca('');
+    setSugestoesProdutos([]);
+    setSelectedIndex(-1);
     inputBuscaRef.current?.focus();
   };
 
   const processarBuscaManual = async (e) => {
-    if (e) e.preventDefault(); if (!busca) return;
-    if (sugestoesProdutos.length > 0 && selectedIndex !== -1) return adicionarProdutoPorObjeto(sugestoesProdutos[selectedIndex]);
-    try { setLoading(true); const res = await api.get(`/produtos`, { params: { termo: busca, size: 1 } });
-    if (res.data.content?.[0]) adicionarProdutoPorObjeto(res.data.content[0]); else toast.warning("Não encontrado");
-    } catch (err) {} finally { setLoading(false); }
+    if (e) e.preventDefault();
+    if (!busca) return;
+
+    if (sugestoesProdutos.length > 0 && selectedIndex !== -1) {
+        return adicionarProdutoPorObjeto(sugestoesProdutos[selectedIndex]);
+    }
+
+    try {
+        setLoading(true);
+        const res = await api.get(`/produtos`, { params: { termo: busca, size: 1 } });
+        if (res.data.content?.[0]) {
+            adicionarProdutoPorObjeto(res.data.content[0]);
+        } else {
+            toast.warning("Produto não encontrado");
+            setBusca('');
+        }
+    } catch (err) {
+        toast.error("Erro ao buscar produto.");
+    } finally {
+        setLoading(false);
+    }
   };
 
   const handleSearchKeyDown = (e) => {
     if (sugestoesProdutos.length > 0) {
       if (e.key === 'ArrowDown') setSelectedIndex(prev => (prev + 1) % sugestoesProdutos.length);
       else if (e.key === 'ArrowUp') setSelectedIndex(prev => (prev - 1 + sugestoesProdutos.length) % sugestoesProdutos.length);
-      else if (e.key === 'Enter') { e.preventDefault(); selectedIndex >= 0 ? adicionarProdutoPorObjeto(sugestoesProdutos[selectedIndex]) : processarBuscaManual(); }
-    } else if (e.key === 'Enter') processarBuscaManual(e);
+      else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (selectedIndex >= 0) adicionarProdutoPorObjeto(sugestoesProdutos[selectedIndex]);
+          else processarBuscaManual();
+      }
+    } else if (e.key === 'Enter') {
+        processarBuscaManual(e);
+    }
   };
 
   // --- UTILS ---
-  const atualizarQtd = (id, delta) => setCarrinho(prev => prev.map(i => i.id === id ? { ...i, quantidade: Math.max(1, i.quantidade + delta) } : i));
+  const atualizarQtd = (id, delta) => {
+      setCarrinho(prev => prev.map(i => {
+          if (i.id === id) {
+             const novaQtd = Math.max(1, i.quantidade + delta);
+             // Se tinha desconto, opcionalmente ajustar ou manter fixo?
+             // Aqui mantemos o desconto total do item fixo (ex: deu 5 reais de desconto, continua 5)
+             // Se fosse unitário, teria que recalcular.
+             return { ...i, quantidade: novaQtd };
+          }
+          return i;
+      }));
+  };
+
   const removerItem = (id) => setCarrinho(prev => prev.filter(i => i.id !== id));
-  const buscarClientes = async (v) => { setBuscaCliente(v); if(v.length>2) { try{const r=await api.get(`/clientes`,{params:{termo:v}}); setSugestoesClientes(r.data.content||[]);}catch(e){}} else setSugestoesClientes([]); };
-  const selecionarCliente = (c) => { setCliente(c); setBuscaCliente(''); setSugestoesClientes([]); setShowClienteInput(false); };
+
+  const buscarClientes = async (v) => {
+      setBuscaCliente(v);
+      if(v.length > 2) {
+          try {
+              const r = await api.get(`/clientes`,{params:{termo:v}});
+              setSugestoesClientes(r.data.content||[]);
+          } catch(e){}
+      } else {
+          setSugestoesClientes([]);
+      }
+  };
+
+  const selecionarCliente = (c) => {
+      setCliente(c);
+      setBuscaCliente('');
+      setSugestoesClientes([]);
+      setShowClienteInput(false);
+  };
+
   const formatCurrencyInput = (v) => v.replace(/\D/g, "");
-  const getValorFormatado = (r) => r ? (parseInt(r, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : "";
-  const getProductColor = (n) => ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6'][n.charCodeAt(0)%5];
-  const getProductInitials = (n) => n.substring(0, 2).toUpperCase();
+
+  const getValorFormatado = (r) => {
+      if (!r) return "";
+      const val = parseInt(r, 10);
+      if (isNaN(val)) return "";
+      return (val / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  };
+
+  const getProductColor = (n) => ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6'][(n?.charCodeAt(0) || 0) % 5];
+  const getProductInitials = (n) => (n || "?").substring(0, 2).toUpperCase();
 
   // --- ATALHOS GLOBAIS ---
   const handleKeyDownGlobal = useCallback((e) => {
+    // Se algum modal estiver aberto, Esc fecha o modal
     if (modalDesconto.open || modalPagamento || showExitModal || showListaEspera || showCleanModal) {
         if (e.key === 'Escape') {
-            setModalDesconto({...modalDesconto, open:false});
-            setModalPagamento(false); setShowExitModal(false); setShowListaEspera(false); setShowCleanModal(false);
+            setModalDesconto(prev => ({...prev, open:false}));
+            setModalPagamento(false);
+            setShowExitModal(false);
+            setShowListaEspera(false);
+            setShowCleanModal(false);
         }
         return;
     }
+
+    // Atalhos do PDV principal
     switch(e.key) {
         case 'F1': e.preventDefault(); inputBuscaRef.current?.focus(); break;
         case 'F2': e.preventDefault(); pausarVenda(); break;
@@ -336,10 +494,15 @@ const PDV = () => {
             else if (carrinho.length > 0) setShowExitModal(true);
             else handleVoltar();
             break;
+        default: break;
     }
-  }, [carrinho, modalPagamento, modalDesconto, showExitModal, showListaEspera, showCleanModal, vendasPausadas]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carrinho.length, modalDesconto.open, modalPagamento, showExitModal, showListaEspera, showCleanModal, vendasPausadas.length, busca, showClienteInput]);
 
-  useEffect(() => { window.addEventListener('keydown', handleKeyDownGlobal); return () => window.removeEventListener('keydown', handleKeyDownGlobal); }, [handleKeyDownGlobal]);
+  useEffect(() => {
+      window.addEventListener('keydown', handleKeyDownGlobal);
+      return () => window.removeEventListener('keydown', handleKeyDownGlobal);
+  }, [handleKeyDownGlobal]);
 
   return (
     <div className="pdv-container fade-in">
@@ -348,7 +511,16 @@ const PDV = () => {
           <button className="btn-action-soft" onClick={handleVoltar} data-tooltip="Sair (Esc)"><ArrowLeft size={22} /></button>
           <div className="search-wrapper">
             <Search size={22} className="text-gray-400 mr-2"/>
-            <input ref={inputBuscaRef} type="text" placeholder="Pesquisar produto (F1)..." value={busca} onChange={handleBuscaChange} onKeyDown={handleSearchKeyDown} autoFocus autoComplete="off" />
+            <input
+                ref={inputBuscaRef}
+                type="text"
+                placeholder="Pesquisar produto (F1)..."
+                value={busca}
+                onChange={handleBuscaChange}
+                onKeyDown={handleSearchKeyDown}
+                autoFocus
+                autoComplete="off"
+            />
             {sugestoesProdutos.length > 0 && (
               <div className="pdv-dropdown-products" ref={dropdownRef}>
                 {sugestoesProdutos.map((prod, idx) => (
@@ -439,7 +611,14 @@ const PDV = () => {
                       <label style={{fontSize:'0.9rem', fontWeight:600, color:'#64748b', marginBottom:'-10px'}}>Valor do Pagamento:</label>
                       <div className="input-with-icon primary">
                           <span className="currency-prefix">R$</span>
-                          <input ref={inputValorRef} autoFocus value={getValorFormatado(valorInputRaw)} onChange={e => setValorInputRaw(formatCurrencyInput(e.target.value))} onKeyDown={e => e.key === 'Enter' && handleAdicionarPagamento()} placeholder="0,00" />
+                          <input
+                              ref={inputValorRef}
+                              autoFocus
+                              value={getValorFormatado(valorInputRaw)}
+                              onChange={e => setValorInputRaw(formatCurrencyInput(e.target.value))}
+                              onKeyDown={e => e.key === 'Enter' && handleAdicionarPagamento()}
+                              placeholder="0,00"
+                          />
                           <button className="btn-enter-icon" onClick={handleAdicionarPagamento} title="Confirmar Valor"><ArrowRight size={24} strokeWidth={3} /></button>
                       </div>
                       <div className="pm-log">
