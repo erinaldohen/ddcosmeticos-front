@@ -1,114 +1,140 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingCart, Package, Users,
   Settings, LogOut, ChevronLeft, X, DollarSign,
-  PieChart, FileText, ShieldCheck, Truck, History
+  FileText, ShieldCheck, Truck, History, Clock
 } from 'lucide-react';
 import './Sidebar.css';
 
 const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) => {
   const location = useLocation();
+  const [userRole, setUserRole] = useState('');
 
-  // ESTRUTURA ORGANIZADA POR SESSÕES
-  // Removemos o item "Estoque" avulso pois era duplicado de "Produtos"
-  const menuGroups = [
-    {
-      title: 'Principal',
-      items: [
-        { path: '/dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
-        { path: '/pdv', icon: <ShoppingCart size={20} />, label: 'PDV (Vendas)' },
-      ]
-    },
-    {
-      title: 'Financeiro',
-      items: [
-        { path: '/caixa', icon: <DollarSign size={20} />, label: 'Gerir Caixa' },
-        { path: '/historico-caixa', icon: <History size={20} />, label: 'Histórico' },
-      ]
-    },
-    {
-      title: 'Gestão',
-      items: [
-        { path: '/produtos', icon: <Package size={20} />, label: 'Produtos' }, // Produtos = Estoque
-        { path: '/estoque/entrada', icon: <Truck size={20} />, label: 'Entrada NFe' },
-        { path: '/fornecedores', icon: <Users size={20} />, label: 'Fornecedores' },
-      ]
-    },
-    {
-      title: 'Controle',
-      items: [
-        { path: '/fiscal', icon: <FileText size={20} />, label: 'Fiscal' },
-        { path: '/auditoria', icon: <ShieldCheck size={20} />, label: 'Auditoria' },
-        { path: '/configuracoes', icon: <Settings size={20} />, label: 'Configurações' },
-      ]
+  // --- LÓGICA DO RELÓGIO ---
+  const [hora, setHora] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+        setHora(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // --- 1. RECUPERAR ROLE DO USUÁRIO ---
+  useEffect(() => {
+    try {
+      const userStr = localStorage.getItem('user') || localStorage.getItem('usuario');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        const role = user.perfil || user.perfilDoUsuario || user.role || 'ROLE_USUARIO';
+        setUserRole(role);
+      }
+    } catch (e) {
+      console.error("Erro ao ler perfil:", e);
     }
+  }, []);
+
+  // --- 2. CONFIGURAÇÃO DOS MENUS ---
+  const menuGroups = [
+      {
+        title: 'Principal',
+        items: [
+          { path: '/dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+          { path: '/pdv', icon: <ShoppingCart size={20} />, label: 'PDV (Vendas)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA', 'ROLE_USUARIO'] },
+        ]
+      },
+      {
+        title: 'Financeiro',
+        items: [
+          { path: '/caixa', icon: <DollarSign size={20} />, label: 'Gerir Caixa', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA', 'ROLE_USUARIO'] },
+          { path: '/historico-caixa', icon: <History size={20} />, label: 'Histórico', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+        ]
+      },
+      {
+        title: 'Gestão',
+        items: [
+          { path: '/produtos', icon: <Package size={20} />, label: 'Produtos', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
+          { path: '/estoque/entrada', icon: <Truck size={20} />, label: 'Entrada NFe', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
+          { path: '/fornecedores', icon: <Users size={20} />, label: 'Fornecedores', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+        ]
+      },
+      {
+        title: 'Controle',
+        items: [
+          { path: '/fiscal', icon: <FileText size={20} />, label: 'Fiscal', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+          { path: '/auditoria', icon: <ShieldCheck size={20} />, label: 'Auditoria', roles: ['ROLE_ADMIN'] },
+          { path: '/configuracoes', icon: <Settings size={20} />, label: 'Configurações', roles: ['ROLE_ADMIN'] },
+        ]
+      }
   ];
 
   const handleLogout = () => {
-    localStorage.clear();
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
     window.location.href = '/login';
   };
 
   return (
     <>
-      <div
-        className={`sidebar-overlay ${isMobileOpen ? 'active' : ''}`}
-        onClick={toggleMobile}
-      />
+      <div className={`sidebar-overlay ${isMobileOpen ? 'active' : ''}`} onClick={toggleMobile} />
 
       <aside className={`sidebar-container ${isMobileOpen ? 'mobile-open' : ''} ${isCollapsed ? 'collapsed' : ''}`}>
 
+        {/* HEADER: LOGO */}
         <div className="sidebar-header">
           <h1 className="logo-text">
             {!isCollapsed ? <>DD<span>Cosméticos</span></> : <span style={{color:'#2563eb'}}>DD</span>}
           </h1>
-
-          <button
-            className="btn-toggle-sidebar desktop-only"
-            onClick={toggleCollapse}
-            data-tooltip={isCollapsed ? "Expandir Menu" : "Recolher Menu"}
-          >
+          <button className="btn-toggle-sidebar desktop-only" onClick={toggleCollapse}>
             <ChevronLeft size={20} className={isCollapsed ? 'rotate-180' : ''}/>
           </button>
-
-          <button
-            className="btn-toggle-sidebar mobile-only"
-            onClick={toggleMobile}
-          >
+          <button className="btn-toggle-sidebar mobile-only" onClick={toggleMobile}>
             <X size={20}/>
           </button>
         </div>
 
-        <nav className="sidebar-nav">
-          {menuGroups.map((group, index) => (
-            <div key={index} className="menu-group">
-              {/* Título da Sessão (Só aparece se não estiver recolhido) */}
-              {!isCollapsed && <h4 className="group-title">{group.title}</h4>}
+        {/* --- RELÓGIO (NOVO POSICIONAMENTO: TOPO) --- */}
+        <div className="sidebar-clock-widget" title={hora.toLocaleDateString('pt-BR')}>
+             {isCollapsed ? (
+                 <div className="clock-collapsed"><Clock size={18} /></div>
+             ) : (
+                 <>
+                    <Clock size={16} className="clock-icon"/>
+                    <span className="clock-time">{hora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="clock-seconds">{hora.toLocaleTimeString('pt-BR', { second: '2-digit' })}</span>
+                 </>
+             )}
+        </div>
 
-              {group.items.map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                  data-tooltip={isCollapsed ? item.label : ''}
-                  onClick={() => isMobileOpen && toggleMobile()}
-                >
-                  <span className="nav-icon">{item.icon}</span>
-                  <span className="nav-label">{item.label}</span>
-                  {location.pathname === item.path && !isCollapsed && <div className="active-indicator" />}
-                </NavLink>
-              ))}
-            </div>
-          ))}
+        <nav className="sidebar-nav">
+          {menuGroups.map((group, index) => {
+            const visibleItems = group.items.filter(item => item.roles.includes(userRole));
+            if (visibleItems.length === 0) return null;
+
+            return (
+              <div key={index} className="menu-group">
+                {!isCollapsed && <h4 className="group-title">{group.title}</h4>}
+                {visibleItems.map((item) => (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                    onClick={() => isMobileOpen && toggleMobile()}
+                    title={isCollapsed ? item.label : ''}
+                  >
+                    <span className="nav-icon">{item.icon}</span>
+                    <span className="nav-label">{item.label}</span>
+                    {location.pathname === item.path && !isCollapsed && <div className="active-indicator" />}
+                  </NavLink>
+                ))}
+              </div>
+            );
+          })}
         </nav>
 
         <div className="sidebar-footer">
-          <button
-            className="nav-item logout"
-            onClick={handleLogout}
-            data-tooltip={isCollapsed ? "Sair do Sistema" : ''}
-          >
+          <button className="nav-item logout" onClick={handleLogout} title="Sair do Sistema">
             <span className="nav-icon"><LogOut size={20} /></span>
             <span className="nav-label">Sair</span>
           </button>

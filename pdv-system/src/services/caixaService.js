@@ -4,8 +4,8 @@ import api from './api';
 const tratarValor = (valor) => {
   if (valor === undefined || valor === null) return 0;
   if (typeof valor === 'number') return valor;
-  // Remove pontos de milhar e troca vírgula por ponto
-  const formatado = String(valor).replace(/\./g, '').replace(',', '.');
+  // Remove pontos de milhar e troca vírgula por ponto (ex: "1.250,50" -> 1250.50)
+  const formatado = String(valor).replace("R$", "").replace(/\./g, '').replace(',', '.').trim();
   const numero = parseFloat(formatado);
   return isNaN(numero) ? 0 : numero;
 };
@@ -14,27 +14,28 @@ const caixaService = {
 
   // --- CONSULTAS ---
 
-  // Verifica se existe caixa aberto (usado no PDV e Dashboard)
+  // Verifica se existe caixa aberto
   getStatus: async () => {
-    return await api.get('/caixas/status'); // Rota corrigida (plural)
-  },
-
-  // Alias para getStatus (mantido para compatibilidade)
-  verificarStatus: async () => {
     return await api.get('/caixas/status');
   },
 
-  // Busca dados completos de um fechamento específico (usado no Modal)
-  buscarDetalhes: async (idCaixa) => {
-    return await api.get(`/caixas/${idCaixa}`); // Rota corrigida: /caixas/{id}
+  // Busca lista de motivos únicos já salvos no banco (Histórico de Observações)
+  // Requisito para o autocomplete inteligente funcionar via sistema
+  getMotivosFrequentes: async () => {
+    return await api.get('/caixas/motivos');
   },
 
-  // Busca movimentações do dia (Entradas/Saídas)
+  // Busca dados completos de um fechamento específico
+  buscarDetalhes: async (idCaixa) => {
+    return await api.get(`/caixas/${idCaixa}`);
+  },
+
+  // Busca movimentações do dia
   getHistoricoDiario: async (data) => {
     return await api.get('/caixas/diario', { params: { data } });
   },
 
-  // Busca lista paginada de caixas (usado na tela Histórico de Caixa)
+  // Busca lista paginada de caixas (Histórico)
   buscarHistorico: async (inicio, fim) => {
       const params = {};
       const hoje = new Date().toISOString().split('T')[0];
@@ -42,18 +43,15 @@ const caixaService = {
       const dataInicio = inicio || hoje;
       const dataFim = fim || dataInicio;
 
-      // Parâmetros exatos que o CaixaController espera
       params.inicio = dataInicio;
       params.fim = dataFim;
 
-      // Rota corrigida: /caixas (Raiz do controller listagem)
       return await api.get('/caixas', { params });
   },
 
-  // --- OPERAÇÕES ---
+  // --- OPERAÇÕES (ABERTURA / FECHAMENTO) ---
 
   abrir: async (dados) => {
-    // Aceita tanto objeto quanto valor direto
     const valor = typeof dados === 'object' ? dados.saldoInicial : dados;
     return await api.post('/caixas/abrir', { saldoInicial: tratarValor(valor) });
   },
@@ -64,7 +62,6 @@ const caixaService = {
   },
 
   // --- MOVIMENTAÇÕES (SANGRIA / SUPRIMENTO) ---
-  // O Backend agora usa um único endpoint /movimentacao com o campo "tipo"
 
   sangria: async (dados) => {
     return await api.post('/caixas/movimentacao', {
@@ -82,9 +79,8 @@ const caixaService = {
     });
   },
 
-  // Método genérico
+  // Método genérico caso precise movimentar passando string
   movimentar: async (tipo, valor, descricao) => {
-    // Backend espera o enum: 'SANGRIA' ou 'SUPRIMENTO'
     const tipoEnum = tipo.toUpperCase().includes('SANGRIA') ? 'SANGRIA' : 'SUPRIMENTO';
 
     return await api.post('/caixas/movimentacao', {

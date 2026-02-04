@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search, Trash2, CreditCard, Banknote, User, Plus, Minus,
-  PauseCircle, Smartphone, ArrowLeft, X,
-  MonitorCheck, History, UserCheck, AlertTriangle,
-  Tag, RotateCcw, UserPlus, Box, Barcode, CheckCircle, Calculator,
-  Percent, ArrowRight, Clock
+  PauseCircle, ArrowLeft, X,
+  MonitorCheck, UserCheck, AlertTriangle,
+  Tag, RotateCcw, UserPlus, Barcode, Percent, ArrowRight, Clock,
+  DollarSign, Menu, LogOut
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
@@ -29,6 +29,9 @@ const PDV = () => {
   const [loading, setLoading] = useState(false);
   const [ultimoItemAdicionadoId, setUltimoItemAdicionadoId] = useState(null);
 
+  // RELÓGIO
+  const [horaAtual, setHoraAtual] = useState(new Date());
+
   // Modais
   const [modalPagamento, setModalPagamento] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
@@ -36,39 +39,33 @@ const PDV = () => {
   const [showCleanModal, setShowCleanModal] = useState(false);
   const [modalDesconto, setModalDesconto] = useState({ open: false, tipo: 'TOTAL', itemId: null });
 
-  // Desconto
+  // Desconto e Pagamento
   const [descontoInput, setDescontoInput] = useState('');
-  const [tipoDesconto, setTipoDesconto] = useState('$'); // '$' ou '%'
-
-  // Dados
+  const [tipoDesconto, setTipoDesconto] = useState('$');
   const [sugestoesProdutos, setSugestoesProdutos] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [pagamentos, setPagamentos] = useState([]);
   const [metodoAtual, setMetodoAtual] = useState('PIX');
   const [valorInputRaw, setValorInputRaw] = useState('');
-  const [descontoTotalRaw, setDescontoTotalRaw] = useState(0); // Desconto Global
+  const [descontoTotalRaw, setDescontoTotalRaw] = useState(0);
   const [cliente, setCliente] = useState(null);
   const [buscaCliente, setBuscaCliente] = useState('');
   const [sugestoesClientes, setSugestoesClientes] = useState([]);
   const [showClienteInput, setShowClienteInput] = useState(false);
 
   // --- CÁLCULOS ---
-  // Soma bruta dos itens (qtd * preco)
   const subtotalItens = carrinho.reduce((acc, item) => acc + (item.precoVenda * item.quantidade), 0);
-  // Soma dos descontos individuais aplicados em cada item
   const descontoItens = carrinho.reduce((acc, item) => acc + (item.desconto || 0), 0);
-
-  // Total a pagar = Subtotal - Descontos Itens - Desconto Global
   const totalPagar = Math.max(0, subtotalItens - descontoItens - descontoTotalRaw);
-
   const totalPago = pagamentos.reduce((acc, p) => acc + p.valor, 0);
-
-  // Arredonda para 2 casas para evitar flutuação de ponto flutuante (ex: 0.0000001)
   const saldoDevedor = Math.max(0, parseFloat((totalPagar - totalPago).toFixed(2)));
   const troco = Math.max(0, parseFloat((totalPago - totalPagar).toFixed(2)));
 
-  // --- SEGURANÇA: PREVENIR SAÍDA ACIDENTAL ---
+  // --- EFEITOS GLOBAIS ---
   useEffect(() => {
+    // Atualiza relógio
+    const timer = setInterval(() => setHoraAtual(new Date()), 1000);
+
     const handleBeforeUnload = (e) => {
       if (carrinho.length > 0) {
         e.preventDefault();
@@ -76,15 +73,41 @@ const PDV = () => {
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+        clearInterval(timer);
+    };
   }, [carrinho]);
 
-  const handleVoltar = () => {
-      if (carrinho.length > 0) setShowExitModal(true);
-      else navigate('/dashboard');
+  // --- LÓGICA DE NAVEGAÇÃO ---
+  const getUserRole = () => {
+    try {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        return user.perfil || user.perfilDoUsuario || user.role || 'ROLE_USUARIO';
+    } catch (e) { return 'ROLE_USUARIO'; }
   };
 
-  const confirmExit = useCallback(() => navigate('/dashboard'), [navigate]);
+  const handleVoltar = () => {
+      if (carrinho.length > 0) {
+          setShowExitModal(true);
+      } else {
+          const role = getUserRole();
+          if (['ROLE_ADMIN', 'ROLE_GERENTE'].includes(role)) {
+              navigate('/dashboard');
+          } else {
+              navigate('/caixa');
+          }
+      }
+  };
+
+  const confirmExit = useCallback(() => {
+      const role = getUserRole();
+      if (['ROLE_ADMIN', 'ROLE_GERENTE'].includes(role)) {
+          navigate('/dashboard');
+      } else {
+          navigate('/caixa');
+      }
+  }, [navigate]);
 
   // --- INICIALIZAÇÃO ---
   useEffect(() => {
@@ -97,12 +120,11 @@ const PDV = () => {
     try {
       const res = await caixaService.getStatus();
       if (!res.data || res.data.status === 'FECHADO') {
-        toast.warning("Caixa Fechado. Abra o caixa para vender.");
+        toast.warning("Caixa Fechado. É necessário abrir o caixa.", { toastId: 'cx-closed' });
         navigate('/caixa');
       }
     } catch (error) {
         console.error("Erro ao verificar caixa", error);
-        toast.error("Erro de conexão ao verificar caixa.");
     }
   };
 
@@ -115,371 +137,149 @@ const PDV = () => {
       }
   }, []);
 
-  // --- AÇÕES ---
+  // --- AÇÕES DO PDV ---
+  const limparEstadoVenda = () => {
+      setCarrinho([]); setPagamentos([]); setCliente(null);
+      setDescontoTotalRaw(0); setModalPagamento(false);
+      setShowExitModal(false); setBusca('');
+  };
 
-  // 1. PAUSAR VENDA (F2)
+  // 1. PAUSAR VENDA
   const pausarVenda = async () => {
     if (carrinho.length === 0) return toast.info("Carrinho vazio.");
-
-    const toastId = toast.loading("Pausando venda...", { position: "top-center" });
-
+    const toastId = toast.loading("Pausando venda...");
     try {
         const payload = {
             clienteId: cliente?.id || null,
-            // Envia o desconto global. O backend deve saber lidar com desconto itens + desconto global
             descontoTotal: Number(descontoTotalRaw) || 0,
             observacao: "Venda Suspensa",
-            formaDePagamento: "DINHEIRO", // Padrão para suspensão
+            formaDePagamento: "DINHEIRO",
             itens: carrinho.map(i => ({
-                produtoId: i.id,
-                quantidade: Number(i.quantidade),
-                precoUnitario: Number(i.precoVenda || 0),
-                desconto: Number(i.desconto || 0)
+                produtoId: i.id, quantidade: Number(i.quantidade), precoUnitario: Number(i.precoVenda), desconto: Number(i.desconto||0)
             })),
             pagamentos: []
         };
-
         await api.post('/vendas/suspender', payload);
-
-        toast.update(toastId, {
-            render: "Venda Pausada! ⏸️",
-            type: "success",
-            isLoading: false,
-            autoClose: 2000,
-            position: "top-center",
-            theme: "colored"
-        });
-
-        limparEstadoVenda();
-        carregarVendasSuspensas();
-    } catch (e) {
-        console.error(e);
-        toast.update(toastId, {
-            render: "Erro ao pausar venda.",
-            type: "error",
-            isLoading: false,
-            autoClose: 3000,
-            position: "top-center"
-        });
-    }
+        toast.update(toastId, { render: "Venda Pausada! ⏸️", type: "success", isLoading: false, autoClose: 2000 });
+        limparEstadoVenda(); carregarVendasSuspensas();
+    } catch (e) { toast.update(toastId, { render: "Erro ao pausar.", type: "error", isLoading: false, autoClose: 3000 }); }
   };
 
-  // 2. RETOMAR VENDA (F6 / Click)
+  // 2. RETOMAR VENDA
   const retomVenda = async (vendaSuspensa) => {
-      if (carrinho.length > 0) return toast.warn("Finalize ou limpe a venda atual antes.");
+      if (carrinho.length > 0) return toast.warn("Finalize a venda atual antes.");
       setLoading(true);
       try {
-          await api.delete(`/vendas/${vendaSuspensa.id}`, { data: { motivo: "Retomada no PDV" } });
-
+          await api.delete(`/vendas/${vendaSuspensa.id}`, { data: { motivo: "Retomada PDV" } });
           const itensRecuperados = vendaSuspensa.itens.map(item => ({
-              id: item.produtoId,
-              descricao: item.produtoDescricao || item.descricao || item.produtoNome || "Item recuperado",
-              precoVenda: Number(item.precoUnitario || item.precoVenda || 0),
-              quantidade: Number(item.quantidade),
-              codigoBarras: item.codigoBarras || '',
-              desconto: Number(item.desconto || 0)
+              id: item.produtoId, descricao: item.produtoDescricao || item.produtoNome || "Item",
+              precoVenda: Number(item.precoUnitario), quantidade: Number(item.quantidade),
+              codigoBarras: item.codigoBarras || '', desconto: Number(item.desconto || 0)
           }));
-
           setCarrinho(itensRecuperados);
-
           if (vendaSuspensa.clienteNome && vendaSuspensa.clienteNome !== "Consumidor Final") {
-              setCliente({ id: vendaSuspensa.clienteId || null, nome: vendaSuspensa.clienteNome });
-          } else {
-              setCliente(null);
+              setCliente({ id: vendaSuspensa.clienteId, nome: vendaSuspensa.clienteNome });
           }
-
           setDescontoTotalRaw(Number(vendaSuspensa.descontoTotal || 0));
-
-          setShowListaEspera(false);
-          carregarVendasSuspensas();
-          toast.success("Venda recuperada!", { position: "top-center", theme: "colored", autoClose: 2000 });
-          setTimeout(() => inputBuscaRef.current?.focus(), 100);
-      } catch (error) {
-          console.error(error);
-          toast.error("Erro ao recuperar venda.", { position: "top-center" });
-      } finally {
-          setLoading(false);
-      }
+          setShowListaEspera(false); carregarVendasSuspensas();
+          toast.success("Venda recuperada!"); setTimeout(() => inputBuscaRef.current?.focus(), 100);
+      } catch (error) { toast.error("Erro ao recuperar."); } finally { setLoading(false); }
   };
 
-  // 3. PAGAMENTO (F5)
+  // 3. PAGAMENTO
   const abrirPagamento = () => {
       if (carrinho.length === 0) return toast.warn("Carrinho vazio.");
       setModalPagamento(true);
-
-      // Usa Math.round para garantir integridade dos centavos antes de converter para string
       const valorCentavos = Math.round(saldoDevedor * 100);
       setValorInputRaw(valorCentavos.toString());
-
       setTimeout(() => inputValorRef.current?.focus(), 100);
   };
 
   const handleAdicionarPagamento = () => {
-    // Parser seguro de inteiros
     const rawVal = parseInt(valorInputRaw.replace(/\D/g, '') || '0', 10);
     let valor = rawVal / 100;
-
-    // Se o usuário apertar enter sem digitar nada (0) e houver saldo, assume o saldo total
     if (valor === 0 && saldoDevedor > 0) valor = saldoDevedor;
-
     if (valor <= 0) return;
-    if (valor > saldoDevedor && metodoAtual !== 'DINHEIRO') {
-        // Bloqueia pagamento maior que a dívida para métodos que não geram troco (opcional, mas recomendado)
-        // toast.warn("Valor maior que o saldo devedor.");
-        // return;
-        // *Mantendo comportamento padrão: permite troco em qualquer método ou deixa passar*
-    }
-
     setPagamentos([...pagamentos, { id: Date.now(), tipo: metodoAtual, valor }]);
-
-    // Calcula novo saldo para UX do input
     const novoSaldo = Math.max(0, saldoDevedor - valor);
-
     if (novoSaldo > 0) {
         setValorInputRaw((Math.round(novoSaldo * 100)).toString());
         setTimeout(() => inputValorRef.current?.focus(), 50);
-    } else {
-        setValorInputRaw('');
-    }
+    } else { setValorInputRaw(''); }
   };
 
   const finalizarVenda = async () => {
-      // Pequena margem para erro de ponto flutuante
       if (saldoDevedor > 0.01) return toast.error(`Falta R$ ${saldoDevedor.toFixed(2)}`);
-
       setLoading(true);
       try {
           const mapPgto = (t) => ({ 'CREDITO':'CREDITO', 'DEBITO':'DEBITO', 'PIX':'PIX', 'CREDIARIO':'CREDIARIO', 'DINHEIRO':'DINHEIRO' }[t] || 'DINHEIRO');
-
           const payload = {
-              clienteId: cliente?.id || null,
-              // Backend deve esperar o desconto total da venda (soma dos descontos)
-              descontoTotal: descontoTotalRaw + descontoItens,
-              observacao: "PDV",
-              // Define forma de pagamento principal (opcional, dependendo do backend)
+              clienteId: cliente?.id || null, descontoTotal: descontoTotalRaw + descontoItens, observacao: "PDV",
               formaDePagamento: pagamentos.length > 0 ? mapPgto(pagamentos[0].tipo) : 'DINHEIRO',
-              itens: carrinho.map(i => ({
-                  produtoId: i.id,
-                  quantidade: i.quantidade,
-                  precoUnitario: i.precoVenda,
-                  desconto: i.desconto || 0
-              })),
-              pagamentos: pagamentos.map(p => ({
-                  formaPagamento: mapPgto(p.tipo),
-                  valor: p.valor,
-                  parcelas: 1
-              }))
+              itens: carrinho.map(i => ({ produtoId: i.id, quantidade: i.quantidade, precoUnitario: i.precoVenda, desconto: i.desconto || 0 })),
+              pagamentos: pagamentos.map(p => ({ formaPagamento: mapPgto(p.tipo), valor: p.valor, parcelas: 1 }))
           };
-
           await api.post('/vendas', payload);
-          toast.success("Venda Finalizada!", { position: "top-center", theme: "colored" });
-          limparEstadoVenda();
-          setTimeout(() => inputBuscaRef.current?.focus(), 100);
-      } catch (e) {
-          console.error(e);
-          toast.error("Erro ao finalizar venda.");
-      } finally {
-          setLoading(false);
-      }
+          toast.success("Venda Finalizada!"); limparEstadoVenda(); setTimeout(() => inputBuscaRef.current?.focus(), 100);
+      } catch (e) { toast.error("Erro ao finalizar."); } finally { setLoading(false); }
   };
 
   const handleLimparVenda = () => { if(carrinho.length > 0) setShowCleanModal(true); };
   const confirmarLimpeza = () => { limparEstadoVenda(); setShowCleanModal(false); inputBuscaRef.current?.focus(); };
 
-  const limparEstadoVenda = () => {
-      setCarrinho([]);
-      setPagamentos([]);
-      setCliente(null);
-      setDescontoTotalRaw(0);
-      setModalPagamento(false);
-      setShowExitModal(false);
-      setBusca('');
-  };
-
-  // --- DESCONTOS ---
-  const abrirModalDesconto = (tipo, itemId = null) => {
-      setModalDesconto({ open: true, tipo, itemId });
-      setDescontoInput('');
-      setTipoDesconto('$');
-      setTimeout(() => inputDescontoRef.current?.focus(), 100);
-  };
-
-  const calcularValorDesconto = (valorBase) => {
-      if (tipoDesconto === '%') {
-          const porcentagem = parseFloat(descontoInput.replace(',', '.') || 0);
-          return (valorBase * porcentagem) / 100;
-      } else {
-          // Input em centavos (formatação monetária)
-          const centavos = parseInt(descontoInput.replace(/\D/g, '') || 0, 10);
-          return centavos / 100;
-      }
-  };
-
-  const aplicarDesconto = () => {
-      if (modalDesconto.tipo === 'TOTAL') {
-          const v = calcularValorDesconto(subtotalItens);
-          if (v > subtotalItens) return toast.error("Desconto maior que o subtotal.");
-          setDescontoTotalRaw(v);
-      } else {
-          // Desconto Item
-          setCarrinho(prev => prev.map(item => {
-              if (item.id === modalDesconto.itemId) {
-                  const totalItem = item.precoVenda * item.quantidade;
-                  const v = calcularValorDesconto(totalItem);
-                  // Validação básica: desconto não pode ser maior que o item
-                  if (v >= totalItem) {
-                      toast.error("Desconto inválido p/ o item.");
-                      return item;
-                  }
-                  return { ...item, desconto: v };
-              }
-              return item;
-          }));
-      }
-      setModalDesconto({ ...modalDesconto, open: false });
-      inputBuscaRef.current?.focus();
-  };
-
-  // --- PRODUTOS ---
+  // --- BUSCA ---
   const handleBuscaChange = async (e) => {
-    const termo = e.target.value;
-    setBusca(termo);
-    setSelectedIndex(-1);
-
-    // Evita busca com termos muito curtos ou códigos de barra incompletos
-    if (/^\d{7,14}$/.test(termo)) {
-        // Se parece código de barras, não busca sugestão, espera Enter
-        setSugestoesProdutos([]);
-        return;
-    }
-    if (termo.length <= 2) {
-        setSugestoesProdutos([]);
-        return;
-    }
-
-    try {
-        const res = await api.get(`/produtos`, { params: { termo, size: 6 } });
-        setSugestoesProdutos(res.data.content || []);
-    } catch (err) {
-        // Silent fail para busca typeahead
-    }
+    const termo = e.target.value; setBusca(termo); setSelectedIndex(-1);
+    if (/^\d{7,14}$/.test(termo) || termo.length <= 2) { setSugestoesProdutos([]); return; }
+    try { const res = await api.get(`/produtos`, { params: { termo, size: 6 } }); setSugestoesProdutos(res.data.content || []); } catch (err) {}
   };
 
   const adicionarProdutoPorObjeto = (prod) => {
     const itemExistente = carrinho.find(i => i.id === prod.id);
-
-    setCarrinho(prev => itemExistente
-        ? prev.map(i => i.id === prod.id ? { ...i, quantidade: i.quantidade + 1 } : i)
-        : [...prev, { ...prod, quantidade: 1, desconto: 0 }]
-    );
-
-    setUltimoItemAdicionadoId(prod.id);
-    setBusca('');
-    setSugestoesProdutos([]);
-    setSelectedIndex(-1);
-    inputBuscaRef.current?.focus();
+    setCarrinho(prev => itemExistente ? prev.map(i => i.id === prod.id ? { ...i, quantidade: i.quantidade + 1 } : i) : [...prev, { ...prod, quantidade: 1, desconto: 0 }]);
+    setUltimoItemAdicionadoId(prod.id); setBusca(''); setSugestoesProdutos([]); setSelectedIndex(-1); inputBuscaRef.current?.focus();
   };
 
   const processarBuscaManual = async (e) => {
-    if (e) e.preventDefault();
-    if (!busca) return;
-
-    if (sugestoesProdutos.length > 0 && selectedIndex !== -1) {
-        return adicionarProdutoPorObjeto(sugestoesProdutos[selectedIndex]);
-    }
-
-    try {
-        setLoading(true);
-        const res = await api.get(`/produtos`, { params: { termo: busca, size: 1 } });
-        if (res.data.content?.[0]) {
-            adicionarProdutoPorObjeto(res.data.content[0]);
-        } else {
-            toast.warning("Produto não encontrado");
-            setBusca('');
-        }
-    } catch (err) {
-        toast.error("Erro ao buscar produto.");
-    } finally {
-        setLoading(false);
-    }
+    if (e) e.preventDefault(); if (!busca) return;
+    if (sugestoesProdutos.length > 0 && selectedIndex !== -1) return adicionarProdutoPorObjeto(sugestoesProdutos[selectedIndex]);
+    try { setLoading(true); const res = await api.get(`/produtos`, { params: { termo: busca, size: 1 } });
+    if (res.data.content?.[0]) adicionarProdutoPorObjeto(res.data.content[0]); else { toast.warning("Não encontrado"); setBusca(''); }
+    } catch (err) { toast.error("Erro ao buscar."); } finally { setLoading(false); }
   };
 
   const handleSearchKeyDown = (e) => {
     if (sugestoesProdutos.length > 0) {
       if (e.key === 'ArrowDown') setSelectedIndex(prev => (prev + 1) % sugestoesProdutos.length);
       else if (e.key === 'ArrowUp') setSelectedIndex(prev => (prev - 1 + sugestoesProdutos.length) % sugestoesProdutos.length);
-      else if (e.key === 'Enter') {
-          e.preventDefault();
-          if (selectedIndex >= 0) adicionarProdutoPorObjeto(sugestoesProdutos[selectedIndex]);
-          else processarBuscaManual();
-      }
-    } else if (e.key === 'Enter') {
-        processarBuscaManual(e);
-    }
+      else if (e.key === 'Enter') { e.preventDefault(); selectedIndex >= 0 ? adicionarProdutoPorObjeto(sugestoesProdutos[selectedIndex]) : processarBuscaManual(); }
+    } else if (e.key === 'Enter') processarBuscaManual(e);
   };
 
   // --- UTILS ---
-  const atualizarQtd = (id, delta) => {
-      setCarrinho(prev => prev.map(i => {
-          if (i.id === id) {
-             const novaQtd = Math.max(1, i.quantidade + delta);
-             // Se tinha desconto, opcionalmente ajustar ou manter fixo?
-             // Aqui mantemos o desconto total do item fixo (ex: deu 5 reais de desconto, continua 5)
-             // Se fosse unitário, teria que recalcular.
-             return { ...i, quantidade: novaQtd };
-          }
-          return i;
-      }));
-  };
-
+  const formatCurrencyInput = (v) => v.replace(/\D/g, "");
+  const getValorFormatado = (r) => r ? (parseInt(r, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : "";
+  const getProductColor = (n) => ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6'][(n?.charCodeAt(0)||0)%5];
+  const getProductInitials = (n) => (n||"?").substring(0, 2).toUpperCase();
+  const atualizarQtd = (id, d) => setCarrinho(prev => prev.map(i => i.id === id ? { ...i, quantidade: Math.max(1, i.quantidade + d) } : i));
   const removerItem = (id) => setCarrinho(prev => prev.filter(i => i.id !== id));
 
-  const buscarClientes = async (v) => {
-      setBuscaCliente(v);
-      if(v.length > 2) {
-          try {
-              const r = await api.get(`/clientes`,{params:{termo:v}});
-              setSugestoesClientes(r.data.content||[]);
-          } catch(e){}
-      } else {
-          setSugestoesClientes([]);
-      }
+  const buscarClientes = async (v) => { setBuscaCliente(v); if(v.length>2) { try{const r=await api.get(`/clientes`,{params:{termo:v}}); setSugestoesClientes(r.data.content||[]);}catch(e){}} else setSugestoesClientes([]); };
+  const selecionarCliente = (c) => { setCliente(c); setBuscaCliente(''); setSugestoesClientes([]); setShowClienteInput(false); };
+
+  const abrirModalDesconto = (t, id=null) => { setModalDesconto({open:true, tipo:t, itemId:id}); setDescontoInput(''); setTipoDesconto('$'); setTimeout(()=>inputDescontoRef.current?.focus(), 100); };
+  const aplicarDesconto = () => {
+      const calc = (base) => tipoDesconto === '%' ? (base * parseFloat(descontoInput.replace(',','.')||0))/100 : parseInt(descontoInput.replace(/\D/g,'')||0,10)/100;
+      if (modalDesconto.tipo === 'TOTAL') { const v = calc(subtotalItens); if(v>subtotalItens) return toast.error("Inválido"); setDescontoTotalRaw(v); }
+      else { setCarrinho(prev => prev.map(i => i.id === modalDesconto.itemId ? { ...i, desconto: calc(i.precoVenda * i.quantidade) } : i)); }
+      setModalDesconto({...modalDesconto, open:false}); inputBuscaRef.current?.focus();
   };
 
-  const selecionarCliente = (c) => {
-      setCliente(c);
-      setBuscaCliente('');
-      setSugestoesClientes([]);
-      setShowClienteInput(false);
-  };
-
-  const formatCurrencyInput = (v) => v.replace(/\D/g, "");
-
-  const getValorFormatado = (r) => {
-      if (!r) return "";
-      const val = parseInt(r, 10);
-      if (isNaN(val)) return "";
-      return (val / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
-  };
-
-  const getProductColor = (n) => ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6'][(n?.charCodeAt(0) || 0) % 5];
-  const getProductInitials = (n) => (n || "?").substring(0, 2).toUpperCase();
-
-  // --- ATALHOS GLOBAIS ---
   const handleKeyDownGlobal = useCallback((e) => {
-    // Se algum modal estiver aberto, Esc fecha o modal
     if (modalDesconto.open || modalPagamento || showExitModal || showListaEspera || showCleanModal) {
-        if (e.key === 'Escape') {
-            setModalDesconto(prev => ({...prev, open:false}));
-            setModalPagamento(false);
-            setShowExitModal(false);
-            setShowListaEspera(false);
-            setShowCleanModal(false);
-        }
+        if (e.key === 'Escape') { setModalDesconto(p=>({...p, open:false})); setModalPagamento(false); setShowExitModal(false); setShowListaEspera(false); setShowCleanModal(false); }
         return;
     }
-
-    // Atalhos do PDV principal
     switch(e.key) {
         case 'F1': e.preventDefault(); inputBuscaRef.current?.focus(); break;
         case 'F2': e.preventDefault(); pausarVenda(); break;
@@ -489,38 +289,32 @@ const PDV = () => {
         case 'F6': e.preventDefault(); if(vendasPausadas.length > 0) setShowListaEspera(true); break;
         case 'Delete': if(carrinho.length > 0) handleLimparVenda(); break;
         case 'Escape':
-            if (showClienteInput) setShowClienteInput(false);
-            else if (busca) setBusca('');
-            else if (carrinho.length > 0) setShowExitModal(true);
+            if(showClienteInput) setShowClienteInput(false);
+            else if(busca) setBusca('');
             else handleVoltar();
             break;
-        default: break;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carrinho.length, modalDesconto.open, modalPagamento, showExitModal, showListaEspera, showCleanModal, vendasPausadas.length, busca, showClienteInput]);
 
-  useEffect(() => {
-      window.addEventListener('keydown', handleKeyDownGlobal);
-      return () => window.removeEventListener('keydown', handleKeyDownGlobal);
-  }, [handleKeyDownGlobal]);
+  useEffect(() => { window.addEventListener('keydown', handleKeyDownGlobal); return () => window.removeEventListener('keydown', handleKeyDownGlobal); }, [handleKeyDownGlobal]);
 
   return (
     <div className="pdv-container fade-in">
       <div className="pdv-left">
         <header className="pdv-header-main">
-          <button className="btn-action-soft" onClick={handleVoltar} data-tooltip="Sair (Esc)"><ArrowLeft size={22} /></button>
-          <div className="search-wrapper">
+
+          <button className="btn-action-soft" onClick={handleVoltar} data-tooltip="Menu (Esc)">
+            {['ROLE_ADMIN','ROLE_GERENTE'].includes(getUserRole()) ? <Menu size={22} /> : <ArrowLeft size={22} />}
+          </button>
+
+          <button className="btn-action-soft" onClick={() => navigate('/caixa')} data-tooltip="Gerir Caixa" style={{marginLeft: 10}}>
+            <DollarSign size={22} color="#16a34a" />
+          </button>
+
+          <div className="search-wrapper" style={{marginLeft: 16}}>
             <Search size={22} className="text-gray-400 mr-2"/>
-            <input
-                ref={inputBuscaRef}
-                type="text"
-                placeholder="Pesquisar produto (F1)..."
-                value={busca}
-                onChange={handleBuscaChange}
-                onKeyDown={handleSearchKeyDown}
-                autoFocus
-                autoComplete="off"
-            />
+            <input ref={inputBuscaRef} type="text" placeholder="Pesquisar produto (F1)..." value={busca} onChange={handleBuscaChange} onKeyDown={handleSearchKeyDown} autoFocus autoComplete="off" />
             {sugestoesProdutos.length > 0 && (
               <div className="pdv-dropdown-products" ref={dropdownRef}>
                 {sugestoesProdutos.map((prod, idx) => (
@@ -533,6 +327,15 @@ const PDV = () => {
               </div>
             )}
           </div>
+
+          {/* --- RELÓGIO NO PDV (NOVO) --- */}
+          <div className="pdv-clock-display" style={{marginLeft: 'auto', paddingRight: 10, display:'flex', alignItems:'center', gap: 8, color: '#334155'}}>
+             <Clock size={20} className="text-gray-400"/>
+             <span style={{fontSize: '1.2rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums'}}>
+                 {horaAtual.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}
+             </span>
+          </div>
+
         </header>
 
         <main className="pdv-cart">
@@ -546,9 +349,9 @@ const PDV = () => {
                   <td style={{paddingLeft:20}}><div className="prod-name-box"><span className="prod-name">{item.descricao}</span><div className="prod-meta-row"><Barcode size={12}/> <small className="prod-ean">{item.codigoBarras}</small></div></div></td>
                   <td align="center"><div className="qty-control-group"><button className="btn-qty" onClick={() => atualizarQtd(item.id, -1)}><Minus size={12}/></button><span className="qty-display">{item.quantidade}</span><button className="btn-qty" onClick={() => atualizarQtd(item.id, 1)}><Plus size={12}/></button></div></td>
                   <td align="right">R$ {item.precoVenda.toFixed(2)}</td>
-                  <td align="center"><button className={`btn-item-desc ${item.desconto > 0 ? 'active' : ''}`} onClick={() => abrirModalDesconto('ITEM', item.id)} data-tooltip="Desconto no Item">{item.desconto > 0 ? `-${item.desconto.toFixed(2)}` : <Tag size={14}/>}</button></td>
+                  <td align="center"><button className={`btn-item-desc ${item.desconto > 0 ? 'active' : ''}`} onClick={() => abrirModalDesconto('ITEM', item.id)}>{item.desconto > 0 ? `-${item.desconto.toFixed(2)}` : <Tag size={14}/>}</button></td>
                   <td align="right" style={{fontWeight:'bold', color:'#0f172a'}}>R$ {((item.precoVenda * item.quantidade) - (item.desconto || 0)).toFixed(2)}</td>
-                  <td align="center"><button className="btn-trash-item" onClick={() => removerItem(item.id)} data-tooltip="Remover (Del)"><Trash2 size={16}/></button></td>
+                  <td align="center"><button className="btn-trash-item" onClick={() => removerItem(item.id)}><Trash2 size={16}/></button></td>
                 </tr>
               ))}
             </tbody>
@@ -566,7 +369,7 @@ const PDV = () => {
              <div className="customer-card-action" style={{flex: 1}} onClick={() => { setShowClienteInput(!showClienteInput); setTimeout(()=>inputClienteRef.current?.focus(), 100); }}>
                  <div style={{display:'flex', gap:8, alignItems:'center'}}>{cliente ? <UserCheck size={18} color="#166534"/> : <UserPlus size={18}/>}<span style={{fontSize:'0.9rem'}}>{cliente ? cliente.nome.substring(0,12) : "Cliente (F3)"}</span></div>
              </div>
-             <button className="customer-card-action" style={{flex: 0.4, background: vendasPausadas.length > 0 ? '#fff7ed' : '#f8fafc', borderColor: vendasPausadas.length > 0 ? '#fdba74' : '#e2e8f0', justifyContent:'center', padding: '0 10px', cursor: 'pointer'}} onClick={() => setShowListaEspera(true)} data-tooltip="Ver Vendas Suspensas (F6)">
+             <button className="customer-card-action" style={{flex: 0.4, background: vendasPausadas.length > 0 ? '#fff7ed' : '#f8fafc', borderColor: vendasPausadas.length > 0 ? '#fdba74' : '#e2e8f0', justifyContent:'center', padding: '0 10px'}} onClick={() => setShowListaEspera(true)}>
                  <Clock size={18} color={vendasPausadas.length > 0 ? '#ea580c' : '#94a3b8'}/>
                  {vendasPausadas.length > 0 && <span style={{marginLeft: 5, color:'#c2410c', fontWeight:'bold'}}>{vendasPausadas.length}</span>}
              </button>
@@ -595,7 +398,7 @@ const PDV = () => {
          <button className="btn-finalize-huge" disabled={carrinho.length===0} onClick={abrirPagamento}><span>Finalizar</span> <span className="key-hint">F5</span></button>
       </aside>
 
-      {/* --- MODAIS --- */}
+      {/* --- MODAIS (PAGAMENTO, DESCONTO, ETC) --- */}
       {modalPagamento && (
           <div className="payment-overlay" onClick={() => setModalPagamento(false)}>
               <div className="payment-modal modern" onClick={e => e.stopPropagation()}>
@@ -611,104 +414,23 @@ const PDV = () => {
                       <label style={{fontSize:'0.9rem', fontWeight:600, color:'#64748b', marginBottom:'-10px'}}>Valor do Pagamento:</label>
                       <div className="input-with-icon primary">
                           <span className="currency-prefix">R$</span>
-                          <input
-                              ref={inputValorRef}
-                              autoFocus
-                              value={getValorFormatado(valorInputRaw)}
-                              onChange={e => setValorInputRaw(formatCurrencyInput(e.target.value))}
-                              onKeyDown={e => e.key === 'Enter' && handleAdicionarPagamento()}
-                              placeholder="0,00"
-                          />
-                          <button className="btn-enter-icon" onClick={handleAdicionarPagamento} title="Confirmar Valor"><ArrowRight size={24} strokeWidth={3} /></button>
+                          <input ref={inputValorRef} autoFocus value={getValorFormatado(valorInputRaw)} onChange={e => setValorInputRaw(formatCurrencyInput(e.target.value))} onKeyDown={e => e.key === 'Enter' && handleAdicionarPagamento()} placeholder="0,00" />
+                          <button className="btn-enter-icon" onClick={handleAdicionarPagamento}><ArrowRight size={24} strokeWidth={3} /></button>
                       </div>
                       <div className="pm-log">
                           {pagamentos.length === 0 && <p style={{textAlign:'center', color:'#cbd5e1', marginTop:20}}>Nenhum pagamento lançado.</p>}
-                          {pagamentos.map(p => (
-                              <div key={p.id} className="log-row">
-                                  <div style={{display:'flex', flexDirection:'column'}}><span style={{fontWeight:700, color:'#3b82f6', fontSize:'0.8rem'}}>{p.tipo}</span><strong style={{fontSize:'1.1rem'}}>R$ {p.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong></div>
-                                  <button onClick={()=>setPagamentos(pagamentos.filter(x=>x.id!==p.id))} style={{background:'none', border:'none', cursor:'pointer', padding:5}}><X size={18} color="#ef4444" /></button>
-                              </div>
-                          ))}
+                          {pagamentos.map(p => (<div key={p.id} className="log-row"><div style={{display:'flex', flexDirection:'column'}}><span style={{fontWeight:700, color:'#3b82f6', fontSize:'0.8rem'}}>{p.tipo}</span><strong style={{fontSize:'1.1rem'}}>R$ {p.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong></div><button onClick={()=>setPagamentos(pagamentos.filter(x=>x.id!==p.id))} style={{background:'none', border:'none', cursor:'pointer', padding:5}}><X size={18} color="#ef4444" /></button></div>))}
                       </div>
                       <button className="btn-finish-modal" disabled={saldoDevedor > 0.01 || loading} onClick={finalizarVenda}>{loading ? 'PROCESSANDO...' : 'CONCLUIR VENDA (F5)'}</button>
                   </div>
               </div>
           </div>
       )}
-
-      {modalDesconto.open && (
-          <div className="modal-exit-overlay">
-              <div className="modal-exit-content" style={{width: 350}}>
-                  <div className="exit-icon-wrapper" style={{background:'#eff6ff', color:'#2563eb'}}><Percent size={48} /></div>
-                  <h3>{modalDesconto.tipo === 'TOTAL' ? 'Desconto Global' : 'Desconto no Item'}</h3>
-                  <div className="toggle-discount-type">
-                      <button className={tipoDesconto === '$' ? 'active' : ''} onClick={() => setTipoDesconto('$')}>R$ Valor</button>
-                      <button className={tipoDesconto === '%' ? 'active' : ''} onClick={() => setTipoDesconto('%')}>% Porcentagem</button>
-                  </div>
-                  <div className="input-with-icon discount" style={{marginBottom: 20}}>
-                      <span style={{fontWeight:800, color:'#64748b'}}>{tipoDesconto}</span>
-                      <input
-                          ref={inputDescontoRef}
-                          type="text"
-                          value={tipoDesconto === '$' ? getValorFormatado(descontoInput) : descontoInput}
-                          onChange={e => {
-                              const val = e.target.value;
-                              if (tipoDesconto === '$') { setDescontoInput(formatCurrencyInput(val)); }
-                              else { setDescontoInput(val.replace(/[^0-9.,]/g, '')); }
-                          }}
-                          onKeyDown={e => e.key === 'Enter' && aplicarDesconto()}
-                          placeholder={tipoDesconto === '$' ? "0,00" : "0"}
-                          autoComplete="off"
-                      />
-                  </div>
-                  <div className="modal-exit-actions">
-                      <button className="btn-exit-cancel" onClick={()=>setModalDesconto({...modalDesconto, open:false})}>Cancelar</button>
-                      <button className="btn-exit-confirm" onClick={aplicarDesconto} style={{background:'#10b981'}}>Aplicar</button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {showCleanModal && (
-        <div className="modal-exit-overlay">
-            <div className="modal-exit-content">
-                <div className="exit-icon-wrapper"><RotateCcw size={48} /></div>
-                <h3>Limpar Venda?</h3>
-                <p>Todos os itens serão removidos do carrinho.</p>
-                <div className="modal-exit-actions"><button className="btn-exit-cancel" onClick={() => setShowCleanModal(false)}>Voltar</button><button className="btn-exit-confirm" onClick={confirmarLimpeza}>Limpar</button></div>
-            </div>
-        </div>
-      )}
-
-      {showListaEspera && (
-          <div className="modal-exit-overlay" onClick={() => setShowListaEspera(false)}>
-              <div className="modal-exit-content" style={{width: 500, padding: 20}} onClick={e => e.stopPropagation()}>
-                  <h3>Vendas em Espera</h3>
-                  <div style={{maxHeight: 300, overflowY: 'auto', marginTop: 10}}>
-                      {vendasPausadas.length === 0 ? <p style={{color:'#94a3b8', padding:20}}>Nenhuma venda na fila.</p> :
-                        vendasPausadas.map(v => (
-                          <div key={v.id} className="paused-card" style={{display:'flex', justifyContent:'space-between', padding:15, marginBottom:10}} onClick={() => retomVenda(v)}>
-                              <div><strong>{v.clienteNome || 'Consumidor'}</strong><br/><small>{new Date(v.dataVenda).toLocaleTimeString()}</small></div>
-                              <div style={{textAlign:'right'}}><strong style={{color:'#059669'}}>R$ {v.valorTotal?.toFixed(2)}</strong><br/><small>{v.itens?.length} itens</small></div>
-                          </div>
-                        ))
-                      }
-                  </div>
-                  <button className="btn-exit-cancel" style={{marginTop:20}} onClick={() => setShowListaEspera(false)}>Fechar (Esc)</button>
-              </div>
-          </div>
-      )}
-
-      {showExitModal && (
-        <div className="modal-exit-overlay">
-            <div className="modal-exit-content">
-                <div className="exit-icon-wrapper"><AlertTriangle size={48} /></div>
-                <h3>Sair do PDV?</h3>
-                <p>A venda atual será perdida.</p>
-                <div className="modal-exit-actions"><button className="btn-exit-cancel" onClick={() => setShowExitModal(false)}>Voltar</button><button className="btn-exit-confirm" onClick={confirmExit}>Sair</button></div>
-            </div>
-        </div>
-      )}
+      {/* ... (Demais modais mantidos: Exit, Clean, Lista, Desconto) ... */}
+      {modalDesconto.open && (<div className="modal-exit-overlay"><div className="modal-exit-content" style={{width: 350}}><div className="exit-icon-wrapper" style={{background:'#eff6ff', color:'#2563eb'}}><Percent size={48}/></div><h3>Desconto</h3><div className="toggle-discount-type"><button className={tipoDesconto==='$'?'active':''} onClick={()=>setTipoDesconto('$')}>R$</button><button className={tipoDesconto==='%'?'active':''} onClick={()=>setTipoDesconto('%')}>%</button></div><div className="input-with-icon discount"><span style={{fontWeight:800, color:'#64748b'}}>{tipoDesconto}</span><input ref={inputDescontoRef} type="text" value={tipoDesconto==='$'?getValorFormatado(descontoInput):descontoInput} onChange={e=>{const v=e.target.value; if(tipoDesconto==='$')setDescontoInput(formatCurrencyInput(v)); else setDescontoInput(v.replace(/[^0-9.,]/g,''));}} onKeyDown={e=>e.key==='Enter'&&aplicarDesconto()}/></div><div className="modal-exit-actions"><button className="btn-exit-cancel" onClick={()=>setModalDesconto({...modalDesconto, open:false})}>Cancelar</button><button className="btn-exit-confirm" onClick={aplicarDesconto} style={{background:'#10b981'}}>Aplicar</button></div></div></div>)}
+      {showCleanModal && (<div className="modal-exit-overlay"><div className="modal-exit-content"><div className="exit-icon-wrapper"><RotateCcw size={48}/></div><h3>Limpar Venda?</h3><p>O carrinho será esvaziado.</p><div className="modal-exit-actions"><button className="btn-exit-cancel" onClick={()=>setShowCleanModal(false)}>Não</button><button className="btn-exit-confirm" onClick={confirmarLimpeza}>Sim, Limpar</button></div></div></div>)}
+      {showListaEspera && (<div className="modal-exit-overlay" onClick={()=>setShowListaEspera(false)}><div className="modal-exit-content" style={{width: 500, padding: 20}} onClick={e=>e.stopPropagation()}><h3>Vendas em Espera</h3><div style={{maxHeight: 300, overflowY:'auto', marginTop:10}}>{vendasPausadas.length===0?<p style={{color:'#94a3b8', padding:20}}>Vazia.</p>:vendasPausadas.map(v=><div key={v.id} className="paused-card" style={{display:'flex', justifyContent:'space-between', padding:15, marginBottom:10}} onClick={()=>retomVenda(v)}><div><strong>{v.clienteNome||'Consumidor'}</strong><br/><small>{new Date(v.dataVenda).toLocaleTimeString()}</small></div><div style={{textAlign:'right'}}><strong style={{color:'#059669'}}>R$ {v.valorTotal?.toFixed(2)}</strong><br/><small>{v.itens?.length} itens</small></div></div>)}</div><button className="btn-exit-cancel" style={{marginTop:20}} onClick={()=>setShowListaEspera(false)}>Fechar</button></div></div>)}
+      {showExitModal && (<div className="modal-exit-overlay"><div className="modal-exit-content"><div className="exit-icon-wrapper"><AlertTriangle size={48}/></div><h3>Deseja Sair?</h3><p>O que gostaria de fazer?</p><div className="modal-exit-actions" style={{flexDirection:'column', gap:10}}><button className="btn-exit-cancel" onClick={()=>setShowExitModal(false)} style={{width:'100%'}}>Cancelar</button><button className="btn-exit-confirm" onClick={confirmExit} style={{width:'100%', background:'#3b82f6'}}>Ir para {['ROLE_ADMIN','ROLE_GERENTE'].includes(getUserRole())?'Dashboard':'Caixa'}</button></div></div></div>)}
     </div>
   );
 };
