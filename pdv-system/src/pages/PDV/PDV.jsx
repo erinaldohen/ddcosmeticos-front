@@ -4,7 +4,7 @@ import {
   PauseCircle, ArrowLeft, X,
   MonitorCheck, UserCheck, AlertTriangle,
   Tag, RotateCcw, UserPlus, Barcode, Percent, ArrowRight, Clock,
-  DollarSign, Menu, LogOut
+  DollarSign, Menu, LogOut, Printer
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
@@ -23,13 +23,17 @@ const PDV = () => {
   const dropdownRef = useRef(null);
 
   // --- ESTADOS ---
-  const [carrinho, setCarrinho] = useState([]);
+  const [carrinho, setCarrinho] = useState(() => {
+      try {
+          const salvo = localStorage.getItem('@dd:carrinho');
+          return salvo ? JSON.parse(salvo) : [];
+      } catch { return []; }
+  });
+
   const [vendasPausadas, setVendasPausadas] = useState([]);
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(false);
   const [ultimoItemAdicionadoId, setUltimoItemAdicionadoId] = useState(null);
-
-  // RELÓGIO
   const [horaAtual, setHoraAtual] = useState(new Date());
 
   // Modais
@@ -63,14 +67,10 @@ const PDV = () => {
 
   // --- EFEITOS GLOBAIS ---
   useEffect(() => {
-    // Atualiza relógio
+    localStorage.setItem('@dd:carrinho', JSON.stringify(carrinho));
     const timer = setInterval(() => setHoraAtual(new Date()), 1000);
-
     const handleBeforeUnload = (e) => {
-      if (carrinho.length > 0) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
+      if (carrinho.length > 0) { e.preventDefault(); e.returnValue = ''; }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
@@ -79,7 +79,6 @@ const PDV = () => {
     };
   }, [carrinho]);
 
-  // --- LÓGICA DE NAVEGAÇÃO ---
   const getUserRole = () => {
     try {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -88,32 +87,19 @@ const PDV = () => {
   };
 
   const handleVoltar = () => {
-      if (carrinho.length > 0) {
-          setShowExitModal(true);
-      } else {
-          const role = getUserRole();
-          if (['ROLE_ADMIN', 'ROLE_GERENTE'].includes(role)) {
-              navigate('/dashboard');
-          } else {
-              navigate('/caixa');
-          }
-      }
+      if (carrinho.length > 0) setShowExitModal(true);
+      else confirmExit();
   };
 
   const confirmExit = useCallback(() => {
       const role = getUserRole();
-      if (['ROLE_ADMIN', 'ROLE_GERENTE'].includes(role)) {
-          navigate('/dashboard');
-      } else {
-          navigate('/caixa');
-      }
+      navigate(['ROLE_ADMIN', 'ROLE_GERENTE'].includes(role) ? '/dashboard' : '/caixa');
   }, [navigate]);
 
   // --- INICIALIZAÇÃO ---
   useEffect(() => {
     carregarVendasSuspensas();
     verificarCaixa();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const verificarCaixa = async () => {
@@ -130,24 +116,22 @@ const PDV = () => {
 
   const carregarVendasSuspensas = useCallback(async () => {
       try {
+          // CORREÇÃO: Removemos o /api/v1 duplicado
           const res = await api.get('/vendas/suspensas');
           setVendasPausadas(res.data || []);
-      } catch (e) {
-          console.error("Erro ao carregar vendas suspensas", e);
-      }
+      } catch (e) { console.error(e); }
   }, []);
 
-  // --- AÇÕES DO PDV ---
   const limparEstadoVenda = () => {
       setCarrinho([]); setPagamentos([]); setCliente(null);
       setDescontoTotalRaw(0); setModalPagamento(false);
       setShowExitModal(false); setBusca('');
+      localStorage.removeItem('@dd:carrinho');
   };
 
-  // 1. PAUSAR VENDA
+  // --- AÇÕES ---
   const pausarVenda = async () => {
     if (carrinho.length === 0) return toast.info("Carrinho vazio.");
-    const toastId = toast.loading("Pausando venda...");
     try {
         const payload = {
             clienteId: cliente?.id || null,
@@ -155,21 +139,23 @@ const PDV = () => {
             observacao: "Venda Suspensa",
             formaDePagamento: "DINHEIRO",
             itens: carrinho.map(i => ({
-                produtoId: i.id, quantidade: Number(i.quantidade), precoUnitario: Number(i.precoVenda), desconto: Number(i.desconto||0)
+                produtoId: i.id, quantidade: Number(i.quantidade),
+                precoUnitario: Number(i.precoVenda), desconto: Number(i.desconto||0)
             })),
             pagamentos: []
         };
+        // CORREÇÃO: Removemos o /api/v1 duplicado
         await api.post('/vendas/suspender', payload);
-        toast.update(toastId, { render: "Venda Pausada! ⏸️", type: "success", isLoading: false, autoClose: 2000 });
+        toast.success("Venda Pausada! ⏸️");
         limparEstadoVenda(); carregarVendasSuspensas();
-    } catch (e) { toast.update(toastId, { render: "Erro ao pausar.", type: "error", isLoading: false, autoClose: 3000 }); }
+    } catch (e) { toast.error("Erro ao pausar venda."); }
   };
 
-  // 2. RETOMAR VENDA
   const retomVenda = async (vendaSuspensa) => {
       if (carrinho.length > 0) return toast.warn("Finalize a venda atual antes.");
       setLoading(true);
       try {
+          // CORREÇÃO: Removemos o /api/v1 duplicado
           await api.delete(`/vendas/${vendaSuspensa.id}`, { data: { motivo: "Retomada PDV" } });
           const itensRecuperados = vendaSuspensa.itens.map(item => ({
               id: item.produtoId, descricao: item.produtoDescricao || item.produtoNome || "Item",
@@ -186,7 +172,6 @@ const PDV = () => {
       } catch (error) { toast.error("Erro ao recuperar."); } finally { setLoading(false); }
   };
 
-  // 3. PAGAMENTO
   const abrirPagamento = () => {
       if (carrinho.length === 0) return toast.warn("Carrinho vazio.");
       setModalPagamento(true);
@@ -214,37 +199,58 @@ const PDV = () => {
       try {
           const mapPgto = (t) => ({ 'CREDITO':'CREDITO', 'DEBITO':'DEBITO', 'PIX':'PIX', 'CREDIARIO':'CREDIARIO', 'DINHEIRO':'DINHEIRO' }[t] || 'DINHEIRO');
           const payload = {
-              clienteId: cliente?.id || null, descontoTotal: descontoTotalRaw + descontoItens, observacao: "PDV",
-              formaDePagamento: pagamentos.length > 0 ? mapPgto(pagamentos[0].tipo) : 'DINHEIRO',
-              itens: carrinho.map(i => ({ produtoId: i.id, quantidade: i.quantidade, precoUnitario: i.precoVenda, desconto: i.desconto || 0 })),
-              pagamentos: pagamentos.map(p => ({ formaPagamento: mapPgto(p.tipo), valor: p.valor, parcelas: 1 }))
+              clienteId: cliente?.id || null, descontoTotal: descontoTotalRaw + descontoItens,
+              observacao: "PDV", formaDePagamento: pagamentos.length > 0 ? mapPgto(pagamentos[0].tipo) : 'DINHEIRO',
+              itens: carrinho.map(i => ({
+                  produtoId: i.id, quantidade: i.quantidade,
+                  precoUnitario: i.precoVenda, desconto: i.desconto || 0
+              })),
+              pagamentos: pagamentos.map(p => ({
+                  formaPagamento: mapPgto(p.tipo), valor: p.valor, parcelas: 1
+              }))
           };
-          await api.post('/vendas', payload);
-          toast.success("Venda Finalizada!"); limparEstadoVenda(); setTimeout(() => inputBuscaRef.current?.focus(), 100);
+          // CORREÇÃO: Removemos o /api/v1 duplicado
+          const res = await api.post('/vendas', payload);
+
+          try { await api.post(`/vendas/${res.data.id}/imprimir`); toast.info("Imprimindo..."); }
+          catch(e) { console.warn("Impressora offline"); }
+
+          toast.success("Venda Finalizada!");
+          limparEstadoVenda(); setTimeout(() => inputBuscaRef.current?.focus(), 100);
       } catch (e) { toast.error("Erro ao finalizar."); } finally { setLoading(false); }
   };
 
   const handleLimparVenda = () => { if(carrinho.length > 0) setShowCleanModal(true); };
   const confirmarLimpeza = () => { limparEstadoVenda(); setShowCleanModal(false); inputBuscaRef.current?.focus(); };
 
-  // --- BUSCA ---
   const handleBuscaChange = async (e) => {
     const termo = e.target.value; setBusca(termo); setSelectedIndex(-1);
-    if (/^\d{7,14}$/.test(termo) || termo.length <= 2) { setSugestoesProdutos([]); return; }
-    try { const res = await api.get(`/produtos`, { params: { termo, size: 6 } }); setSugestoesProdutos(res.data.content || []); } catch (err) {}
+    if (/^\d{7,14}$/.test(termo)) { setSugestoesProdutos([]); return; }
+    if (termo.length > 2) {
+        try {
+            // CORREÇÃO: Removemos o /api/v1 duplicado
+            const res = await api.get(`/produtos`, { params: { termo, size: 6 } });
+            setSugestoesProdutos(res.data.content || []);
+        } catch (err) {}
+    } else setSugestoesProdutos([]);
   };
 
   const adicionarProdutoPorObjeto = (prod) => {
-    const itemExistente = carrinho.find(i => i.id === prod.id);
-    setCarrinho(prev => itemExistente ? prev.map(i => i.id === prod.id ? { ...i, quantidade: i.quantidade + 1 } : i) : [...prev, { ...prod, quantidade: 1, desconto: 0 }]);
+    const existe = carrinho.find(i => i.id === prod.id);
+    if (existe) setCarrinho(prev => prev.map(i => i.id === prod.id ? { ...i, quantidade: i.quantidade + 1 } : i));
+    else setCarrinho(prev => [...prev, { ...prod, quantidade: 1, desconto: 0 }]);
     setUltimoItemAdicionadoId(prod.id); setBusca(''); setSugestoesProdutos([]); setSelectedIndex(-1); inputBuscaRef.current?.focus();
   };
 
   const processarBuscaManual = async (e) => {
     if (e) e.preventDefault(); if (!busca) return;
     if (sugestoesProdutos.length > 0 && selectedIndex !== -1) return adicionarProdutoPorObjeto(sugestoesProdutos[selectedIndex]);
-    try { setLoading(true); const res = await api.get(`/produtos`, { params: { termo: busca, size: 1 } });
-    if (res.data.content?.[0]) adicionarProdutoPorObjeto(res.data.content[0]); else { toast.warning("Não encontrado"); setBusca(''); }
+    try {
+        setLoading(true);
+        // CORREÇÃO: Removemos o /api/v1 duplicado
+        const res = await api.get(`/produtos`, { params: { termo: busca, size: 1 } });
+        if (res.data.content?.[0]) adicionarProdutoPorObjeto(res.data.content[0]);
+        else { toast.warning("Produto não encontrado"); setBusca(''); }
     } catch (err) { toast.error("Erro ao buscar."); } finally { setLoading(false); }
   };
 
@@ -256,7 +262,7 @@ const PDV = () => {
     } else if (e.key === 'Enter') processarBuscaManual(e);
   };
 
-  // --- UTILS ---
+  // UTILS
   const formatCurrencyInput = (v) => v.replace(/\D/g, "");
   const getValorFormatado = (r) => r ? (parseInt(r, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : "";
   const getProductColor = (n) => ['#3b82f6','#ef4444','#10b981','#f59e0b','#8b5cf6'][(n?.charCodeAt(0)||0)%5];
@@ -264,7 +270,10 @@ const PDV = () => {
   const atualizarQtd = (id, d) => setCarrinho(prev => prev.map(i => i.id === id ? { ...i, quantidade: Math.max(1, i.quantidade + d) } : i));
   const removerItem = (id) => setCarrinho(prev => prev.filter(i => i.id !== id));
 
-  const buscarClientes = async (v) => { setBuscaCliente(v); if(v.length>2) { try{const r=await api.get(`/clientes`,{params:{termo:v}}); setSugestoesClientes(r.data.content||[]);}catch(e){}} else setSugestoesClientes([]); };
+  const buscarClientes = async (v) => {
+      setBuscaCliente(v);
+      if(v.length>2) { try{const r=await api.get(`/clientes`,{params:{termo:v}}); setSugestoesClientes(r.data.content||[]);}catch(e){} } else setSugestoesClientes([]);
+  };
   const selecionarCliente = (c) => { setCliente(c); setBuscaCliente(''); setSugestoesClientes([]); setShowClienteInput(false); };
 
   const abrirModalDesconto = (t, id=null) => { setModalDesconto({open:true, tipo:t, itemId:id}); setDescontoInput(''); setTipoDesconto('$'); setTimeout(()=>inputDescontoRef.current?.focus(), 100); };
@@ -294,7 +303,6 @@ const PDV = () => {
             else handleVoltar();
             break;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [carrinho.length, modalDesconto.open, modalPagamento, showExitModal, showListaEspera, showCleanModal, vendasPausadas.length, busca, showClienteInput]);
 
   useEffect(() => { window.addEventListener('keydown', handleKeyDownGlobal); return () => window.removeEventListener('keydown', handleKeyDownGlobal); }, [handleKeyDownGlobal]);
@@ -303,15 +311,12 @@ const PDV = () => {
     <div className="pdv-container fade-in">
       <div className="pdv-left">
         <header className="pdv-header-main">
-
           <button className="btn-action-soft" onClick={handleVoltar} data-tooltip="Menu (Esc)">
             {['ROLE_ADMIN','ROLE_GERENTE'].includes(getUserRole()) ? <Menu size={22} /> : <ArrowLeft size={22} />}
           </button>
-
           <button className="btn-action-soft" onClick={() => navigate('/caixa')} data-tooltip="Gerir Caixa" style={{marginLeft: 10}}>
             <DollarSign size={22} color="#16a34a" />
           </button>
-
           <div className="search-wrapper" style={{marginLeft: 16}}>
             <Search size={22} className="text-gray-400 mr-2"/>
             <input ref={inputBuscaRef} type="text" placeholder="Pesquisar produto (F1)..." value={busca} onChange={handleBuscaChange} onKeyDown={handleSearchKeyDown} autoFocus autoComplete="off" />
@@ -327,15 +332,10 @@ const PDV = () => {
               </div>
             )}
           </div>
-
-          {/* --- RELÓGIO NO PDV (NOVO) --- */}
           <div className="pdv-clock-display" style={{marginLeft: 'auto', paddingRight: 10, display:'flex', alignItems:'center', gap: 8, color: '#334155'}}>
              <Clock size={20} className="text-gray-400"/>
-             <span style={{fontSize: '1.2rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums'}}>
-                 {horaAtual.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}
-             </span>
+             <span style={{fontSize: '1.2rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums'}}>{horaAtual.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}</span>
           </div>
-
         </header>
 
         <main className="pdv-cart">
@@ -398,7 +398,7 @@ const PDV = () => {
          <button className="btn-finalize-huge" disabled={carrinho.length===0} onClick={abrirPagamento}><span>Finalizar</span> <span className="key-hint">F5</span></button>
       </aside>
 
-      {/* --- MODAIS (PAGAMENTO, DESCONTO, ETC) --- */}
+      {/* --- MODAIS --- */}
       {modalPagamento && (
           <div className="payment-overlay" onClick={() => setModalPagamento(false)}>
               <div className="payment-modal modern" onClick={e => e.stopPropagation()}>
@@ -426,7 +426,6 @@ const PDV = () => {
               </div>
           </div>
       )}
-      {/* ... (Demais modais mantidos: Exit, Clean, Lista, Desconto) ... */}
       {modalDesconto.open && (<div className="modal-exit-overlay"><div className="modal-exit-content" style={{width: 350}}><div className="exit-icon-wrapper" style={{background:'#eff6ff', color:'#2563eb'}}><Percent size={48}/></div><h3>Desconto</h3><div className="toggle-discount-type"><button className={tipoDesconto==='$'?'active':''} onClick={()=>setTipoDesconto('$')}>R$</button><button className={tipoDesconto==='%'?'active':''} onClick={()=>setTipoDesconto('%')}>%</button></div><div className="input-with-icon discount"><span style={{fontWeight:800, color:'#64748b'}}>{tipoDesconto}</span><input ref={inputDescontoRef} type="text" value={tipoDesconto==='$'?getValorFormatado(descontoInput):descontoInput} onChange={e=>{const v=e.target.value; if(tipoDesconto==='$')setDescontoInput(formatCurrencyInput(v)); else setDescontoInput(v.replace(/[^0-9.,]/g,''));}} onKeyDown={e=>e.key==='Enter'&&aplicarDesconto()}/></div><div className="modal-exit-actions"><button className="btn-exit-cancel" onClick={()=>setModalDesconto({...modalDesconto, open:false})}>Cancelar</button><button className="btn-exit-confirm" onClick={aplicarDesconto} style={{background:'#10b981'}}>Aplicar</button></div></div></div>)}
       {showCleanModal && (<div className="modal-exit-overlay"><div className="modal-exit-content"><div className="exit-icon-wrapper"><RotateCcw size={48}/></div><h3>Limpar Venda?</h3><p>O carrinho será esvaziado.</p><div className="modal-exit-actions"><button className="btn-exit-cancel" onClick={()=>setShowCleanModal(false)}>Não</button><button className="btn-exit-confirm" onClick={confirmarLimpeza}>Sim, Limpar</button></div></div></div>)}
       {showListaEspera && (<div className="modal-exit-overlay" onClick={()=>setShowListaEspera(false)}><div className="modal-exit-content" style={{width: 500, padding: 20}} onClick={e=>e.stopPropagation()}><h3>Vendas em Espera</h3><div style={{maxHeight: 300, overflowY:'auto', marginTop:10}}>{vendasPausadas.length===0?<p style={{color:'#94a3b8', padding:20}}>Vazia.</p>:vendasPausadas.map(v=><div key={v.id} className="paused-card" style={{display:'flex', justifyContent:'space-between', padding:15, marginBottom:10}} onClick={()=>retomVenda(v)}><div><strong>{v.clienteNome||'Consumidor'}</strong><br/><small>{new Date(v.dataVenda).toLocaleTimeString()}</small></div><div style={{textAlign:'right'}}><strong style={{color:'#059669'}}>R$ {v.valorTotal?.toFixed(2)}</strong><br/><small>{v.itens?.length} itens</small></div></div>)}</div><button className="btn-exit-cancel" style={{marginTop:20}} onClick={()=>setShowListaEspera(false)}>Fechar</button></div></div>)}

@@ -53,7 +53,7 @@
 .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2.5rem; }
 .kpi-card {
     background: white; border-radius: 16px; padding: 1.25rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; transition: transform 0.2s;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; transition: transform 0.2s; position: relative;
 }
 .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 16px rgba(0,0,0,0.06); }
 .kpi-card.highlight { background: #f8fafc; border-color: #e2e8f0; }
@@ -108,52 +108,29 @@
 .card-title-row h4 { margin: 0; font-size: 0.95rem; font-weight: 600; color: #475569; display: flex; align-items: center; gap: 8px; }
 .info-icon { color: #cbd5e1; cursor: help; }
 
-/* === MOVIMENTAÇÃO FORM (CORREÇÃO DE ÍCONES E PADDING) === */
+/* === MOVIMENTAÇÃO FORM === */
 .mov-form-grid {
     display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem;
 }
 .form-group { display: flex; flex-direction: column; gap: 6px; }
 .form-group label { font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; }
-.form-group small { color: #94a3b8; font-weight: 500; font-size: 0.65rem; margin-left: 4px; text-transform: none; }
 
-.input-with-icon {
-    position: relative;
-    width: 100%;
-}
+.input-with-icon { position: relative; width: 100%; }
 
-/* Ícone posicionado: Garante que fique fixo na esquerda */
+/* Ícone na esquerda */
 .input-icon-left {
-    position: absolute;
-    left: 16px; /* Distância da borda esquerda */
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 1rem;
-    color: #94a3b8;
-    font-weight: 600;
-    pointer-events: none; /* Permite clicar através do ícone para focar no input */
-    z-index: 10;
+    position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+    font-size: 1rem; color: #94a3b8; font-weight: 600; pointer-events: none; z-index: 10;
 }
 .text-gray { color: #94a3b8; }
 
-/* Input Suave: Padding esquerdo aumentado para 50px para não sobrepor o ícone */
+/* Input com Padding Ajustado */
 .input-soft {
-    width: 100%;
-    /* AQUI ESTÁ A CORREÇÃO PRINCIPAL: 50px de espaço na esquerda */
-    padding: 12px 14px 12px 50px !important;
-    border-radius: 10px;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
-    font-size: 0.95rem;
-    font-weight: 500;
-    color: #334155;
-    outline: none;
-    transition: all 0.2s;
+    width: 100%; padding: 12px 14px 12px 50px !important;
+    border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc;
+    font-size: 0.95rem; font-weight: 500; color: #334155; outline: none; transition: all 0.2s;
 }
-.input-soft:focus {
-    background: white;
-    border-color: #cbd5e1;
-    box-shadow: 0 0 0 3px rgba(226, 232, 240, 0.5);
-}
+.input-soft:focus { background: white; border-color: #cbd5e1; box-shadow: 0 0 0 3px rgba(226, 232, 240, 0.5); }
 
 /* === BOTÕES E HISTÓRICO === */
 .action-buttons-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -171,17 +148,91 @@
 .history-content { flex: 1; display: flex; flex-direction: column; }
 .h-desc { font-size: 0.85rem; color: #334155; font-weight: 500; }
 .h-time { font-size: 0.75rem; color: #94a3b8; }
-.h-value { font-size: 0.85rem; font-weight: 600; color: #1e293b; }
+.h-val { font-size: 0.85rem; font-weight: 600; color: #1e293b; }
 .empty-state { text-align: center; font-size: 0.85rem; color: #94a3b8; padding: 20px; font-style: italic; }
 
-[data-tooltip] { position: relative; }
-[data-tooltip]:hover::after {
-    content: attr(data-tooltip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
-    background: #1e293b; color: white; padding: 5px 10px; border-radius: 6px; font-size: 0.75rem;
-    white-space: nowrap; pointer-events: none; margin-bottom: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 10;
+/* MODAIS */
+.modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.7); display: flex; align-items: center; justify-content: center; z-index: 2000;
+}
+.modal-content-blind {
+    background: white; border-radius: 16px; width: 500px; padding: 24px;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+}
+.modal-header-blind { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.icon-lock { color: #f59e0b; }
+.modal-header-blind h3 { font-size: 1.25rem; margin: 0; }
+.btn-close-modal { margin-left: auto; background: none; border: none; cursor: pointer; }
+
+.modal-body-blind .security-notice {
+    background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; padding: 12px; border-radius: 8px; font-size: 0.9rem; margin-bottom: 20px;
+}
+.modal-actions-blind { display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px; }
+.btn-confirmar-fechamento {
+    background: #0f172a; color: white; padding: 10px 20px; border-radius: 8px; font-weight: 700; border: none; cursor: pointer;
 }
 
+/* ================================================================= */
+/* 2. SISTEMA DE TOOLTIP LOCAL (COM OVERFLOW CORRIGIDO)              */
+/* ================================================================= */
+[data-tooltip] { position: relative; }
+
+/* Tooltip Padrão - Desktop */
+[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1e293b;
+    color: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    pointer-events: none;
+    margin-bottom: 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    z-index: 99999;
+}
+
+/* ================================================================= */
+/* MOBILE / TABLET (AJUSTES RESPONSIVOS)                             */
+/* ================================================================= */
 @media (max-width: 900px) {
-    .content-grid, .kpi-row { grid-template-columns: 1fr; }
-    .status-banner { flex-direction: column; text-align: center; gap: 0.5rem; }
+    /* 1. Ajuste de Container */
+    .caixa-manager-container {
+        padding: 16px !important;
+    }
+
+    /* 2. Header Vertical */
+    .header-status-highlight {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+    }
+    .status-banner { width: 100%; justify-content: center; }
+
+    /* 3. Grid de KPIs Empilhado */
+    .kpi-row {
+        grid-template-columns: 1fr; /* 1 Coluna */
+        gap: 12px;
+    }
+
+    /* 4. Grid de Conteúdo Empilhado */
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* 5. Inputs Maiores */
+    .input-hero { font-size: 2rem; }
+
+    /* 6. Modal Fullscreen */
+    .modal-content-blind { width: 95%; margin: 10px; }
+
+    /* 7. REMOVER TOOLTIPS NO MOBILE */
+    [data-tooltip]:hover::after {
+        display: none !important;
+    }
 }

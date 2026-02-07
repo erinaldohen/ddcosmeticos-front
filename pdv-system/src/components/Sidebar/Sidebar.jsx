@@ -11,7 +11,7 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
   const location = useLocation();
   const [userRole, setUserRole] = useState('');
 
-  // --- LÓGICA DO RELÓGIO ---
+  // Relógio
   const [hora, setHora] = useState(new Date());
 
   useEffect(() => {
@@ -21,7 +21,7 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
     return () => clearInterval(timer);
   }, []);
 
-  // --- 1. RECUPERAR ROLE DO USUÁRIO ---
+  // Recuperar perfil
   useEffect(() => {
     try {
       const userStr = localStorage.getItem('user') || localStorage.getItem('usuario');
@@ -35,7 +35,6 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
     }
   }, []);
 
-  // --- 2. CONFIGURAÇÃO DOS MENUS ---
   const menuGroups = [
       {
         title: 'Principal',
@@ -81,7 +80,7 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
 
       <aside className={`sidebar-container ${isMobileOpen ? 'mobile-open' : ''} ${isCollapsed ? 'collapsed' : ''}`}>
 
-        {/* HEADER: LOGO */}
+        {/* HEADER */}
         <div className="sidebar-header">
           <h1 className="logo-text">
             {!isCollapsed ? <>DD<span>Cosméticos</span></> : <span style={{color:'#2563eb'}}>DD</span>}
@@ -94,8 +93,8 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
           </button>
         </div>
 
-        {/* --- RELÓGIO (NOVO POSICIONAMENTO: TOPO) --- */}
-        <div className="sidebar-clock-widget" title={hora.toLocaleDateString('pt-BR')}>
+        {/* RELÓGIO */}
+        <div className="sidebar-clock-widget">
              {isCollapsed ? (
                  <div className="clock-collapsed"><Clock size={18} /></div>
              ) : (
@@ -121,7 +120,8 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
                     to={item.path}
                     className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
                     onClick={() => isMobileOpen && toggleMobile()}
-                    title={isCollapsed ? item.label : ''}
+                    // AQUI ESTÁ A MÁGICA: Passamos o label no data-tooltip apenas se estiver recolhido
+                    data-tooltip={isCollapsed ? item.label : null}
                   >
                     <span className="nav-icon">{item.icon}</span>
                     <span className="nav-label">{item.label}</span>
@@ -134,7 +134,11 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
         </nav>
 
         <div className="sidebar-footer">
-          <button className="nav-item logout" onClick={handleLogout} title="Sair do Sistema">
+          <button
+            className="nav-item logout"
+            onClick={handleLogout}
+            data-tooltip={isCollapsed ? "Sair do Sistema" : null}
+          >
             <span className="nav-icon"><LogOut size={20} /></span>
             <span className="nav-label">Sair</span>
           </button>

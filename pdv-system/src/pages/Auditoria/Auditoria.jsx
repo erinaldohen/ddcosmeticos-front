@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Activity, Search, Trash2, RefreshCw,
   AlertTriangle, User, Calendar,
@@ -7,9 +7,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
+import ConfirmModal from '../../components/ConfirmModal';
 import './Auditoria.css';
 
-// Hook de Debounce (Evita chamadas excessivas na API enquanto digita)
+// Hook de Debounce
 const useDebounce = (value, delay) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
   useEffect(() => {
@@ -33,127 +34,134 @@ const Auditoria = () => {
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
 
-  // Aplica o delay na busca de texto (500ms)
-  const termoBusca = useDebounce(filtroTexto, 500);
-
+  const termoBusca = useDebounce(filtroTexto, 600);
   const ITENS_POR_PAGINA = 20;
 
-  // 1. Resetar e Recarregar quando mudar filtros principais (Aba, Texto, Datas)
+  // Estado para Modal de Confirmação
+  const [modalConfig, setModalConfig] = useState({
+    open: false,
+    id: null,
+    titulo: '',
+    mensagem: '',
+    acao: null
+  });
+
+  // Efeito de Carga Inicial
   useEffect(() => {
     setPage(0);
     setHasMore(true);
-    // Limpa a lista visualmente antes de buscar para dar feedback de "nova busca"
     if (activeTab === 'timeline') setLogs([]);
     else setLixeira([]);
 
     carregarDados(0, true);
-  // eslint-disable-next-line
+    // eslint-disable-next-line
   }, [activeTab, termoBusca, dataInicio, dataFim]);
 
   const carregarDados = async (pagina = 0, resetList = false) => {
-    if (loading && pagina > 0) return; // Evita duplicidade apenas na paginação
+    if (loading && pagina > 0) return;
     setLoading(true);
-
     try {
       const params = {
         page: pagina,
         size: ITENS_POR_PAGINA,
         sort: 'dataHora,desc',
-        search: termoBusca, // Agora enviamos a busca para o backend!
+        search: termoBusca || null,
         inicio: dataInicio || null,
         fim: dataFim || null
       };
 
-      // Remove chaves nulas/vazias
-      Object.keys(params).forEach(key => !params[key] && delete params[key]);
+      // CORREÇÃO CRÍTICA: Removido o prefixo /api/v1 que já vem do api.js
+      const endpoint = activeTab === 'timeline' ? '/auditoria/eventos' : '/auditoria/lixeira';
 
-      let novosDados = [];
+      const res = await api.get(endpoint, { params });
+      const novosDados = res.data.content || res.data || [];
 
       if (activeTab === 'timeline') {
-        const res = await api.get('/auditoria/eventos', { params });
-        novosDados = res.data.content || res.data || [];
-
         setLogs(prev => resetList ? novosDados : [...prev, ...novosDados]);
       } else {
-        const res = await api.get('/auditoria/lixeira', { params });
-        novosDados = res.data.content || res.data || [];
-
         setLixeira(prev => resetList ? novosDados : [...prev, ...novosDados]);
       }
 
       setHasMore(novosDados.length >= ITENS_POR_PAGINA);
 
     } catch (error) {
-      console.error("Erro busca:", error);
-      // Opcional: toast.error("Erro ao buscar dados");
+      console.error("Erro auditoria:", error);
+      // Evita flood de toast se for apenas cancelamento de request ou erro menor
+      if (resetList && error.response?.status !== 404) {
+          toast.error("Não foi possível carregar os dados de auditoria.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCarregarMais = () => {
-    const nextPage = page + 1;
-    setPage(nextPage);
-    carregarDados(nextPage, false);
+  // Abertura do Modal Seguro
+  const solicitarRestauracao = (item) => {
+    setModalConfig({
+      open: true,
+      id: item.id,
+      titulo: 'Confirmar Restauração',
+      mensagem: `Deseja realmente restaurar o produto "${item.descricao}" ao estoque?`,
+      acao: confirmarRestauracao
+    });
   };
 
-  const handleAtualizarManual = () => {
-    setPage(0);
-    carregarDados(0, true);
-  };
-
-  // --- AÇÕES ---
-  const restaurarItem = async (id, nome) => {
-    if(!window.confirm(`Restaurar "${nome}"?`)) return;
+  // Ação real após confirmação
+  const confirmarRestauracao = async (id) => {
     try {
+      // CORREÇÃO: Endpoint limpo
       await api.post(`/auditoria/restaurar/${id}`);
-      toast.success("Item restaurado!");
-      handleAtualizarManual();
+      toast.success("Item restaurado com sucesso! 🎉");
+      setModalConfig({ ...modalConfig, open: false });
+      carregarDados(0, true);
     } catch (error) {
-      toast.error("Erro ao restaurar.");
+      toast.error(error.response?.data?.message || "Erro ao restaurar item.");
     }
   };
 
   const baixarPDF = async () => {
+    const toastId = toast.loading("Gerando PDF...");
     try {
       const params = { inicio: dataInicio, fim: dataFim, search: termoBusca };
+      // CORREÇÃO: Endpoint limpo
       const res = await api.get('/auditoria/relatorio/pdf', { params, responseType: 'blob' });
+
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', `Auditoria_${new Date().toISOString().split('T')[0]}.pdf`);
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      toast.success("PDF gerado!");
+      link.remove();
+
+      toast.update(toastId, { render: "PDF baixado!", type: "success", isLoading: false, autoClose: 3000 });
     } catch (error) {
-      toast.error("Erro ao gerar PDF.");
+      toast.update(toastId, { render: "Erro ao gerar PDF.", type: "error", isLoading: false, autoClose: 3000 });
     }
   };
 
   // Helpers UI
-  const getIconForEvent = (tipo) => {
-      if (tipo?.includes('ESTOQUE_NEGATIVO') || tipo?.includes('CANCELAMENTO')) return <AlertTriangle size={20} />;
-      if (tipo?.includes('RESTORE')) return <RotateCcw size={20} />;
-      return <Activity size={20} />;
-  };
-
-  const getIconClass = (tipo) => {
-      if (tipo?.includes('ESTOQUE_NEGATIVO') || tipo?.includes('CANCELAMENTO')) return 'warning';
-      return 'info';
+  const getEventStyle = (tipo) => {
+      if (tipo?.includes('EXCLUSAO') || tipo?.includes('CANCELAMENTO'))
+          return { icon: <Trash2 size={18} />, color: 'danger' };
+      if (tipo?.includes('ESTOQUE_NEGATIVO') || tipo?.includes('ERRO'))
+          return { icon: <AlertTriangle size={18} />, color: 'warning' };
+      if (tipo?.includes('RESTORE'))
+          return { icon: <RotateCcw size={18} />, color: 'success' };
+      return { icon: <Activity size={18} />, color: 'default' };
   };
 
   return (
     <div className="auditoria-container fade-in">
       <div className="auditoria-header">
         <div className="header-title">
-          <h1><ShieldAlert size={32} color="#6366f1" /> Auditoria & Segurança</h1>
-          <p>Monitoramento inteligente de operações</p>
+          <h1><ShieldAlert size={28} className="text-primary"/> Auditoria & Segurança</h1>
+          <p>Rastreabilidade completa de operações sensíveis</p>
         </div>
 
         <div className="header-tabs">
             <button className={`tab-btn ${activeTab === 'timeline' ? 'active' : ''}`} onClick={() => setActiveTab('timeline')}>
-                <History size={18} /> Timeline
+                <History size={18} /> Histórico
             </button>
             <button className={`tab-btn ${activeTab === 'lixeira' ? 'active' : ''}`} onClick={() => setActiveTab('lixeira')}>
                 <Trash2 size={18} /> Lixeira
@@ -162,83 +170,82 @@ const Auditoria = () => {
       </div>
 
       <div className="auditoria-toolbar">
-        <div className="search-box">
-            <Search size={20} />
+        <div className="search-wrapper-audit">
+            <Search size={18} className="search-icon"/>
             <input
                 type="text"
-                placeholder={activeTab === 'timeline' ? "Buscar eventos (Enter para buscar)..." : "Buscar produtos..."}
+                placeholder={activeTab === 'timeline' ? "Buscar eventos..." : "Buscar produto excluído..."}
                 value={filtroTexto}
                 onChange={(e) => setFiltroTexto(e.target.value)}
             />
         </div>
 
         {activeTab === 'timeline' && (
-            <div className="date-filter-group">
-                <input type="date" className="date-input" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
-                <span className="date-separator">até</span>
-                <input type="date" className="date-input" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
+            <div className="date-range-audit">
+                <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
+                <span>até</span>
+                <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
             </div>
         )}
 
-        <button className="btn-filter" onClick={handleAtualizarManual} title="Atualizar">
-            <RefreshCw size={18} className={loading ? 'spin' : ''} />
-        </button>
-        <button className="btn-filter" onClick={baixarPDF} title="Baixar PDF">
-            <FileText size={18} /> <span className="mobile-hide">PDF</span>
-        </button>
+        <div className="audit-actions">
+            <button className="btn-icon-audit" onClick={() => carregarDados(0, true)} data-tooltip="Atualizar Lista">
+                <RefreshCw size={18} className={loading ? 'spin' : ''} />
+            </button>
+            <button className="btn-icon-audit primary" onClick={baixarPDF} data-tooltip="Exportar Relatório PDF">
+                <FileText size={18} /> <span className="mobile-hide">Exportar</span>
+            </button>
+        </div>
       </div>
 
-      <div className="content-area">
+      <div className="audit-content">
         {activeTab === 'timeline' && (
-            <div className="timeline-wrapper">
+            <div className="timeline-feed">
                 {logs.length === 0 && !loading ? (
-                    <div className="empty-state">Nenhum evento encontrado.</div>
+                    <div className="empty-audit"><Activity size={48} opacity={0.2} /><p>Nenhum registro encontrado.</p></div>
                 ) : (
-                    logs.map((log, index) => (
-                        <div key={log.id || index} className="timeline-item">
-                            <div className="timeline-line"></div>
-                            <div className={`timeline-icon ${getIconClass(log.tipoEvento)}`}>
-                                {getIconForEvent(log.tipoEvento)}
-                            </div>
-                            <div className="timeline-card">
-                                <div className="card-header">
-                                    <span className="action-tag">{log.tipoEvento?.replace(/_/g, ' ') || 'LOG'}</span>
-                                    <div className="time-tag">
-                                        <Calendar size={14} />
-                                        {log.dataHora ? new Date(log.dataHora).toLocaleString('pt-BR') : '--/--'}
+                    logs.map((log, idx) => {
+                        const style = getEventStyle(log.tipoEvento);
+                        return (
+                            <div key={log.id || idx} className={`timeline-entry ${style.color}`}>
+                                <div className="entry-marker">{style.icon}</div>
+                                <div className="entry-card">
+                                    <div className="entry-header">
+                                        <span className="entry-type">{log.tipoEvento?.replace(/_/g, ' ')}</span>
+                                        <span className="entry-date"><Calendar size={12}/> {new Date(log.dataHora).toLocaleString('pt-BR')}</span>
+                                    </div>
+                                    <p className="entry-msg">{log.mensagem}</p>
+                                    <div className="entry-meta">
+                                        <User size={12}/> {log.usuarioResponsavel || 'Sistema'}
                                     </div>
                                 </div>
-                                <p className="card-details">{log.mensagem}</p>
-                                <div className="card-footer">
-                                    <User size={14} />
-                                    <span>Resp: <strong>{log.usuarioResponsavel || 'Sistema'}</strong></span>
-                                </div>
                             </div>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
             </div>
         )}
 
         {activeTab === 'lixeira' && (
-            <div className="trash-grid">
+            <div className="trash-grid-view">
                 {lixeira.length === 0 && !loading ? (
-                    <div className="empty-state" style={{gridColumn: '1/-1'}}>Lixeira vazia.</div>
+                    <div className="empty-audit"><Trash2 size={48} opacity={0.2} /><p>A lixeira está vazia.</p></div>
                 ) : (
                     lixeira.map((item) => (
-                        <div key={item.id} className="trash-card">
-                            <div style={{display:'flex', gap:15, alignItems:'flex-start', width:'100%'}}>
-                                <div className="trash-icon"><Trash2 size={24} /></div>
-                                <div className="trash-info">
-                                    <h4>{item.descricao}</h4>
-                                    <p>Cod: {item.codigoBarras || 'S/N'}</p>
-                                    <p style={{marginTop:4, fontWeight:600}}>
-                                        {item.precoVenda?.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}
-                                    </p>
-                                </div>
+                        <div key={item.id} className="trash-item-card">
+                            <div className="trash-img-placeholder"><Trash2 size={24} color="#ef4444"/></div>
+                            <div className="trash-details">
+                                <strong>{item.descricao}</strong>
+                                <small>Cód: {item.codigoBarras || 'N/A'}</small>
+                                <span className="deleted-info">Por: {item.usuarioExclusao || '?'}</span>
                             </div>
-                            <button className="btn-restore" onClick={() => restaurarItem(item.id, item.descricao)}>
-                                <RotateCcw size={18} /> Restaurar
+
+                            <button
+                                className="btn-restore-action"
+                                onClick={() => solicitarRestauracao(item)}
+                                data-tooltip="Restaurar ao Estoque"
+                            >
+                                <RotateCcw size={16}/> Restaurar
                             </button>
                         </div>
                     ))
@@ -246,21 +253,23 @@ const Auditoria = () => {
             </div>
         )}
 
-        {/* Loading / Carregar Mais */}
-        {loading && (
-            <div className="empty-state" style={{padding: 20}}>
-                <RefreshCw size={24} className="spin" color="#6366f1" />
-            </div>
-        )}
+        {loading && <div className="loading-spinner-audit"><RefreshCw className="spin"/> Carregando...</div>}
 
         {!loading && hasMore && (logs.length > 0 || lixeira.length > 0) && (
-            <div className="load-more-container">
-                <button className="btn-load-more" onClick={handleCarregarMais}>
-                    <ArrowDownCircle size={18} /> Carregar Mais
-                </button>
-            </div>
+            <button className="btn-audit-loadmore" onClick={() => { setPage(page+1); carregarDados(page+1, false); }}>
+                <ArrowDownCircle size={18}/> Ver Mais
+            </button>
         )}
       </div>
+
+      {modalConfig.open && (
+        <ConfirmModal
+          title={modalConfig.titulo}
+          message={modalConfig.mensagem}
+          onConfirm={() => modalConfig.acao(modalConfig.id)}
+          onCancel={() => setModalConfig({ ...modalConfig, open: false })}
+        />
+      )}
     </div>
   );
 };

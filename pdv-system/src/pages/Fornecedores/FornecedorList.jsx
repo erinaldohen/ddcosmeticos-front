@@ -2,8 +2,14 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
-import { Tooltip } from 'react-tooltip';
-import { Plus, Search, Edit, Trash2, Building2, Phone, Mail, MapPin, ChevronLeft, ChevronRight, Truck, X } from 'lucide-react';
+// Removido 'react-tooltip' em favor do CSS global data-tooltip
+import {
+  Plus, Search, Edit, Trash2, Truck, X,
+  ChevronLeft, ChevronRight, Download
+} from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import ConfirmModal from '../../components/ConfirmModal'; // Importando Modal Seguro
 import './FornecedorList.css';
 
 const FornecedorList = () => {
@@ -14,7 +20,10 @@ const FornecedorList = () => {
   const [totalPaginas, setTotalPaginas] = useState(0);
   const [termoBusca, setTermoBusca] = useState('');
 
-  // Função de carregar dados isolada
+  // Estado para Modal de Exclusão
+  const [modalDelete, setModalDelete] = useState({ open: false, id: null, nome: '' });
+
+  // --- LÓGICA DE BUSCA (Mantida Original) ---
   const fetchFornecedores = useCallback(async (termo = '', page = 0) => {
     setLoading(true);
     try {
@@ -29,35 +38,71 @@ const FornecedorList = () => {
     }
   }, []);
 
-  // Debounce para busca automática conforme digita
   useEffect(() => {
     const timer = setTimeout(() => {
-      fetchFornecedores(termoBusca, 0); // Sempre volta para página 0 na busca
+      fetchFornecedores(termoBusca, 0);
       setPagina(0);
-    }, 400); // Aguarda 400ms após o último caractere
+    }, 400);
     return () => clearTimeout(timer);
   }, [termoBusca, fetchFornecedores]);
 
-  // Carregar quando trocar de página (sem busca ativa)
   useEffect(() => {
     if (termoBusca === '') {
       fetchFornecedores('', pagina);
     }
   }, [pagina, termoBusca, fetchFornecedores]);
 
-  const handleExcluir = async (id) => {
-    if (window.confirm("Deseja inativar este fornecedor?")) {
-      try {
-        await api.delete(`/fornecedores/${id}`);
-        toast.success("Fornecedor atualizado.");
-        fetchFornecedores(termoBusca, pagina);
-      } catch (e) { toast.error("Erro na exclusão."); }
+  // --- AÇÃO DE EXCLUSÃO (Com Modal) ---
+  const confirmarExclusao = async () => {
+    try {
+      await api.delete(`/fornecedores/${modalDelete.id}`);
+      toast.success("Fornecedor inativado com sucesso!");
+      setModalDelete({ open: false, id: null, nome: '' });
+      fetchFornecedores(termoBusca, pagina);
+    } catch (e) {
+      toast.error(e.response?.data?.message || "Erro na exclusão.");
     }
   };
 
+  // --- GERADOR DE PDF ---
+  const gerarRelatorioPDF = () => {
+    const doc = new jsPDF();
+
+    // Cabeçalho Marca
+    doc.setFillColor(59, 130, 246); // Azul Primary
+    doc.rect(0, 0, 210, 20, 'F');
+    doc.setFontSize(22); doc.setTextColor(255, 255, 255);
+    doc.text("DD Cosméticos", 14, 13);
+    doc.setFontSize(10);
+    doc.text("Relatório de Fornecedores", 150, 13);
+
+    doc.setTextColor(50);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Gerado em: ${new Date().toLocaleString()}`, 14, 30);
+
+    const tableBody = fornecedores.map(f => [
+      f.nomeFantasia,
+      f.cnpj,
+      f.telefone || '-',
+      f.email || '-',
+      f.ativo ? 'Ativo' : 'Inativo'
+    ]);
+
+    autoTable(doc, {
+      startY: 35,
+      head: [["Nome", "CNPJ", "Telefone", "Email", "Status"]],
+      body: tableBody,
+      theme: 'grid',
+      headStyles: { fillColor: [30, 41, 59] },
+      styles: { fontSize: 8 },
+    });
+
+    doc.save("Fornecedores.pdf");
+    toast.success("PDF baixado com sucesso!");
+  };
+
   return (
-    <div className="fl-wrapper">
-      <Tooltip id="fl-tip" />
+    <div className="fl-wrapper fade-in">
 
       <header className="fl-header">
         <div className="fl-title-area">
@@ -67,9 +112,15 @@ const FornecedorList = () => {
             <p>Listagem dinâmica de parceiros comerciais</p>
           </div>
         </div>
-        <button className="fl-btn-new" onClick={() => navigate('/fornecedores/novo')}>
-          <Plus size={18} /> Adicionar
-        </button>
+
+        <div className="fl-header-actions">
+          <button className="fl-btn-secondary" onClick={gerarRelatorioPDF} data-tooltip="Baixar PDF">
+            <Download size={18} /> <span className="mobile-hide">Relatório</span>
+          </button>
+          <button className="fl-btn-new" onClick={() => navigate('/fornecedores/novo')} data-tooltip="Novo Cadastro">
+            <Plus size={18} /> <span className="mobile-hide">Adicionar</span>
+          </button>
+        </div>
       </header>
 
       <div className="fl-card-main">
@@ -79,7 +130,7 @@ const FornecedorList = () => {
             <input
               type="text"
               className="fl-input-v2"
-              placeholder="Digite o CNPJ ou Nome do fornecedor..."
+              placeholder="Digite o CNPJ ou Nome..."
               value={termoBusca}
               onChange={(e) => setTermoBusca(e.target.value)}
             />
@@ -118,7 +169,7 @@ const FornecedorList = () => {
                       <small>{f.email || 'Sem e-mail'}</small>
                     </div>
                   </td>
-                  <td><span className="fl-city-tag">{f.cidade} - {f.uf}</span></td>
+                  <td><span className="fl-city-tag">{f.cidade ? `${f.cidade} - ${f.uf}` : 'N/A'}</span></td>
                   <td>
                     <span className={`fl-status-dot ${f.ativo ? 'is-active' : 'is-inactive'}`}>
                       {f.ativo ? 'Ativo' : 'Inativo'}
@@ -126,8 +177,20 @@ const FornecedorList = () => {
                   </td>
                   <td className="fl-text-right">
                     <div className="fl-actions-row">
-                      <button className="fl-icon-btn edit" onClick={() => navigate(`/fornecedores/editar/${f.id}`)} data-tooltip-id="fl-tip" data-tooltip-content="Editar"><Edit size={16}/></button>
-                      <button className="fl-icon-btn delete" onClick={() => handleExcluir(f.id)} data-tooltip-id="fl-tip" data-tooltip-content="Inativar"><Trash2 size={16}/></button>
+                      <button
+                        className="fl-icon-btn edit"
+                        onClick={() => navigate(`/fornecedores/editar/${f.id}`)}
+                        data-tooltip="Editar"
+                      >
+                        <Edit size={16}/>
+                      </button>
+                      <button
+                        className="fl-icon-btn delete tooltip-left"
+                        onClick={() => setModalDelete({ open: true, id: f.id, nome: f.nomeFantasia })}
+                        data-tooltip="Inativar"
+                      >
+                        <Trash2 size={16}/>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -145,7 +208,7 @@ const FornecedorList = () => {
 
         <footer className="fl-footer">
           <div className="fl-pagination-info">
-            Mostrando página {pagina + 1} de {totalPaginas}
+            Página {pagina + 1} de {totalPaginas > 0 ? totalPaginas : 1}
           </div>
           <div className="fl-pagination-nav">
             <button disabled={pagina === 0} onClick={() => setPagina(p => p - 1)} className="fl-nav-btn"><ChevronLeft size={18}/></button>
@@ -153,6 +216,16 @@ const FornecedorList = () => {
           </div>
         </footer>
       </div>
+
+      {/* MODAL DE CONFIRMAÇÃO */}
+      {modalDelete.open && (
+        <ConfirmModal
+          title="Inativar Fornecedor"
+          message={`Tem certeza que deseja inativar "${modalDelete.nome}"?`}
+          onConfirm={confirmarExclusao}
+          onCancel={() => setModalDelete({ open: false, id: null, nome: '' })}
+        />
+      )}
     </div>
   );
 };

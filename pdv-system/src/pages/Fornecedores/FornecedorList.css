@@ -14,7 +14,10 @@
   background-color: var(--bg-page);
   min-height: 100vh;
   font-family: 'Inter', system-ui, sans-serif;
+  animation: fadeIn 0.4s ease-out;
 }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
 /* --- CABEÇALHO --- */
 .fl-header {
@@ -55,6 +58,11 @@
   font-size: 14px;
 }
 
+.fl-header-actions {
+  display: flex;
+  gap: 10px;
+}
+
 .fl-btn-new {
   background: var(--primary);
   color: var(--white);
@@ -75,6 +83,21 @@
   transform: translateY(-2px);
   box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3);
 }
+
+.fl-btn-secondary {
+  background: var(--white);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.fl-btn-secondary:hover { background: #f1f5f9; color: var(--primary); border-color: var(--primary); }
 
 /* --- CARD E BARRA DE PESQUISA --- */
 .fl-card-main {
@@ -151,10 +174,12 @@
 /* --- TABELA --- */
 .fl-table-scroll {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .fl-table {
   width: 100%;
+  min-width: 800px; /* Garante estrutura no mobile */
   border-collapse: collapse;
   text-align: left;
 }
@@ -168,6 +193,7 @@
   color: #64748b;
   letter-spacing: 0.05em;
   border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
 
 .fl-table td {
@@ -193,6 +219,7 @@
   font-size: 13px;
   color: var(--text-sub);
   margin-top: 2px;
+  font-family: monospace;
 }
 
 .fl-cell-contact {
@@ -221,6 +248,7 @@
   font-size: 12px;
   font-weight: 600;
   display: inline-block;
+  white-space: nowrap;
 }
 
 .fl-status-dot {
@@ -334,3 +362,53 @@
 
 @keyframes fl-spin { to { transform: rotate(360deg); } }
 
+/* ================================================================= */
+/* MOBILE RESPONSIVE (Padrão Ouro: Stack + Horizontal Scroll)        */
+/* ================================================================= */
+
+@media (max-width: 768px) {
+  .fl-wrapper {
+    padding: 16px; /* Reduz padding da página */
+  }
+
+  /* Header Vertical */
+  .fl-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 20px;
+  }
+
+  .fl-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .mobile-hide {
+    display: none; /* Esconde textos de botões no mobile */
+  }
+
+  /* Toolbar Search */
+  .fl-toolbar-search {
+    padding: 16px;
+  }
+  .fl-search-box-v2 {
+    max-width: 100%;
+  }
+
+  /* Tabela */
+  .fl-table-scroll {
+    /* Mantém rolagem horizontal, como solicitado */
+    border-radius: 0;
+  }
+
+  .fl-table td, .fl-table th {
+    padding: 12px 16px;
+  }
+
+  /* Footer Paginacao Compacto */
+  .fl-footer {
+    flex-direction: column;
+    gap: 15px;
+    padding: 20px;
+  }
+}

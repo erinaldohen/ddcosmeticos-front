@@ -2,44 +2,41 @@ import React, { useState, useEffect } from 'react';
 import {
     Archive, Calendar, Search, RefreshCw,
     Eye, ArrowDownCircle, User, X, Download,
-    TrendingUp, TrendingDown, Minus, AlertTriangle, FileText
+    TrendingUp, TrendingDown, FileText
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import api from '../../services/api';
 import './HistoricoCaixa.css';
 
 const HistoricoCaixa = () => {
-    // --- ESTADOS DE DADOS ---
+    // --- ESTADOS ---
     const [caixas, setCaixas] = useState([]);
     const [loading, setLoading] = useState(false);
     const [resumo, setResumo] = useState({ total: 0, qtd: 0 });
 
-    // --- ESTADOS DO MODAL ---
     const [modalOpen, setModalOpen] = useState(false);
     const [caixaSelecionado, setCaixaSelecionado] = useState(null);
     const [loadingDetalhes, setLoadingDetalhes] = useState(false);
 
-    // --- FILTROS (Padrão: Últimos 30 dias) ---
+    // Filtros
     const [dataInicio, setDataInicio] = useState(() => {
         const d = new Date();
         d.setDate(d.getDate() - 30);
         return d.toISOString().split('T')[0];
     });
-    const [dataFim, setDataFim] = useState(() => {
-        return new Date().toISOString().split('T')[0];
-    });
+    const [dataFim, setDataFim] = useState(() => new Date().toISOString().split('T')[0]);
 
-    // --- PAGINAÇÃO ---
     const [page, setPage] = useState(0);
     const [hasMore, setHasMore] = useState(true);
 
-    // --- INICIALIZAÇÃO ---
     useEffect(() => {
         carregarCaixas(0, true);
         // eslint-disable-next-line
     }, []);
 
-    // --- CARREGAR LISTA ---
+    // --- CARREGAR DADOS ---
     const carregarCaixas = async (pagina = 0, reset = false) => {
         if (loading && pagina > 0) return;
         setLoading(true);
@@ -48,8 +45,8 @@ const HistoricoCaixa = () => {
             const params = {
                 page: pagina,
                 size: 20,
-                sort: 'id,desc', // Ordenação decrescente (mais recente primeiro)
-                inicio: dataInicio, // Parâmetro renomeado para bater com o Java
+                sort: 'dataAbertura,desc',
+                inicio: dataInicio,
                 fim: dataFim
             };
 
@@ -63,13 +60,18 @@ const HistoricoCaixa = () => {
 
         } catch (error) {
             console.error("Erro histórico:", error);
-            toast.error("Erro ao carregar histórico.");
+            if (reset) toast.error("Não foi possível carregar o histórico.");
         } finally {
             setLoading(false);
         }
     };
 
-    // --- CARREGAR DETALHES (MODAL) ---
+    const calcularResumo = (lista) => {
+        const fechados = lista.filter(c => c.status === 'FECHADO');
+        const total = fechados.reduce((acc, c) => acc + (c.valorFechamento || 0), 0);
+        setResumo({ total, qtd: fechados.length });
+    };
+
     const handleVerDetalhes = async (id) => {
         setModalOpen(true);
         setLoadingDetalhes(true);
@@ -77,69 +79,136 @@ const HistoricoCaixa = () => {
             const res = await api.get(`/caixas/${id}`);
             setCaixaSelecionado(res.data);
         } catch (error) {
-            console.error("Erro detalhes:", error);
-            toast.error("Não foi possível carregar os detalhes.");
+            toast.error("Erro ao carregar detalhes.");
             setModalOpen(false);
         } finally {
             setLoadingDetalhes(false);
         }
     };
 
-    // --- EXPORTAR PDF ---
-    const handleExportarPDF = async () => {
-        try {
-            const toastId = toast.loading("Gerando PDF...");
+    // --- GERADOR DE PDF SOFISTICADO (AJUSTE FINO) ---
+    const gerarPDFSofisticado = () => {
+        const doc = new jsPDF();
 
-            const params = { inicio: dataInicio, fim: dataFim };
+        // 1. Cabeçalho Executivo
+        doc.setFillColor(242, 41, 152); // Magenta
+        doc.rect(0, 0, 210, 20, 'F');
 
-            const response = await api.get('/caixas/relatorio/pdf', {
-                params,
-                responseType: 'blob' // Importante para arquivos binários
-            });
+        doc.setFontSize(22);
+        doc.setTextColor(255, 255, 255);
+        doc.text("DD Cosméticos", 14, 13);
 
-            // Cria link temporário
-            const url = window.URL.createObjectURL(new Blob([response.data]));
-            const link = document.createElement('a');
-            link.href = url;
-            link.setAttribute('download', `Relatorio_Caixa_${dataInicio}.pdf`);
-            document.body.appendChild(link);
-            link.click();
+        doc.setFontSize(10);
+        doc.text("Relatório de Fechamento de Caixa", 150, 13);
 
-            // Limpa memória
-            link.remove();
-            window.URL.revokeObjectURL(url);
+        // 2. Metadados (Cálculo preciso de espaço)
+        doc.setTextColor(50);
+        doc.setFontSize(10);
 
-            toast.dismiss(toastId);
-            toast.success("Download concluído!");
+        // Define labels e valores
+        const lblPeriodo = "Período:";
+        const valPeriodo = `${formatData(dataInicio)} a ${formatData(dataFim)}`;
+        const lblGerado = "Gerado em:";
+        const valGerado = `${new Date().toLocaleString()}`;
 
-        } catch (error) {
-            console.error("Erro download:", error);
-            toast.dismiss();
-            toast.error("Erro ao gerar o PDF.");
+        // Calcula a largura de um espaço em branco na fonte atual (size 10)
+        const spaceWidth = doc.getTextWidth(" ");
+
+        // Linha 1: Período
+        doc.setFont(undefined, 'bold');
+        doc.text(lblPeriodo, 14, 30);
+        const w1 = doc.getTextWidth(lblPeriodo); // Largura do label
+
+        doc.setFont(undefined, 'normal');
+        // Posição X = 14 + largura do texto + largura de 1 espaço
+        doc.text(valPeriodo, 14 + w1 + spaceWidth, 30);
+
+        // Linha 2: Gerado em
+        doc.setFont(undefined, 'bold');
+        doc.text(lblGerado, 14, 35);
+        const w2 = doc.getTextWidth(lblGerado); // Largura do label
+
+        doc.setFont(undefined, 'normal');
+        doc.text(valGerado, 14 + w2 + spaceWidth, 35);
+
+        // 3. Resumo KPI (Box)
+        doc.setDrawColor(200);
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(14, 40, 180, 20, 3, 3, 'FD');
+
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text("Total Movimentado (Período)", 20, 48);
+        doc.text("Qtd. Fechamentos", 120, 48);
+
+        doc.setFontSize(14);
+        doc.setTextColor(0);
+        doc.setFont(undefined, 'bold');
+        doc.text(formatMoeda(resumo.total), 20, 56);
+        doc.text(resumo.qtd.toString(), 120, 56);
+        doc.setFont(undefined, 'normal');
+
+        // 4. Tabela de Dados
+        const tableColumn = ["ID", "Operador", "Abertura", "Fechamento", "Saldo Final", "Diferença", "Status"];
+        const tableRows = caixas.map(c => {
+            const diff = (c.valorFechamento || 0) - (c.valorCalculadoSistema || 0);
+            return [
+                c.id,
+                c.usuarioAbertura?.nome || 'Admin',
+                formatData(c.dataAbertura),
+                c.status === 'ABERTO' ? '--' : formatData(c.dataFechamento),
+                formatMoeda(c.valorFechamento || 0),
+                c.status === 'ABERTO' ? '--' : formatMoeda(diff),
+                c.status
+            ];
+        });
+
+        autoTable(doc, {
+            startY: 70,
+            head: [tableColumn],
+            body: tableRows,
+            theme: 'grid',
+            headStyles: {
+                fillColor: [30, 41, 59], // Slate 800
+                textColor: 255,
+                fontSize: 9,
+                fontStyle: 'bold'
+            },
+            styles: {
+                fontSize: 8,
+                cellPadding: 3,
+                textColor: [51, 65, 85]
+            },
+            alternateRowStyles: { fillColor: [241, 245, 249] }, // Slate 100
+            columnStyles: {
+                4: { halign: 'right', fontStyle: 'bold' }, // Saldo Final
+                5: { halign: 'right' } // Diferença
+            },
+            didParseCell: function(data) {
+                if (data.section === 'body' && data.column.index === 5) {
+                    const texto = data.cell.raw;
+                    if (texto.includes('-')) data.cell.styles.textColor = [220, 38, 38]; // Vermelho
+                    else if (texto !== 'R$ 0,00' && texto !== '--') data.cell.styles.textColor = [22, 163, 74]; // Verde
+                }
+            }
+        });
+
+        // 5. Rodapé
+        const pageCount = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor(150);
+            doc.text('DD Cosméticos - Sistema de Gestão Interno', 14, doc.internal.pageSize.height - 10);
+            doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 10);
         }
+
+        doc.save(`Relatorio_Caixa_${dataInicio}.pdf`);
+        toast.success("PDF Sofisticado gerado com sucesso! 📄");
     };
 
-    // --- HELPER FUNCTIONS ---
-    const calcularResumo = (lista) => {
-        const fechados = lista.filter(c => c.status !== 'ABERTO');
-        // Usa o valor de fechamento ou o calculado se nulo
-        const total = fechados.reduce((acc, c) => acc + (c.valorFechamento || c.valorCalculadoSistema || 0), 0);
-        setResumo({ total, qtd: fechados.length });
-    };
-
-    const handleAtualizar = () => {
-        setPage(0);
-        carregarCaixas(0, true);
-    };
-
-    const handleCarregarMais = () => {
-        const nextPage = page + 1;
-        setPage(nextPage);
-        carregarCaixas(nextPage, false);
-    };
-
+    // --- HELPER FORMAT ---
     const formatMoeda = (val) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-
     const formatData = (dataStr) => {
         if (!dataStr) return '--';
         return new Date(dataStr).toLocaleString('pt-BR', {
@@ -147,60 +216,60 @@ const HistoricoCaixa = () => {
         });
     };
 
-    // Função segura para evitar erro de objeto no React
-    const getUsuarioNome = (user) => {
-        if (!user) return 'Sistema';
-        if (typeof user === 'string') return user;
-        return user.nome || user.username || 'Operador';
-    };
-
     return (
         <div className="historico-container fade-in">
             {/* HEADER */}
             <div className="page-header">
                 <div className="header-title">
-                    <h1><Archive size={32} color="#6366f1" /> Histórico de Caixa</h1>
-                    <p><b>{resumo.qtd}</b> fechamentos | Movimentação Total: <b style={{color:'#16a34a'}}>{formatMoeda(resumo.total)}</b></p>
+                    <h1><Archive size={32} className="text-primary" /> Histórico de Caixa</h1>
+                    <p><b>{resumo.qtd}</b> registros | Total: <b className="text-success">{formatMoeda(resumo.total)}</b></p>
                 </div>
-                <button className="btn-primary" onClick={handleAtualizar}>
+                <button
+                    className="btn-primary"
+                    onClick={() => { setPage(0); carregarCaixas(0, true); }}
+                    data-tooltip="Atualizar lista agora"
+                >
                     <RefreshCw size={18} className={loading ? 'spin' : ''} /> Atualizar
                 </button>
             </div>
 
-            {/* TOOLBAR */}
+            {/* FILTROS */}
             <div className="toolbar">
-                <div style={{flex: 1, display: 'flex', alignItems:'center', gap: 10, flexWrap:'wrap'}}>
-                    <div className="date-range-box">
-                        <Calendar size={18} color="#94a3b8" />
-                        <input type="date" className="date-input" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
-                        <span style={{color:'#cbd5e1'}}>até</span>
-                        <input type="date" className="date-input" value={dataFim} onChange={e => setDataFim(e.target.value)} />
-                    </div>
-                    <button className="btn-icon-text" onClick={handleAtualizar}>
-                        <Search size={18} /> Filtrar
+                <div className="date-filter-group">
+                    <Calendar size={18} className="text-gray" />
+                    <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
+                    <span>até</span>
+                    <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} />
+                    <button
+                        className="btn-search-icon"
+                        onClick={() => carregarCaixas(0, true)}
+                        data-tooltip="Aplicar Filtro"
+                    >
+                        <Search size={18} />
                     </button>
                 </div>
 
-                <div style={{flex:1}}></div>
-
-                {/* BOTÃO EXPORTAR */}
-                <button className="btn-icon-text" onClick={handleExportarPDF} title="Baixar Relatório">
-                    <Download size={18} /> <span className="mobile-hide">Exportar PDF</span>
+                <button
+                    className="btn-export"
+                    onClick={gerarPDFSofisticado}
+                    data-tooltip="Baixar Relatório Executivo"
+                >
+                    <Download size={18} /> PDF
                 </button>
             </div>
 
             {/* TABELA */}
-            <div className="table-container">
+            <div className="table-wrapper">
                 <table className="data-table">
                     <thead>
                         <tr>
-                            <th style={{width: '25%'}}>Caixa / Operador</th>
-                            <th>Período</th>
-                            <th style={{textAlign: 'right'}}>Saldo Inicial</th>
-                            <th style={{textAlign: 'right'}}>Saldo Final</th>
-                            <th style={{textAlign: 'right'}}>Conferência</th>
+                            <th>Caixa / Operador</th>
+                            <th>Abertura</th>
+                            <th>Fechamento</th>
+                            <th className="text-right">Saldo Final</th>
+                            <th className="text-right">Diferença</th>
                             <th>Status</th>
-                            <th style={{textAlign: 'right'}}>Ações</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -208,71 +277,53 @@ const HistoricoCaixa = () => {
                             <tr><td colSpan="7" className="empty-state">Nenhum registro encontrado.</td></tr>
                         ) : (
                             caixas.map((caixa) => {
-                                // Lógica de Valores
-                                const valorEsperado = caixa.valorCalculadoSistema || caixa.valorCalculado || (caixa.saldoInicial + (caixa.totalEntradas || 0)) || 0;
-                                const valorInformado = caixa.valorFechamento !== null ? caixa.valorFechamento : 0;
-                                const diferenca = valorInformado - valorEsperado;
-
-                                const statusClass = (caixa.status || 'FECHADO').toLowerCase();
-                                const isAberto = statusClass === 'aberto';
+                                const esperado = caixa.valorCalculadoSistema || 0;
+                                const informado = caixa.valorFechamento || 0;
+                                const diff = informado - esperado;
+                                const isAberto = caixa.status === 'ABERTO';
 
                                 return (
                                     <tr key={caixa.id}>
                                         <td>
-                                            <div className="item-identity">
-                                                <div className="item-avatar"><User size={20} /></div>
-                                                <div className="item-info">
-                                                    <h4>#{caixa.id} - {getUsuarioNome(caixa.usuarioAbertura)}</h4>
-                                                    <span>PDV Principal</span>
+                                            <div className="user-cell">
+                                                <div className="avatar-mini"><User size={14}/></div>
+                                                <div>
+                                                    <strong>#{caixa.id} - {caixa.usuarioAbertura?.nome || 'Admin'}</strong>
+                                                    <span>PDV 01</span>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td>
-                                            <div className="item-info">
-                                                <span style={{display:'block', color:'#0f172a'}}>{formatData(caixa.dataAbertura)}</span>
-                                                <span style={{display:'block', color: isAberto ? '#16a34a' : '#64748b'}}>
-                                                    {isAberto ? 'Em andamento' : formatData(caixa.dataFechamento)}
-                                                </span>
-                                            </div>
+                                        <td>{formatData(caixa.dataAbertura)}</td>
+                                        <td>{isAberto ? '--' : formatData(caixa.dataFechamento)}</td>
+
+                                        <td className="text-right font-bold">
+                                            {isAberto ? '--' : formatMoeda(informado)}
                                         </td>
-                                        <td style={{textAlign: 'right', color:'#64748b', fontWeight:500}}>
-                                            {formatMoeda(caixa.saldoInicial)}
-                                        </td>
-                                        <td style={{textAlign: 'right'}}>
-                                            {isAberto ? <span className="text-neutral">--</span> :
-                                                <span className="value-main" style={{color: valorInformado === 0 ? '#ef4444' : '#0f172a'}}>
-                                                    {formatMoeda(valorInformado)}
-                                                </span>
-                                            }
-                                        </td>
-                                        <td style={{textAlign: 'right'}}>
+
+                                        <td className="text-right">
                                             {!isAberto ? (
-                                                Math.abs(diferenca) > 0.05 ? (
-                                                    <div style={{display:'flex', alignItems:'center', justifyContent:'flex-end', gap:4}}>
-                                                        {diferenca > 0 ? <TrendingUp size={14} color="#16a34a"/> : <TrendingDown size={14} color="#ef4444"/>}
-                                                        <span className={diferenca > 0 ? 'text-success' : 'text-danger'}>
-                                                            {diferenca > 0 ? '+' : ''}{formatMoeda(diferenca)}
-                                                        </span>
-                                                    </div>
-                                                ) : <span className="text-success"><Minus size={14} /> Batido</span>
-                                            ) : <span className="text-neutral">--</span>}
+                                                Math.abs(diff) > 0.05 ? (
+                                                    <span className={diff > 0 ? 'badge-success' : 'badge-danger'}>
+                                                        {diff > 0 ? '+' : ''}{formatMoeda(diff)}
+                                                    </span>
+                                                ) : <span className="badge-neutral">OK</span>
+                                            ) : '--'}
                                         </td>
+
                                         <td>
-                                            <span className={`status-badge ${statusClass}`}>
-                                                <div style={{width:6, height:6, borderRadius:'50%', background:'currentColor', marginRight:6}}></div>
-                                                {caixa.status || 'FECHADO'}
+                                            <span className={`status-pill ${isAberto ? 'open' : 'closed'}`}>
+                                                {caixa.status}
                                             </span>
                                         </td>
+
                                         <td>
-                                            <div className="action-buttons">
-                                                <button
-                                                    className="btn-icon-action view"
-                                                    onClick={() => handleVerDetalhes(caixa.id)}
-                                                    title="Ver Detalhes"
-                                                >
-                                                    <Eye size={18} />
-                                                </button>
-                                            </div>
+                                            <button
+                                                className="btn-icon-view"
+                                                onClick={() => handleVerDetalhes(caixa.id)}
+                                                data-tooltip="Ver Conferência"
+                                            >
+                                                <Eye size={18}/>
+                                            </button>
                                         </td>
                                     </tr>
                                 );
@@ -281,102 +332,59 @@ const HistoricoCaixa = () => {
                     </tbody>
                 </table>
 
-                {loading && <div style={{padding:20, textAlign:'center', color:'#6366f1'}}><RefreshCw size={24} className="spin" /></div>}
-
-                {!loading && hasMore && caixas.length > 0 && (
-                    <div className="load-more-container">
-                        <button className="btn-icon-text" onClick={handleCarregarMais}>
-                            <ArrowDownCircle size={18} /> Carregar Mais
-                        </button>
-                    </div>
+                {!loading && hasMore && (
+                    <button className="btn-load-more" onClick={() => { const p = page + 1; setPage(p); carregarCaixas(p, false); }}>
+                        <ArrowDownCircle size={18}/> Carregar Mais
+                    </button>
                 )}
             </div>
 
-            {/* --- MODAL DE DETALHES --- */}
-            {modalOpen && (
-                <div className="modal-overlay" onClick={() => setModalOpen(false)}>
-                    <div className="modal-content" onClick={e => e.stopPropagation()}>
+            {/* MODAL DETALHES */}
+            {modalOpen && caixaSelecionado && (
+                <div className="modal-overlay fade-in" onClick={() => setModalOpen(false)}>
+                    <div className="modal-content-lg" onClick={e => e.stopPropagation()}>
                         <div className="modal-header">
-                            <h2><FileText size={20} color="#6366f1"/> Detalhes do Caixa #{caixaSelecionado?.id || '...'}</h2>
-                            <button className="btn-close" onClick={() => setModalOpen(false)}><X size={20}/></button>
+                            <h3><FileText size={20}/> Detalhes do Caixa #{caixaSelecionado.id}</h3>
+                            <button onClick={() => setModalOpen(false)} className="btn-close-modal"><X size={20}/></button>
                         </div>
+                        <div className="modal-body-grid">
+                            <div className="info-section">
+                                <label>Operador</label>
+                                <p>{caixaSelecionado.usuarioAbertura?.nome || 'Admin'}</p>
+                            </div>
+                            <div className="info-section">
+                                <label>Abertura</label>
+                                <p>{formatData(caixaSelecionado.dataAbertura)}</p>
+                            </div>
+                            <div className="info-section">
+                                <label>Fechamento</label>
+                                <p>{caixaSelecionado.dataFechamento ? formatData(caixaSelecionado.dataFechamento) : 'Em aberto'}</p>
+                            </div>
 
-                        <div className="modal-body">
-                            {loadingDetalhes || !caixaSelecionado ? (
-                                <div style={{textAlign:'center', padding:30}}><RefreshCw className="spin"/> Carregando...</div>
-                            ) : (
-                                <>
-                                    <div className="detail-grid">
-                                        <div className="detail-item">
-                                            <span className="detail-label">Operador</span>
-                                            <span className="detail-value">{getUsuarioNome(caixaSelecionado.usuarioAbertura)}</span>
-                                        </div>
-                                        <div className="detail-item">
-                                            <span className="detail-label">Status</span>
-                                            <span className={`status-badge ${(caixaSelecionado.status || '').toLowerCase()}`}>
-                                                {caixaSelecionado.status}
-                                            </span>
-                                        </div>
-                                        <div className="detail-item">
-                                            <span className="detail-label">Abertura</span>
-                                            <span className="detail-value">{formatData(caixaSelecionado.dataAbertura)}</span>
-                                        </div>
-                                        <div className="detail-item">
-                                            <span className="detail-label">Fechamento</span>
-                                            <span className="detail-value">{formatData(caixaSelecionado.dataFechamento)}</span>
-                                        </div>
-                                    </div>
+                            <div className="divider-full"></div>
 
-                                    <div className="finance-summary">
-                                        <h4 style={{margin:'0 0 15px 0', color:'#64748b', fontSize:'0.9rem', textTransform:'uppercase'}}>Resumo Financeiro</h4>
+                            <div className="finance-card">
+                                <span>Saldo Inicial</span>
+                                <strong>{formatMoeda(caixaSelecionado.saldoInicial)}</strong>
+                            </div>
+                            <div className="finance-card success">
+                                <span>(+) Entradas</span>
+                                <strong>{formatMoeda(caixaSelecionado.totalEntradas)}</strong>
+                            </div>
+                            <div className="finance-card danger">
+                                <span>(-) Saídas</span>
+                                <strong>{formatMoeda(caixaSelecionado.totalSaidas)}</strong>
+                            </div>
 
-                                        <div className="finance-row">
-                                            <span>Saldo Inicial (Fundo)</span>
-                                            <span>{formatMoeda(caixaSelecionado.saldoInicial)}</span>
-                                        </div>
-                                        <div className="finance-row" style={{color:'#16a34a'}}>
-                                            <span>(+) Total Vendas/Entradas</span>
-                                            <span>{formatMoeda(caixaSelecionado.totalEntradas || 0)}</span>
-                                        </div>
-                                        <div className="finance-row" style={{color:'#ef4444'}}>
-                                            <span>(-) Total Sangrias/Saídas</span>
-                                            <span>{formatMoeda(caixaSelecionado.totalSaidas || 0)}</span>
-                                        </div>
+                            <div className="finance-card highlight">
+                                <span>(=) Esperado</span>
+                                <strong>{formatMoeda(caixaSelecionado.valorCalculadoSistema)}</strong>
+                            </div>
 
-                                        <div className="finance-row total">
-                                            <span>(=) Valor Esperado</span>
-                                            <span>{formatMoeda(
-                                                (caixaSelecionado.valorCalculadoSistema ||
-                                                (caixaSelecionado.saldoInicial + (caixaSelecionado.totalEntradas||0) - (caixaSelecionado.totalSaidas||0)))
-                                            )}</span>
-                                        </div>
-
-                                        <div className="finance-row" style={{marginTop:5, fontSize:'1.1rem', fontWeight:800, color:'#0f172a'}}>
-                                            <span>Valor em Gaveta</span>
-                                            <span>{formatMoeda(caixaSelecionado.valorFechamento || 0)}</span>
-                                        </div>
-
-                                        {(() => {
-                                            const sistema = caixaSelecionado.valorCalculadoSistema || 0;
-                                            const gaveta = caixaSelecionado.valorFechamento || 0;
-                                            const diff = gaveta - sistema;
-                                            if(Math.abs(diff) < 0.05) return null;
-
-                                            return (
-                                                <div style={{
-                                                    marginTop: 15, padding: 10, borderRadius: 8,
-                                                    background: diff > 0 ? '#f0fdf4' : '#fef2f2',
-                                                    color: diff > 0 ? '#166534' : '#991b1b',
-                                                    display:'flex', alignItems:'center', gap: 10, fontWeight: 700
-                                                }}>
-                                                    {diff > 0 ? <TrendingUp size={20}/> : <AlertTriangle size={20}/>}
-                                                    <span>{diff > 0 ? 'Sobra:' : 'Quebra:'} {formatMoeda(diff)}</span>
-                                                </div>
-                                            );
-                                        })()}
-                                    </div>
-                                </>
-                            )}
+                            <div className="finance-card dark">
+                                <span>Contado na Gaveta</span>
+                                <strong>{formatMoeda(caixaSelecionado.valorFechamento)}</strong>
+                            </div>
                         </div>
                     </div>
                 </div>

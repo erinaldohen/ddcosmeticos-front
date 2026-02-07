@@ -1,27 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import {
     Unlock, Lock, TrendingUp, TrendingDown,
-    CheckCircle, AlertTriangle, Wallet,
+    CheckCircle, Wallet,
     History as HistoryIcon,
-    Clock, DollarSign, Calendar, Info, Power, Edit3
+    Calendar, Info, Power, Edit3,
+    Eye, EyeOff, X, Printer
 } from 'lucide-react';
 import { toast } from 'react-toastify';
+import { useNavigate } from 'react-router-dom';
+import jsPDF from 'jspdf'; // NOVO
 import caixaService from '../../services/caixaService';
-import { MOTIVOS_PADRAO_CAIXA } from '../../utils/motivosFinanceiros'; // Mantemos a lista fixa como base
+import { MOTIVOS_PADRAO_CAIXA } from '../../utils/motivosFinanceiros';
 import './GerenciamentoCaixa.css';
 
 const GerenciamentoCaixa = () => {
+    const navigate = useNavigate();
+
+    // Estados de Controle
     const [status, setStatus] = useState(null);
     const [loading, setLoading] = useState(true);
     const [loadingAction, setLoadingAction] = useState(false);
 
-    // Inputs
+    // Regra de Negócio: Privacidade do Saldo
+    const [exibirSaldo, setExibirSaldo] = useState(false);
+
+    // Regra de Negócio: Fechamento Cego
+    const [exibirModalFechamento, setExibirModalFechamento] = useState(false);
+    const [saldoFechamentoContado, setSaldoFechamentoContado] = useState('');
+
+    // Inputs Gerais
     const [valorInput, setValorInput] = useState('');
     const [observacao, setObservacao] = useState('');
 
-    // LISTA DE MOTIVOS (Começa com a padrão, depois enriquece com a do sistema)
     const [listaMotivos, setListaMotivos] = useState(MOTIVOS_PADRAO_CAIXA);
-
     const [dadosCaixa, setDadosCaixa] = useState({
         saldoInicial: 0,
         totalEntradas: 0,
@@ -36,23 +47,17 @@ const GerenciamentoCaixa = () => {
 
     useEffect(() => {
         carregarStatus();
-        carregarMotivosDoSistema(); // Nova função de carga
+        carregarMotivosDoSistema();
     }, []);
 
-    // --- CARREGA MOTIVOS DO BANCO DE DADOS ---
+    // --- CARGAS DE DADOS ---
     const carregarMotivosDoSistema = async () => {
         try {
-            // Tenta buscar do backend
             const response = await caixaService.getMotivosFrequentes();
             const motivosDoBanco = response.data || [];
-
-            // Funde a lista padrão com a do banco (Remove duplicatas com Set)
             const listaCompleta = [...new Set([...MOTIVOS_PADRAO_CAIXA, ...motivosDoBanco])].sort();
-
             setListaMotivos(listaCompleta);
         } catch (error) {
-            // Se o backend falhar ou não tiver o endpoint ainda, usa só a padrão
-            console.warn("Não foi possível carregar histórico de motivos.", error);
             setListaMotivos(MOTIVOS_PADRAO_CAIXA.sort());
         }
     };
@@ -63,11 +68,17 @@ const GerenciamentoCaixa = () => {
             const res = await caixaService.getStatus();
             if (res.data) {
                 setStatus('ABERTO');
+                const saldoAtualCalculado = (res.data.totalDinheiro || 0) +
+                                            (res.data.saldoInicial || 0) +
+                                            (res.data.totalEntradas || 0) -
+                                            (res.data.totalSaidas || 0);
+
                 setDadosCaixa({
+                    id: res.data.id,
                     saldoInicial: res.data.saldoInicial,
                     totalEntradas: res.data.totalEntradas || 0,
                     totalSaidas: res.data.totalSaidas || 0,
-                    saldoAtual: (res.data.totalDinheiro || 0) + res.data.saldoInicial,
+                    saldoAtual: saldoAtualCalculado,
                     movimentacoes: res.data.movimentacoes || []
                 });
             } else {
@@ -80,57 +91,126 @@ const GerenciamentoCaixa = () => {
         }
     };
 
-    const handleValorChange = (e) => {
-        let valor = e.target.value.replace(/\D/g, "");
-        if (valor === "") { setValorInput(""); return; }
-        const numero = parseFloat(valor) / 100;
-        setValorInput(numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }));
+    // --- FORMATAÇÃO E VALIDAÇÃO ---
+    const formatarMoedaInput = (valor) => {
+        let v = valor.replace(/\D/g, "");
+        if (v === "") return "";
+        const numero = parseFloat(v) / 100;
+        return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     };
 
-    const getValorNumerico = () => valorInput ? parseFloat(valorInput.replace(/\D/g, "")) / 100 : 0;
+    const getValorNumerico = (strValor) => {
+        if (!strValor) return 0;
+        return parseFloat(strValor.replace(/\D/g, "")) / 100;
+    };
 
+    // --- NOVO: GERADOR DE RECIBO PDF SOFISTICADO ---
+    const gerarReciboPDF = (tipo, dados, valorInformado = 0) => {
+        const doc = new jsPDF();
+
+        // Cores e Cabeçalho
+        const colorPrimary = [37, 99, 235]; // Azul
+        const colorDanger = [220, 38, 38];  // Vermelho
+
+        doc.setFillColor(...colorPrimary);
+        doc.rect(0, 0, 210, 20, 'F');
+
+        doc.setFontSize(18);
+        doc.setTextColor(255, 255, 255);
+        doc.text("DD Cosméticos - Comprovante", 105, 13, { align: 'center' });
+
+        // Info Básica
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(10);
+        doc.text(`Operação: ${tipo}`, 14, 30);
+        doc.text(`Data: ${new Date().toLocaleString()}`, 14, 35);
+        if(dados.id) doc.text(`ID Movimentação: #${dados.id}`, 14, 40);
+
+        // Box de Valor
+        doc.setDrawColor(200);
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(14, 45, 180, 25, 3, 3, 'FD');
+
+        doc.setFontSize(12);
+        doc.text("Valor da Operação", 20, 55);
+
+        doc.setFontSize(16);
+        doc.setFont(undefined, 'bold');
+        if (tipo === 'SANGRIA') doc.setTextColor(...colorDanger);
+        else doc.setTextColor(...colorPrimary);
+
+        const valorFinal = tipo === 'FECHAMENTO' ? valorInformado : dados.valor;
+        doc.text(Number(valorFinal).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}), 20, 63);
+
+        // Se for Fechamento, mostra resumo
+        if (tipo === 'FECHAMENTO') {
+            doc.setFontSize(10);
+            doc.setTextColor(100);
+            doc.setFont(undefined, 'normal');
+            doc.text("Conferência de Fechamento (Cego)", 14, 80);
+            doc.text(`Saldo Contado: R$ ${valorInformado.toFixed(2)}`, 14, 85);
+            doc.text("O valor será auditado pelo gerente.", 14, 90);
+        }
+
+        // Rodapé
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text("Documento gerado eletronicamente.", 105, 280, { align: 'center' });
+
+        doc.save(`Recibo_${tipo}_${new Date().getTime()}.pdf`);
+    };
+
+    // --- AÇÕES DO CAIXA ---
     const executarAcao = async (tipoAcao, payload) => {
-        const valorCheck = getValorNumerico();
-        if (valorCheck <= 0) return toast.warn("Informe um valor válido maior que zero.");
-        if ((tipoAcao === 'SANGRIA' || tipoAcao === 'SUPRIMENTO') && !observacao) return toast.warn("Informe o motivo.");
+        const valorRaw = tipoAcao === 'FECHAR' ? saldoFechamentoContado : valorInput;
+        const valorCheck = getValorNumerico(valorRaw);
+
+        if (valorCheck <= 0 && tipoAcao !== 'ABRIR') return toast.warn("Valor inválido.");
+
+        if ((tipoAcao === 'SANGRIA' || tipoAcao === 'SUPRIMENTO') && !observacao) {
+            return toast.warn("Informe o motivo da movimentação.");
+        }
 
         setLoadingAction(true);
         try {
-            if (tipoAcao === 'ABRIR') await caixaService.abrir(payload);
-            else if (tipoAcao === 'FECHAR') await caixaService.fechar(payload);
-            else if (tipoAcao === 'SANGRIA') await caixaService.sangria(payload);
-            else if (tipoAcao === 'SUPRIMENTO') await caixaService.suprimento(payload);
+            let response;
 
-            toast.success("Operação realizada com sucesso!");
+            if (tipoAcao === 'ABRIR') {
+                await caixaService.abrir(payload);
+                toast.success("Caixa ABERTO com sucesso!");
+            }
+            else if (tipoAcao === 'FECHAR') {
+                response = await caixaService.fechar(payload);
+                toast.success("Caixa FECHADO! Gerando recibo... 📄");
+                setExibirModalFechamento(false);
+                gerarReciboPDF('FECHAMENTO', response?.data || {}, valorCheck);
+            }
+            else if (tipoAcao === 'SANGRIA') {
+                response = await caixaService.sangria(payload);
+                toast.success("Sangria realizada! 📄");
+                gerarReciboPDF('SANGRIA', response.data);
+            }
+            else if (tipoAcao === 'SUPRIMENTO') {
+                response = await caixaService.suprimento(payload);
+                toast.success("Suprimento realizado! 📄");
+                gerarReciboPDF('SUPRIMENTO', response.data);
+            }
 
-            // Atualiza a lista local imediatamente para o usuário não precisar recarregar a página
-            // para ver o motivo que acabou de criar
-            if (!listaMotivos.includes(observacao)) {
+            // Atualiza lista de motivos
+            if (observacao && !listaMotivos.includes(observacao)) {
                 setListaMotivos(prev => [...prev, observacao].sort());
             }
 
+            // Limpeza
             setValorInput('');
             setObservacao('');
+            setSaldoFechamentoContado('');
             carregarStatus();
+
         } catch (error) {
-            toast.error(error.response?.data?.message || "Erro na operação.");
+            toast.error(error.response?.data?.message || "Erro ao realizar operação.");
         } finally {
             setLoadingAction(false);
-        }
-    };
-
-    const handleMainInputKeyDown = (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            if (status === 'FECHADO') executarAcao('ABRIR', { saldoInicial: getValorNumerico() });
-            else executarAcao('FECHAR', { saldoFinalInformado: getValorNumerico() });
-        }
-    };
-
-    const handleMovValorKeyDown = (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            document.getElementById('input-motivo')?.focus();
         }
     };
 
@@ -159,30 +239,39 @@ const GerenciamentoCaixa = () => {
                 <div className="kpi-row fade-in">
                     <div className="kpi-card" data-tooltip="Dinheiro inicial na gaveta">
                         <span className="kpi-label">Fundo Inicial</span>
-                        <div className="kpi-value">
-                            <DollarSign size={18} className="text-gray"/>
-                            {dadosCaixa.saldoInicial.toFixed(2)}
+                        <div className="kpi-value text-gray">
+                            R$ {dadosCaixa.saldoInicial.toFixed(2)}
                         </div>
                     </div>
-                    <div className="kpi-card" data-tooltip="Total Vendas Dinheiro + Suprimentos">
-                        <span className="kpi-label">Entradas</span>
+                    <div className="kpi-card" data-tooltip="Aportes manuais">
+                        <span className="kpi-label">Suprimentos</span>
                         <div className="kpi-value text-green">
                             <TrendingUp size={18}/>
                             {dadosCaixa.totalEntradas.toFixed(2)}
                         </div>
                     </div>
-                    <div className="kpi-card" data-tooltip="Total Sangrias">
-                        <span className="kpi-label">Saídas</span>
+                    <div className="kpi-card" data-tooltip="Retiradas para despesas/sangrias">
+                        <span className="kpi-label">Sangrias</span>
                         <div className="kpi-value text-red">
                             <TrendingDown size={18}/>
                             {dadosCaixa.totalSaidas.toFixed(2)}
                         </div>
                     </div>
-                    <div className="kpi-card highlight" data-tooltip="Valor estimado atual na gaveta">
-                        <span className="kpi-label">Saldo Estimado</span>
+
+                    <div className="kpi-card highlight" data-tooltip="Saldo esperado (Sistema)">
+                        <div className="kpi-header-row" style={{display:'flex', justifyContent:'space-between', width:'100%'}}>
+                            <span className="kpi-label">Saldo Estimado</span>
+                            <button
+                                onClick={() => setExibirSaldo(!exibirSaldo)}
+                                className="btn-icon-sm"
+                                title={exibirSaldo ? "Ocultar valor" : "Ver valor"}
+                            >
+                                {exibirSaldo ? <EyeOff size={16}/> : <Eye size={16}/>}
+                            </button>
+                        </div>
                         <div className="kpi-value text-primary">
                             <Wallet size={18}/>
-                            {dadosCaixa.saldoAtual.toFixed(2)}
+                            {exibirSaldo ? `R$ ${dadosCaixa.saldoAtual.toFixed(2)}` : "••••••"}
                         </div>
                     </div>
                 </div>
@@ -196,49 +285,58 @@ const GerenciamentoCaixa = () => {
                             {status === 'FECHADO' ? <Power size={24}/> : <CheckCircle size={24}/>}
                         </div>
                         <div>
-                            <h3>{status === 'FECHADO' ? 'Iniciar Operação' : 'Encerrar Operação'}</h3>
-                            <p>{status === 'FECHADO' ? 'Defina o fundo de troco.' : 'Conferência final.'}</p>
+                            <h3>{status === 'FECHADO' ? 'Iniciar Operação' : 'Operação Ativa'}</h3>
+                            <p>{status === 'FECHADO' ? 'Defina o fundo de troco para abrir.' : 'O caixa está registrando vendas.'}</p>
                         </div>
                     </div>
 
-                    <div className="input-hero-wrapper">
-                        <span className="currency-symbol">R$</span>
-                        <input
-                            type="text"
-                            placeholder="0,00"
-                            value={status === 'FECHADO' || !observacao ? valorInput : ''}
-                            onChange={handleValorChange}
-                            onKeyDown={handleMainInputKeyDown}
-                            className="input-hero"
-                            disabled={loadingAction}
-                            autoFocus={status === 'FECHADO'}
-                        />
-                    </div>
-
-                    <button
-                        className={`btn-primary-soft ${status === 'FECHADO' ? 'btn-open-action' : 'btn-close-action'}`}
-                        onClick={() => status === 'FECHADO'
-                            ? executarAcao('ABRIR', { saldoInicial: getValorNumerico() })
-                            : executarAcao('FECHAR', { saldoFinalInformado: getValorNumerico() })
-                        }
-                        disabled={loadingAction}
-                    >
-                        {loadingAction ? 'Processando...' : (status === 'FECHADO' ? 'ABRIR CAIXA (Enter)' : 'CONFERIR E FECHAR (Enter)')}
-                    </button>
+                    {status === 'FECHADO' ? (
+                        <>
+                            <div className="input-hero-wrapper">
+                                <span className="currency-symbol">R$</span>
+                                <input
+                                    type="text"
+                                    placeholder="0,00"
+                                    value={valorInput}
+                                    onChange={(e) => setValorInput(formatarMoedaInput(e.target.value))}
+                                    className="input-hero"
+                                    autoFocus
+                                />
+                            </div>
+                            <button
+                                className="btn-primary-soft btn-open-action"
+                                onClick={() => executarAcao('ABRIR', { saldoInicial: getValorNumerico(valorInput) })}
+                                disabled={loadingAction}
+                            >
+                                {loadingAction ? 'Abrindo...' : 'ABRIR CAIXA'}
+                            </button>
+                        </>
+                    ) : (
+                        <div className="fechamento-container">
+                            <p className="info-text">Para encerrar o dia, realize o fechamento cego (contagem física).</p>
+                            <button
+                                className="btn-primary-soft btn-close-action"
+                                onClick={() => setExibirModalFechamento(true)}
+                                disabled={loadingAction}
+                            >
+                                ENCERRAR EXPEDIENTE
+                            </button>
+                        </div>
+                    )}
                 </div>
 
-                {/* MOVIMENTAÇÕES */}
+                {/* MOVIMENTAÇÕES AVULSAS */}
                 {status === 'ABERTO' && (
                     <div className="side-column fade-in">
                         <div className="card-soft mov-card">
                             <div className="card-title-row">
                                 <h4>Movimentação Avulsa</h4>
-                                <Info size={14} className="info-icon" data-tooltip="Registre retiradas (Sangria) ou entradas manuais (Suprimento)."/>
+                                <Info size={14} className="info-icon" title="Sangrias e Suprimentos não fiscais"/>
                             </div>
 
                             <div className="mov-form-grid">
                                 <div className="form-group">
-                                    <label>Valor da Movimentação</label>
+                                    <label>Valor (R$)</label>
                                     <div className="input-with-icon">
                                         <span className="input-icon-left">R$</span>
                                         <input
@@ -246,14 +344,13 @@ const GerenciamentoCaixa = () => {
                                             type="text"
                                             placeholder="0,00"
                                             value={valorInput}
-                                            onChange={handleValorChange}
-                                            onKeyDown={handleMovValorKeyDown}
+                                            onChange={(e) => setValorInput(formatarMoedaInput(e.target.value))}
                                         />
                                     </div>
                                 </div>
 
                                 <div className="form-group full-width">
-                                    <label>Motivo / Observação <small>(Selecione ou digite)</small></label>
+                                    <label>Motivo</label>
                                     <div className="input-with-icon">
                                         <Edit3 size={16} className="input-icon-left text-gray"/>
                                         <input
@@ -261,12 +358,10 @@ const GerenciamentoCaixa = () => {
                                             className="input-soft"
                                             type="text"
                                             list="motivos-list"
-                                            placeholder="Ex: Pagamento..."
+                                            placeholder="Ex: Pagamento Motoboy..."
                                             value={observacao}
                                             onChange={e => setObservacao(e.target.value)}
-                                            autoComplete="off"
                                         />
-                                        {/* Lista carregada do Banco + Padrões */}
                                         <datalist id="motivos-list">
                                             {listaMotivos.map((motivo, idx) => (
                                                 <option key={idx} value={motivo} />
@@ -279,15 +374,15 @@ const GerenciamentoCaixa = () => {
                             <div className="action-buttons-row">
                                 <button
                                     className="btn-action sangria"
-                                    onClick={() => executarAcao('SANGRIA', { valor: getValorNumerico(), observacao })}
+                                    onClick={() => executarAcao('SANGRIA', { valor: getValorNumerico(valorInput), observacao })}
                                 >
-                                    <TrendingDown size={16}/> Sangria (Saída)
+                                    <TrendingDown size={16}/> Sangria
                                 </button>
                                 <button
                                     className="btn-action suprimento"
-                                    onClick={() => executarAcao('SUPRIMENTO', { valor: getValorNumerico(), observacao })}
+                                    onClick={() => executarAcao('SUPRIMENTO', { valor: getValorNumerico(valorInput), observacao })}
                                 >
-                                    <TrendingUp size={16}/> Suprimento (Entrada)
+                                    <TrendingUp size={16}/> Suprimento
                                 </button>
                             </div>
                         </div>
@@ -303,19 +398,66 @@ const GerenciamentoCaixa = () => {
                                             <div className={`indicator ${mov.tipo === 'SANGRIA' ? 'red' : 'green'}`}></div>
                                             <div className="history-content">
                                                 <span className="h-desc">{mov.observacao || mov.tipo}</span>
-                                                <span className="h-time">{new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                                                <span className="h-time">
+                                                    {new Date(mov.dataHora).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                                </span>
                                             </div>
                                             <span className="h-val">R$ {mov.valor.toFixed(2)}</span>
                                         </li>
                                     ))}
                                 </ul>
                             ) : (
-                                <div className="empty-state">Sem registros recentes.</div>
+                                <div className="empty-state">Sem movimentações hoje.</div>
                             )}
                         </div>
                     </div>
                 )}
             </div>
+
+            {/* --- MODAL DE FECHAMENTO CEGO (SEGURANÇA) --- */}
+            {exibirModalFechamento && (
+                <div className="modal-overlay fade-in">
+                    <div className="modal-content-blind">
+                        <div className="modal-header-blind">
+                            <Lock size={24} className="icon-lock"/>
+                            <h3>Conferência de Caixa</h3>
+                            <button className="btn-close-modal" onClick={() => setExibirModalFechamento(false)}>
+                                <X size={20}/>
+                            </button>
+                        </div>
+
+                        <div className="modal-body-blind">
+                            <p className="security-notice">
+                                <strong>Atenção:</strong> Conte o dinheiro físico na gaveta e informe o valor abaixo.
+                            </p>
+
+                            <label>Valor Total em Dinheiro (Físico):</label>
+                            <div className="input-hero-wrapper blind-input">
+                                <span className="currency-symbol">R$</span>
+                                <input
+                                    type="text"
+                                    placeholder="0,00"
+                                    value={saldoFechamentoContado}
+                                    onChange={(e) => setSaldoFechamentoContado(formatarMoedaInput(e.target.value))}
+                                    className="input-hero"
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
+
+                        <div className="modal-actions-blind">
+                            <button className="btn-cancelar" onClick={() => setExibirModalFechamento(false)}>Cancelar</button>
+                            <button
+                                className="btn-confirmar-fechamento"
+                                onClick={() => executarAcao('FECHAR', { saldoFinalInformado: getValorNumerico(saldoFechamentoContado) })}
+                                disabled={loadingAction || !saldoFechamentoContado}
+                            >
+                                {loadingAction ? 'Processando...' : 'CONFIRMAR FECHAMENTO'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

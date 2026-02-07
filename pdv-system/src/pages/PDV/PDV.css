@@ -28,59 +28,6 @@
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-/* --- TOOLTIPS (CORREÇÃO DE Z-INDEX) ---
-   Aplica-se a qualquer elemento com atributo data-tooltip
-*/
-[data-tooltip] {
-  position: relative;
-  overflow: visible !important; /* Importante para a legenda não cortar */
-}
-
-/* O elemento da legenda */
-[data-tooltip]:hover::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: 115%; /* Joga para cima do botão */
-  left: 50%;
-  transform: translateX(-50%);
-
-  background: #1e293b;
-  color: white;
-  padding: 6px 10px;
-  border-radius: 6px;
-
-  font-size: 0.75rem;
-  font-weight: 700;
-  white-space: nowrap;
-  pointer-events: none;
-
-  opacity: 0;
-  animation: tooltipFade 0.2s forwards;
-  z-index: 999999; /* Garante que fique acima de tudo */
-  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-}
-
-/* A setinha da legenda */
-[data-tooltip]:hover::before {
-  content: '';
-  position: absolute;
-  bottom: 100%; /* Bem na borda de cima */
-  left: 50%;
-  transform: translateX(-50%);
-
-  border-width: 6px;
-  border-style: solid;
-  border-color: #1e293b transparent transparent transparent;
-
-  opacity: 0;
-  animation: tooltipFade 0.2s forwards;
-  z-index: 999999;
-}
-
-@keyframes tooltipFade {
-  to { opacity: 1; transform: translateX(-50%) translateY(-5px); }
-}
-
 /* =========================================
    2. LADO ESQUERDO: OPERACIONAL
    ========================================= */
@@ -138,8 +85,7 @@
   height: 100%;
 }
 
-/* --- BOTÕES DE CABEÇALHO (CORREÇÃO DE Z-INDEX) ---
-*/
+/* --- BOTÕES DE CABEÇALHO --- */
 .btn-action-soft {
   width: 50px;
   height: 100%;
@@ -153,7 +99,7 @@
   color: #64748b;
   transition: all 0.2s;
   position: relative; /* Necessário para z-index */
-  z-index: 20; /* Base z-index */
+  z-index: 20;
 }
 
 .btn-action-soft:hover {
@@ -161,7 +107,7 @@
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
   color: #1e293b;
   background: #f8fafc;
-  z-index: 1000; /* TRUQUE: Traz o botão para frente ao passar o mouse */
+  z-index: 1000;
 }
 
 /* DROPDOWN DE PRODUTOS */
@@ -169,7 +115,7 @@
   position: absolute;
   top: 110%; left: 0; width: 100%; background: white;
   border-radius: 12px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.15), 0 0 0 1px #e2e8f0;
-  z-index: 2000; /* Bem alto */
+  z-index: 2000;
   overflow: hidden; max-height: 400px; overflow-y: auto;
 }
 
@@ -255,7 +201,7 @@
   border-left: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0;
 }
 
-/* Botões */
+/* Botões da Tabela */
 .btn-trash-item {
   border: none; background: transparent; color: #ef4444; cursor: pointer;
   padding: 6px; border-radius: 6px; transition: all 0.2s;
@@ -288,9 +234,6 @@
   height: 100vh;
   min-width: 360px;
 }
-
-/* ... (O restante dos estilos do lado direito e modais pode ser mantido igual ao anterior,
-        pois o problema de z-index era principalmente no cabeçalho) ... */
 
 /* Card Cliente */
 .customer-card-action {
@@ -342,7 +285,7 @@
 .btn-finalize-huge:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; box-shadow: none; }
 .key-hint { background: rgba(0,0,0,0.15); padding: 4px 8px; border-radius: 6px; font-size: 0.8rem; }
 
-/* MODAIS GERAIS (Pagamento, etc) */
+/* MODAIS GERAIS */
 .payment-overlay, .modal-exit-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
     background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px);
@@ -407,3 +350,80 @@
 .Toastify__toast-container { z-index: 999999 !important; }
 .Toastify__toast--success { background-color: #10b981 !important; color: white !important; font-weight: 600; }
 .Toastify__toast--error { background-color: #ef4444 !important; color: white !important; }
+
+/* ================================================================= */
+/* CORREÇÃO DEFINITIVA DE TOOLTIPS NO PDV                            */
+/* ================================================================= */
+
+/* Define o posicionamento relativo para o botão que tem o tooltip */
+.pdv-container [data-tooltip] {
+  position: relative;
+  /* CRÍTICO: Permite que o tooltip saia do botão sem ser cortado */
+  overflow: visible !important;
+}
+
+/* O corpo do Tooltip (Abaixo do botão para não sair da tela no topo) */
+.pdv-container [data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+
+  /* Posicionamento: Top 110% (Abaixo do botão) */
+  top: 110%;
+  left: 50%;
+  transform: translateX(-50%);
+
+  /* Estilo Visual */
+  background-color: #1e293b;
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+
+  /* Dimensão Fixa para evitar quebra */
+  white-space: nowrap;
+  width: max-content;
+
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+
+  /* CAMADA SUPREMA */
+  z-index: 999999 !important;
+  pointer-events: none;
+
+  opacity: 0;
+  animation: tooltipFadeIn 0.2s ease-out forwards;
+}
+
+/* A setinha do topo (Aponta para cima, conectando ao botão) */
+.pdv-container [data-tooltip]:hover::before {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+
+  border-width: 5px;
+  border-style: solid;
+  border-color: transparent transparent #1e293b transparent;
+
+  z-index: 999999 !important;
+  opacity: 0;
+  animation: tooltipFadeIn 0.2s ease-out forwards;
+}
+
+@keyframes tooltipFadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-5px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Ajuste para o último botão à direita (Evita corte lateral) */
+.pdv-container .btn-action-soft:last-child[data-tooltip]:hover::after {
+  left: auto;
+  right: 0;
+  transform: translateX(0);
+}
+.pdv-container .btn-action-soft:last-child[data-tooltip]:hover::before {
+  left: auto;
+  right: 15px;
+  transform: translateX(0);
+}
