@@ -1,13 +1,36 @@
+/* =========================================
+   GLOBAL & RESET
+   ========================================= */
 .dashboard-container {
     padding: 24px;
     background-color: #f8fafc;
     min-height: 100vh;
     font-family: 'Inter', sans-serif;
     color: #1e293b;
-    overflow-x: hidden; /* Impede scroll horizontal na página inteira */
+    /* overflow-x: hidden; -> CUIDADO: Isso pode esconder tooltips/modais laterais.
+       Use no body se necessário, ou mantenha apenas se souber que não há conflito. */
 }
 
-/* --- HEADER --- */
+/* Estilização de Scrollbar (WebKit) - Deixa o dashboard mais profissional */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* =========================================
+   HEADER
+   ========================================= */
 .page-header {
     display: flex;
     justify-content: space-between;
@@ -15,12 +38,21 @@
     margin-bottom: 24px;
     flex-wrap: wrap;
     gap: 15px;
+    /* Sticky header opcional para dashboards longos */
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background-color: #f8fafc; /* Garante legibilidade ao rolar */
+    padding-top: 10px;
+    padding-bottom: 10px;
 }
 
 .page-header h1 { margin: 0; font-size: 1.8rem; color: #0f172a; font-weight: 800; letter-spacing: -0.5px; }
 .text-muted { color: #64748b; font-size: 0.95rem; margin: 4px 0 0 0; font-weight: 500; }
 
-/* --- BOX IA --- */
+/* =========================================
+   BOX IA (INSIGHTS)
+   ========================================= */
 .ai-insight-box {
     background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
     border-radius: 16px;
@@ -38,10 +70,13 @@
 .ai-content h4 { margin: 0 0 4px 0; font-size: 0.9rem; font-weight: 700; text-transform: uppercase; color: rgba(255, 255, 255, 0.8); }
 .ai-content p { margin: 0; font-size: 1.05rem; line-height: 1.4; font-weight: 500; color: white; }
 
-/* --- KPI GRID --- */
+/* =========================================
+   KPI GRID
+   ========================================= */
 .kpi-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    /* Melhor responsividade: cards encolhem até 240px antes de quebrar linha */
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 24px;
     margin-bottom: 32px;
 }
@@ -50,188 +85,218 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #f1f5f9;
     display: flex; flex-direction: column; justify-content: space-between;
     min-height: 140px;
+    transition: transform 0.2s ease;
 }
+.kpi-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+
+/* Variação de Destaque */
 .kpi-card.highlight-revenue { background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: white; border: none; }
 .kpi-card.highlight-revenue label { color: rgba(255, 255, 255, 0.9); }
 .kpi-card.highlight-revenue strong { color: #ffffff; }
 .kpi-card.highlight-revenue svg { color: rgba(255,255,255,0.8) !important; }
+
+/* Tipografia KPI */
 .kpi-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .kpi-header label { font-size: 0.85rem; font-weight: 700; color: #64748b; text-transform: uppercase; }
 .kpi-card strong { font-size: 2rem; font-weight: 800; letter-spacing: -1px; }
 .kpi-body { display: flex; flex-direction: column; justify-content: flex-end; flex: 1; }
+
+/* Badges de Tendência */
 .kpi-trend-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; font-weight: 700; margin-top: 4px; padding: 2px 0; }
-.trend-positive { color: #10b981; } .trend-negative { color: #ef4444; } .trend-neutral { color: #64748b; }
+.trend-positive { color: #10b981; }
+.trend-negative { color: #ef4444; }
+.trend-neutral { color: #64748b; }
 .kpi-trend-badge.white-text { color: white !important; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 12px; }
 .kpi-trend-badge.white-text .trend-positive { color: white; }
 
-/* --- GRÁFICOS & CONTAINERS --- */
+/* =========================================
+   GRÁFICOS & CONTAINERS
+   ========================================= */
+.dashboard-grid {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    width: 100%;
+    margin-bottom: 24px;
+}
+
 .chart-card {
     background: white; border-radius: 16px; border: 1px solid #f1f5f9;
     box-shadow: 0 2px 4px rgba(0,0,0,0.02);
     display: flex; flex-direction: column;
-    width: 100%; overflow: hidden; /* Garante que nada vaze do card */
+    width: 100%;
+    /* overflow: hidden; -> REMOVIDO para evitar cortar tooltips do gráfico */
+    position: relative;
 }
+
 .chart-header-row {
     display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 20px; flex-wrap: wrap; gap: 10px;
+    margin-bottom: 20px; flex-wrap: wrap; gap: 10px; padding: 20px 20px 0 20px;
 }
 .chart-title { margin: 0; font-size: 1.1rem; color: #334155; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+
+/* Filtros */
 .filter-group { display: flex; background: #f1f5f9; padding: 4px; border-radius: 8px; gap: 4px; flex-wrap: wrap; }
-.filter-btn { border: none; background: transparent; padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; color: #64748b; cursor: pointer; flex: 1; }
+.filter-btn { border: none; background: transparent; padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; color: #64748b; cursor: pointer; flex: 1; transition: all 0.2s; }
+.filter-btn:hover { color: #3b82f6; }
 .filter-btn.active { background: white; color: #3b82f6; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 
-/* Wrapper para isolar contexto de layout */
-/* WRAPPER PARA O GRÁFICO - CORREÇÃO CRÍTICA DO RECHARTS */
+/* WRAPPER PARA O GRÁFICO (Recharts Fix) */
 .chart-wrapper {
-    /* Define uma altura fixa para o bloco do gráfico */
     height: 350px;
     width: 100%;
-    /* Correção do Flexbox que causa o erro width(-1) */
-    min-width: 0;
+    min-width: 0; /* Correção vital do Flexbox */
     min-height: 350px;
-
-    /* Isolamento de contexto */
     position: relative;
-    display: block;
-
-    /* Padding interno para as labels não cortarem */
-    padding: 0 10px;
+    padding: 0 10px 10px 10px;
     box-sizing: border-box;
 }
 
-/* Responsividade para evitar quebra no mobile */
-@media (max-width: 1024px) {
-    .chart-wrapper {
-        height: 300px;
-        min-height: 300px;
-    }
+/* Tooltip Customizado (Gráficos) */
+.custom-tooltip-chart {
+    background-color: rgba(255, 255, 255, 0.98);
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px 12px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    min-width: 120px;
+    z-index: 50;
+    pointer-events: none;
 }
+.custom-tooltip-chart .tooltip-label { margin: 0 0 5px 0; font-size: 0.8rem; font-weight: 600; color: #64748b; border-bottom: 1px solid #f1f5f9; padding-bottom: 4px; }
+.custom-tooltip-chart .tooltip-value { margin: 0; font-size: 0.95rem; font-weight: 700; color: #3b82f6; display: flex; align-items: center; gap: 6px; }
+.custom-tooltip-chart .tooltip-value span { color: #0f172a; font-weight: 500; font-size: 0.8rem; }
 
-/* --- TABELAS (CORREÇÃO DE ROLAGEM) --- */
+/* =========================================
+   TABELAS E RANKING
+   ========================================= */
 .table-container {
     width: 100%;
-    overflow-x: hidden; /* Remove rolagem horizontal forçada */
+    overflow-x: auto; /* Permite rolagem se necessário */
+    padding-bottom: 10px;
 }
 
-/* Tabela com layout fixo para respeitar larguras */
-.table-fixed {
-    width: 100%;
-    table-layout: fixed;
-    border-collapse: collapse;
-}
+.table-fixed { width: 100%; table-layout: fixed; border-collapse: collapse; }
+.table-fixed th { background-color: #f8fafc; font-size: 0.75rem; text-transform: uppercase; color: #64748b; font-weight: 700; border-bottom: 2px solid #e2e8f0; }
+.table-fixed th, .table-fixed td { padding: 12px 15px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid #f1f5f9; }
+.table-fixed tr:last-child td { border-bottom: none; }
 
-.table-fixed th, .table-fixed td {
-    padding: 12px 15px;
-    text-align: left;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis; /* Adiciona "..." se o texto for longo */
-}
-
-/* Ajuste de colunas específicas */
+/* Larguras de Coluna */
 .col-cliente { width: 45%; }
 .col-metodo { width: 25%; text-align: center !important; }
 .col-valor { width: 30%; text-align: right !important; }
 
-/* --- RANKING --- */
-.ranking-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
-.ranking-item { display: flex; align-items: center; padding: 12px; border-radius: 12px; background-color: #ffffff; border: 1px solid #f1f5f9; }
+/* Ranking List */
+.ranking-list { list-style: none; padding: 20px; margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.ranking-item { display: flex; align-items: center; padding: 12px; border-radius: 12px; background-color: #ffffff; border: 1px solid #f1f5f9; transition: background 0.2s; }
+.ranking-item:hover { background-color: #f8fafc; }
+
 .rank-medal { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; color: white; margin-right: 12px; flex-shrink: 0; font-size: 0.9rem; }
-.rank-medal.gold { background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%); }
+.rank-medal.gold { background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%); box-shadow: 0 4px 6px rgba(217, 119, 6, 0.2); }
 .rank-medal.silver { background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%); }
 .rank-medal.bronze { background: linear-gradient(135deg, #fb923c 0%, #c2410c 100%); }
 .rank-medal.default { background: #f1f5f9; color: #64748b; }
+
 .rank-info { flex: 1; display: flex; flex-direction: column; justify-content: center; margin-right: 10px; min-width: 0; }
 .rank-name { font-size: 0.9rem; font-weight: 600; color: #334155; margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rank-bar-bg { width: 100%; height: 6px; background-color: #f1f5f9; border-radius: 3px; }
+.rank-bar-bg { width: 100%; height: 6px; background-color: #f1f5f9; border-radius: 3px; overflow: hidden; }
 .rank-bar-fill { height: 100%; background-color: #3b82f6; border-radius: 3px; }
 .rank-stats { text-align: right; min-width: 80px; }
 .rank-value { font-weight: 700; color: #0f172a; font-size: 0.95rem; }
 .rank-qty { font-size: 0.75rem; color: #94a3b8; font-weight: 500; margin-top: 2px; }
 
-/* --- AUDITORIA --- */
-.audit-panel { display: flex; flex-direction: column; overflow: hidden; min-height: 400px; }
-.audit-header { padding: 15px 20px; border-bottom: 1px solid #fee2e2; display: flex; justify-content: space-between; align-items: center; background: #fff1f2; }
+/* =========================================
+   AUDITORIA (CORRIGIDO PARA SCROLL)
+   ========================================= */
+.audit-panel {
+    display: flex;
+    flex-direction: column;
+    background: white;
+    border-radius: 16px;
+    border: 1px solid #f1f5f9;
+    /* Define altura fixa ou máxima para forçar o scroll da lista interna */
+    height: 100%;
+    max-height: 500px;
+    overflow: hidden; /* Mantém o border-radius */
+}
+
+.audit-header { padding: 15px 20px; border-bottom: 1px solid #fee2e2; display: flex; justify-content: space-between; align-items: center; background: #fff1f2; flex-shrink: 0; }
 .audit-header h3 { margin: 0; font-size: 1.1rem; color: #be123c; display: flex; align-items: center; gap: 8px; }
-.audit-legend-container { padding: 12px 20px; background: white; border-bottom: 1px solid #f1f5f9; display: flex; flex-direction: column; gap: 6px; }
+
+.audit-legend-container { padding: 12px 20px; background: white; border-bottom: 1px solid #f1f5f9; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
 .legend-row { display: flex; align-items: center; gap: 10px; font-size: 0.75rem; color: #64748b; }
-.legend-row strong { color: #334155; }
 .legend-row .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .legend-row .dot.alto { background: #ef4444; }
 .legend-row .dot.medio { background: #f59e0b; }
 .legend-row .dot.baixo { background: #3b82f6; }
-.audit-list { flex: 1; display: flex; flex-direction: column; overflow-y: auto; }
-.audit-item { padding: 15px 20px; border-bottom: 1px solid #f1f5f9; display: flex; gap: 12px; align-items: flex-start; }
+
+/* Correção crítica: Scroll apenas na lista */
+.audit-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    min-height: 0; /* Necessário para Firefox flexbox scrolling */
+}
+
+.audit-item { padding: 15px 20px; border-bottom: 1px solid #f1f5f9; display: flex; gap: 12px; align-items: flex-start; transition: background 0.2s; }
+.audit-item:hover { background-color: #fafafa; }
 .audit-item.alto { border-left: 4px solid #ef4444; background: #fffbfb; }
 .audit-item.medio { border-left: 4px solid #f59e0b; }
 .audit-item.baixo { border-left: 4px solid #3b82f6; }
+
 .audit-icon-area { margin-top: 3px; }
 .audit-item.alto .audit-icon-area { color: #ef4444; }
 .audit-item.medio .audit-icon-area { color: #f59e0b; }
 .audit-item.baixo .audit-icon-area { color: #3b82f6; }
+
 .audit-item strong { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; font-size: 0.9rem; color: #1e293b; margin-bottom: 4px; gap: 8px; }
 .audit-meta { margin: 0; font-size: 0.75rem; color: #94a3b8; }
-.audit-footer { padding: 15px; background: #f8fafc; border-top: 1px solid #e2e8f0; }
-.btn-audit-action { width: 100%; padding: 10px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 600; color: #475569; cursor: pointer; }
 
-/* UTILS */
+.audit-footer { padding: 15px; background: #f8fafc; border-top: 1px solid #e2e8f0; flex-shrink: 0; }
+.btn-audit-action { width: 100%; padding: 10px; background: white; border: 1px solid #cbd5e1; border-radius: 8px; font-weight: 600; color: #475569; cursor: pointer; transition: all 0.2s; }
+.btn-audit-action:hover { background: #f1f5f9; border-color: #94a3b8; }
+
+/* =========================================
+   UTILS & BADGES
+   ========================================= */
 .badge { border-radius: 6px; font-weight: 700; text-transform: uppercase; font-size: 0.7rem; padding: 4px 8px; display: inline-flex; }
 .badge.success { background: #dcfce7; color: #166534; }
 .badge.info { background: #e0f2fe; color: #0369a1; }
 .badge.warning { background: #ffedd5; color: #c2410c; }
 .badge.secondary { background: #f1f5f9; color: #64748b; }
+
 .empty-state-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #94a3b8; min-height: 200px; }
 .empty-subtext { font-size: 0.85rem; margin-top: 8px; }
+
+/* Skeletons */
 .skeleton { background: #e2e8f0; animation: pulse 1.5s infinite; border-radius: 6px; }
-.skeleton-text { height: 1em; }
+.skeleton-text { height: 1em; margin-bottom: 0.5em; }
 .skeleton-box { width: 100%; height: 100%; }
+
+/* Animações */
 @keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-/* GRID SYSTEM */
-.dashboard-grid { display: flex; gap: 24px; align-items: flex-start; width: 100%; }
-
+/* =========================================
+   RESPONSIVIDADE (MEDIA QUERIES)
+   ========================================= */
 @media (max-width: 1024px) {
+    /* Stack charts verticalmente */
     .dashboard-grid { flex-direction: column; }
     .dashboard-grid > div { width: 100% !important; max-width: 100%; }
-    .chart-container, .chart-wrapper { height: 300px; }
-    /* Ajuste fino para evitar que o PieChart vaze */
+
+    /* Ajuste de altura de gráficos mobile */
+    .chart-wrapper { height: 300px; min-height: 300px; }
+
+    /* Centralizar wrappers de gráfico */
     .recharts-wrapper { margin: 0 auto; }
 }
 
-/* ... (MANTENHA TODO O CSS ANTERIOR, ADICIONE/SUBSTITUA ISSO NO FINAL) ... */
-
-/* --- CUSTOM TOOLTIP PARA GRÁFICOS --- */
-.custom-tooltip-chart {
-    background-color: rgba(255, 255, 255, 0.95);
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 10px 12px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    min-width: 120px;
-}
-
-.custom-tooltip-chart .tooltip-label {
-    margin: 0 0 5px 0;
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: #64748b;
-    border-bottom: 1px solid #f1f5f9;
-    padding-bottom: 4px;
-}
-
-.custom-tooltip-chart .tooltip-value {
-    margin: 0;
-    font-size: 0.95rem;
-    font-weight: 700;
-    color: #3b82f6; /* Azul do gráfico */
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.custom-tooltip-chart .tooltip-value span {
-    color: #0f172a;
-    font-weight: 500;
-    font-size: 0.8rem;
+@media (max-width: 768px) {
+    .page-header { flex-direction: column; align-items: flex-start; }
+    .ai-insight-box { flex-direction: column; align-items: flex-start; text-align: left; }
+    .kpi-grid { grid-template-columns: 1fr; }
+    .chart-header-row { flex-direction: column; align-items: flex-start; }
+    .filter-group { width: 100%; }
 }

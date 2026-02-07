@@ -6,32 +6,26 @@ export const produtoService = {
 
   /**
    * [ATUALIZADO] Lista produtos com paginação e filtro NO SERVIDOR
-   * Aceita o 4º parâmetro 'filtros' para enviar ao Backend
    */
   listar: async (pagina = 0, tamanho = 10, termo = '', filtros = {}) => {
     try {
-      // Mapeamento dos parâmetros para o padrão do Backend
       const params = {
         page: pagina,
         size: tamanho,
         termo: termo || ''
       };
 
-      // Adiciona filtros avançados se existirem
       if (filtros) {
         if (filtros.marca) params.marca = filtros.marca;
         if (filtros.categoria) params.categoria = filtros.categoria;
 
-        // Mapeia o status do estoque do frontend para o backend
         if (filtros.estoque && filtros.estoque !== 'todos') {
-          // Frontend: 'com-estoque' -> Backend: 'ok'
-          // Frontend: 'baixo'       -> Backend: 'baixo'
           params.statusEstoque = filtros.estoque === 'com-estoque' ? 'ok' : 'baixo';
         }
 
         if (filtros.semImagem) params.semImagem = true;
         if (filtros.semNcm) params.semNcm = true;
-        if (filtros.precoZerado) params.precoZero = true; // Note: backend usa 'precoZero'
+        if (filtros.precoZerado) params.precoZero = true;
       }
 
       const response = await api.get(RESOURCE_URL, { params });
@@ -45,7 +39,6 @@ export const produtoService = {
       };
     } catch (error) {
       console.error("Erro no serviço de listagem:", error);
-      // Retorna objeto vazio seguro para não quebrar a tela
       return { itens: [], totalPaginas: 0, totalElementos: 0 };
     }
   },
@@ -170,16 +163,19 @@ export const produtoService = {
   },
 
   /**
-   * Consulta se um EAN já existe (interno ou externo)
+   * Consulta se um EAN já existe
    */
   consultarEan: async (ean) => {
     try {
-      // Endpoint ajustado para o padrão REST do controller (/produtos/123)
-      // Se retornar 200, o produto existe.
-      const response = await api.get(`/produtos/ean/${ean}`);
-      return response.data;
+      // Ajuste para usar a busca por termo, que é mais segura para validação prévia
+      const response = await api.get(`${RESOURCE_URL}?termo=${ean}&size=1`);
+      // Se retornar lista vazia, não existe. Se retornar item e o EAN bater, existe.
+      if (response.data && response.data.content && response.data.content.length > 0) {
+         const produto = response.data.content[0];
+         if (produto.codigoBarras === ean) return produto;
+      }
+      return null;
     } catch (error) {
-      // Se der 404 (Not Found), significa que o produto NÃO existe (o que é bom para cadastrar novo)
       return null;
     }
   },
@@ -243,7 +239,7 @@ export const produtoService = {
   },
 
   /**
-   * Restaurar da lixeira (Reativar)
+   * Restaurar da lixeira
    */
   restaurar: async (ean) => {
     try {
@@ -255,7 +251,7 @@ export const produtoService = {
   },
 
   /**
-   * Alias para restaurar (manter compatibilidade)
+   * Alias para restaurar
    */
   reativar: async (ean) => {
     try {
@@ -287,54 +283,13 @@ export const produtoService = {
   },
 
   /**
-   * [ATUALIZADO] Gera EAN interno Seguro e Único
-   * Usa prefixo 200 (Uso Interno) para evitar colisão com indústria.
-   * Verifica no banco se o código já existe antes de retornar.
+   * [CORRIGIDO] Gera EAN interno chamando o Backend
+   * Removemos a lógica manual antiga que estava causando erro de sintaxe.
    */
   gerarEanInterno: async () => {
-    // Função auxiliar para calcular dígito verificador EAN-13
-    const calcularDigito = (base) => {
-        let sum = 0;
-        for (let i = 0; i < 12; i++) {
-            sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
-        }
-        return (10 - (sum % 10)) % 10;
-    };
-
-    const gerarCandidato = () => {
-        // Prefixo 200 é reservado para uso interno/instore (GS1), evitando conflito com 789
-        const prefix = "200";
-        const random = Math.floor(Math.random() * 1000000000).toString().padStart(9, '0');
-        const base = prefix + random;
-        return base + calcularDigito(base);
-    };
-
-    try {
-      // 1. Tenta usar o serviço do backend se disponível (ideal)
       const response = await api.get(`${RESOURCE_URL}/proximo-sequencial`);
-      return response.data.ean;
-    } catch (error) {
-      // 2. Fallback Local Seguro com Verificação de Duplicidade
-      let eanGerado = gerarCandidato();
-      let tentativas = 0;
-      const maxTentativas = 3; // Evita loop infinito
-
-      while (tentativas < maxTentativas) {
-          try {
-              // Tenta buscar o produto no backend. Se der sucesso (200), ele EXISTE -> Conflito!
-              await api.get(`${RESOURCE_URL}/${eanGerado}`);
-              console.warn(`Colisão detectada para EAN ${eanGerado}. Gerando novo...`);
-              eanGerado = gerarCandidato();
-              tentativas++;
-          } catch (e) {
-              // Se der erro 404 (Not Found), significa que o código está LIVRE.
-              // Pode usar com segurança!
-              return eanGerado;
-          }
-      }
-      // Se falhar 3x, retorna o último gerado (chance de colisão infinitesimal)
-      return eanGerado;
-    }
+      // O backend retorna o número direto (String)
+      return response.data;
   }
 };
 

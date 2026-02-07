@@ -11,7 +11,7 @@ import {
 import api from '../../services/api';
 import './Dashboard.css';
 
-// Componentes
+// Componentes (Assumindo que existem na pasta components)
 import KPICard from './components/KPICard';
 import AuditPanel from './components/AuditPanel';
 
@@ -44,11 +44,9 @@ const Dashboard = () => {
       return isNaN(num) ? "R$ 0,00" : num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
-  // --- TOOLTIP CUSTOMIZADO (CORRIGIDO) ---
+  // --- TOOLTIP CUSTOMIZADO ---
   const CustomTooltip = ({ active, payload, label }) => {
       if (active && payload && payload.length) {
-          // Busca o valor garantido do objeto original (payload.valor)
-          // Se falhar, tenta pegar do valor do gráfico (value)
           const dadosOriginais = payload[0].payload;
           const valor = dadosOriginais.valor ?? payload[0].value ?? 0;
 
@@ -70,9 +68,7 @@ const Dashboard = () => {
           if (val === null || val === undefined) return 0;
           if (typeof val === 'number') return val;
           if (typeof val === 'string') {
-              if (val.includes(',')) {
-                  return parseFloat(val.replace(/\./g, '').replace(',', '.')) || 0;
-              }
+              if (val.includes(',')) return parseFloat(val.replace(/\./g, '').replace(',', '.')) || 0;
               return parseFloat(val) || 0;
           }
           return 0;
@@ -80,7 +76,6 @@ const Dashboard = () => {
 
       // 1. Processa Vendas Diárias
       const todasVendas = (resumo.graficoVendas || []).map((item, index) => ({
-          // Tenta pegar a data ou usa o índice+1 como dia se vier vazio
           data: String(item.data || item.dataVenda || item.dia || (index + 1)),
           valor: safeNumber(item.valor ?? item.total ?? item.valorTotal ?? item.faturamento)
       }));
@@ -98,13 +93,13 @@ const Dashboard = () => {
           valor: safeNumber(item.valor ?? item.total ?? item.amount ?? 0)
       }));
 
-      // 4. Trends
+      // 4. Trends (Cálculo de tendência vs média do período)
       const diasComVenda = todasVendas.filter(d => d.valor > 0).length || 1;
       const totalMes = todasVendas.reduce((acc, curr) => acc + curr.valor, 0);
       const mediaDiaria = totalMes / diasComVenda;
       const baseFat = mediaDiaria > 0 ? mediaDiaria : 1;
       const varFat = ((resumo.faturamentoTotal - baseFat) / baseFat) * 100;
-      const varQtd = varFat * 0.8;
+      const varQtd = varFat * 0.8; // Estimativa simples para qtd
 
       return {
           vendas: vendasFiltradas,
@@ -118,6 +113,7 @@ const Dashboard = () => {
       };
   }, [resumo, filtroPeriodo]);
 
+  // Atualiza insight ao mudar dados
   useEffect(() => {
     if (!loading) gerarInsightGeral();
   }, [resumo, loading]);
@@ -140,7 +136,7 @@ const Dashboard = () => {
         });
       }
     } catch (error) {
-      console.warn("Erro dashboard:", error);
+      console.warn("Erro dashboard (usando dados zerados):", error);
     } finally {
         setLoading(false);
     }
@@ -148,9 +144,9 @@ const Dashboard = () => {
 
   const gerarInsightGeral = () => {
     const { ticketMedio, faturamentoTotal, metaFaturamento, qtdVendas } = resumo;
-    if (qtdVendas === 0) setInsightGeral("Loja aberta. Aguardando movimentação.");
-    else if (faturamentoTotal >= metaFaturamento) setInsightGeral("🚀 Meta batida! Excelente desempenho.");
-    else setInsightGeral(`📊 Faltam ${format(metaFaturamento - faturamentoTotal)} para a meta.`);
+    if (qtdVendas === 0) setInsightGeral("Loja aberta. Aguardando a primeira venda do dia.");
+    else if (faturamentoTotal >= metaFaturamento) setInsightGeral("🚀 Meta batida! O desempenho de hoje está excelente.");
+    else setInsightGeral(`📊 Faltam ${format(metaFaturamento - faturamentoTotal)} para atingir a meta diária.`);
   };
 
   const COLORS_PIE = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899'];
@@ -176,15 +172,25 @@ const Dashboard = () => {
   return (
     <div className="dashboard-container fade-in">
       <header className="page-header">
-        <div><h1>Visão Geral</h1><p className="text-muted">Acompanhamento em tempo real</p></div>
-        <div>{!loading && <span className="badge success" style={{padding: '8px 16px', fontSize:'0.85rem'}}>Loja Aberta</span>}</div>
+        <div>
+            <h1>Visão Geral</h1>
+            <p className="text-muted">Acompanhamento em tempo real</p>
+        </div>
+        <div>
+            {!loading && <span className="badge success" style={{padding: '8px 16px', fontSize:'0.85rem'}}>Loja Aberta</span>}
+        </div>
       </header>
 
+      {/* Caixa de Insight IA */}
       <div className="ai-insight-box">
         <div className="ai-icon"><Sparkles size={24} /></div>
-        <div className="ai-content"><h4>Análise Inteligente</h4><p>{insightGeral}</p></div>
+        <div className="ai-content">
+            <h4>Análise Inteligente</h4>
+            <p>{insightGeral}</p>
+        </div>
       </div>
 
+      {/* KPIs */}
       <div className="kpi-grid">
         <KPICard title="Faturamento Hoje" icon={<ShoppingBag size={24} color="#ffffff" />} value={format(resumo.faturamentoTotal)} loading={loading} className="highlight-revenue" trend={dadosProcessados.trends.fat} />
         <KPICard title="Vendas Realizadas" icon={<Hash size={24} color="#8b5cf6" />} value={resumo.qtdVendas} loading={loading} trend={dadosProcessados.trends.qtd} />
@@ -192,7 +198,8 @@ const Dashboard = () => {
       </div>
 
       <div className="dashboard-grid">
-        {/* COLUNA ESQUERDA */}
+
+        {/* COLUNA ESQUERDA (2/3) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '25px', flex: 2, minWidth: 0 }}>
 
           {/* GRÁFICO EVOLUÇÃO */}
@@ -209,8 +216,8 @@ const Dashboard = () => {
             <div className="chart-wrapper">
               {loading ? <div className="skeleton skeleton-box"></div> :
                 temDadosVendas ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={dadosProcessados.vendas} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                    <ResponsiveContainer width="99%" height={300}>
+                        <AreaChart data={dadosProcessados.vendas} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                             <defs>
                                 <linearGradient id="colorVendas" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
@@ -218,7 +225,6 @@ const Dashboard = () => {
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                            {/* EIXO X CORRIGIDO: usa 'tick' para estilizar o texto */}
                             <XAxis
                                 dataKey="data"
                                 axisLine={false}
@@ -227,20 +233,17 @@ const Dashboard = () => {
                                 tick={{ fontSize: 11, fill: '#64748b' }}
                                 interval="preserveStartEnd"
                             />
-                            {/* EIXO Y CORRIGIDO */}
                             <YAxis
                                 axisLine={false}
                                 tickLine={false}
                                 tickFormatter={(val) => `R$${val}`}
                                 tick={{ fontSize: 11, fill: '#64748b' }}
                             />
-
                             <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#3b82f6', strokeWidth: 1 }} />
-
                             <Area type="monotone" dataKey="valor" stroke="#3b82f6" fillOpacity={1} fill="url(#colorVendas)" animationDuration={1000} />
                         </AreaChart>
                     </ResponsiveContainer>
-                ) : <div className="empty-state-container"><Info size={32} /><span className="empty-subtext">Sem dados.</span></div>
+                ) : <div className="empty-state-container"><Info size={32} /><span className="empty-subtext">Sem dados no período.</span></div>
               }
             </div>
           </div>
@@ -312,7 +315,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* COLUNA DIREITA */}
+        {/* COLUNA DIREITA (1/3) */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '25px', flex: 1, minWidth: 0 }}>
 
           {/* GRÁFICO PAGAMENTOS */}
@@ -356,15 +359,18 @@ const Dashboard = () => {
                 }
              </div>
 
-             {/* ANÁLISE IA */}
+             {/* ANÁLISE IA - Insight de Pagamento */}
              {temDadosPagamentos && (
                  <div style={{marginTop: 15, padding: 12, background:'#f0fdf4', borderRadius: 8, fontSize:'0.85rem', color:'#166534', display:'flex', gap:8, alignItems:'flex-start'}}>
                      <Sparkles size={16} style={{marginTop:2, flexShrink:0}} />
                      <span>
                         <strong>Insight:</strong> O método
                         {(() => {
-                            const max = dadosProcessados.pagamentos.reduce((p, c) => (p.valor > c.valor ? p : c));
-                            return ` ${max.formaPagamento} `;
+                            if (dadosProcessados.pagamentos.length > 0) {
+                                const max = dadosProcessados.pagamentos.reduce((p, c) => (p.valor > c.valor ? p : c));
+                                return ` ${max.formaPagamento} `;
+                            }
+                            return ' Principal ';
                         })()}
                         é o favorito dos clientes hoje.
                      </span>
