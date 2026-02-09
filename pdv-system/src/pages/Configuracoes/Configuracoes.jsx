@@ -298,6 +298,37 @@ const Configuracoes = () => {
     } catch (error) { console.error(error); toast.error("Erro ao salvar."); } finally { setIsSaving(false); }
   };
 
+  // --- NOVAS FUNÇÕES DE MANUTENÇÃO (CONECTADAS AO BACKEND) ---
+  const handleOtimizarBanco = async () => {
+    const toastId = toast.loading("Otimizando banco de dados...");
+    try {
+      await api.post('/configuracoes/manutencao/otimizar');
+      toast.update(toastId, { render: "Banco de dados otimizado!", type: "success", isLoading: false, autoClose: 3000 });
+    } catch (e) {
+      toast.update(toastId, { render: "Erro ao otimizar banco.", type: "error", isLoading: false, autoClose: 3000 });
+    }
+  };
+
+  const handleBackup = async () => {
+    const toastId = toast.loading("Gerando backup...");
+    try {
+      const response = await api.get('/configuracoes/manutencao/backup', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      // Gera nome com data atual: backup_ddcosmeticos_2023-10-25_14-30.mv.db
+      const dateStr = new Date().toISOString().replace(/T/, '_').replace(/\..+/, '').replace(/:/g, '-');
+      link.setAttribute('download', `backup_ddcosmeticos_${dateStr}.mv.db`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.update(toastId, { render: "Download iniciado!", type: "success", isLoading: false, autoClose: 3000 });
+    } catch (e) {
+      console.error(e);
+      toast.update(toastId, { render: "Erro ao gerar backup.", type: "error", isLoading: false, autoClose: 3000 });
+    }
+  };
+
   if (isLoading) return <div className="loading-screen"><div className="spinner"></div> Carregando...</div>;
 
   const currentEnv = (form.fiscal.ambiente || 'HOMOLOGACAO').toLowerCase();
@@ -688,9 +719,11 @@ const Configuracoes = () => {
                    <section className="form-section border-danger">
                        <h3 className="section-title text-danger"><AlertTriangle size={20}/> Manutenção</h3>
                        <div className="danger-zone-content">
-                           <button type="button" className="list-btn" onClick={() => toast.success("Banco otimizado!")}><div className="icon-bg blue"><Database size={20}/></div><div className="text"><strong>Otimizar Banco</strong><span>Compactar e reindexar</span></div></button>
+                           <button type="button" className="list-btn" onClick={handleOtimizarBanco}><div className="icon-bg blue"><Database size={20}/></div><div className="text"><strong>Otimizar Banco</strong><span>Compactar e reindexar</span></div></button>
                            <button type="button" className="list-btn mt-2" onClick={() => toast.info("Cache limpo.")}><div className="icon-bg blue"><RefreshCw size={20}/></div><div className="text"><strong>Limpar Cache</strong><span>Resolver lentidão</span></div></button>
-                           <button type="button" className="list-btn mt-2" onClick={() => window.confirm("Certeza?")}><div className="icon-bg red"><Trash2 size={20}/></div><div className="text"><strong>Resetar Fábrica</strong><span>Apagar configurações</span></div></button>
+                           <button type="button" className="list-btn mt-2" onClick={handleBackup}><div className="icon-bg green"><Download size={20}/></div><div className="text"><strong>Backup Manual</strong><span>Baixar cópia .SQL</span></div></button>
+                           <div className="divider"></div>
+                           <button type="button" className="list-btn mt-2" onClick={() => window.confirm("Certeza? Isso apagará todas as configurações.")}><div className="icon-bg red"><Trash2 size={20}/></div><div className="text"><strong>Resetar Fábrica</strong><span>Apagar configurações</span></div></button>
                        </div>
                    </section>
                </div>

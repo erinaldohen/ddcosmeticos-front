@@ -1,0 +1,11 @@
+/* Copie o conteúdo de ContasReceber.css */
+/* Alterações visuais sugeridas: */
+.kpi-card-finance.danger { border-left: 4px solid #ef4444; } /* Mantém vermelho para Vencido */
+.kpi-card-finance.warning { border-left: 4px solid #f59e0b; } /* Amarelo para A Pagar */
+
+.btn-pay-out {
+    background: #ef4444; color: white; border: none; padding: 6px 12px;
+    border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem;
+    display: flex; align-items: center; gap: 6px; transition: 0.2s;
+}
+.btn-pay-out:hover { background: #dc2626; }
