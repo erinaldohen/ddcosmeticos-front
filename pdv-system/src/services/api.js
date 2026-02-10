@@ -6,13 +6,23 @@ let isRedirecting = false;
 
 // Cria a instância do Axios
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  // Timeout de 15 segundos (Evita telas travadas em conexões lentas)
-  timeout: 15000,
+  baseURL: 'http://localhost:8080/api/v1', // URL Base correta
+  timeout: 10000,
+  withCredentials: true // CRÍTICO: Permite que o browser envie/receba cookies HttpOnly
 });
+
+// Interceptor de Resposta (Mantemos para tratar sessão expirada)
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      console.warn("Sessão expirada. Redirecionando para login.");
+      localStorage.removeItem('user'); // Limpa dados do usuário
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
 
 // --- INTERCEPTOR DE REQUISIÇÃO ---
 api.interceptors.request.use((config) => {

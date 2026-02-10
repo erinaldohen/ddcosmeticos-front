@@ -28,7 +28,7 @@ import ContasPagar from './pages/Financeiro/ContasPagar'; // <--- FALTAVA ESTE I
 // Função auxiliar para ler usuário com segurança
 const getUser = () => {
   try {
-    const userStr = localStorage.getItem('user') || localStorage.getItem('usuario');
+    const userStr = localStorage.getItem('user'); // Só buscamos 'user', não token
     return userStr ? JSON.parse(userStr) : {};
   } catch (e) {
     return {};
@@ -36,22 +36,22 @@ const getUser = () => {
 };
 
 const PrivateRoute = ({ children }) => {
-  const token = localStorage.getItem('token');
-  return token ? children : <Navigate to="/login" replace />;
+  // A validação agora é: "Tem usuário salvo?".
+  // A validação real de segurança acontece na primeira requisição à API (Cookie)
+  const user = getUser();
+  return user && user.login ? children : <Navigate to="/login" replace />;
 };
 
 const AdminRoute = ({ children }) => {
-  const token = localStorage.getItem('token');
   const user = getUser();
 
-  // Normaliza o perfil
-  const role = user.perfil || user.perfilDoUsuario || user.role || '';
+  // Se não tem usuário, login
+  if (!user || !user.login) return <Navigate to="/login" replace />;
 
-  if (!token) return <Navigate to="/login" replace />;
+  const role = String(user.perfil || user.role || 'ROLE_USUARIO').toUpperCase();
+  const allowed = ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA', 'ROLE_FINANCEIRO'];
 
-  // Se for ROLE_USUARIO ou ROLE_CAIXA tentando acessar rota admin, manda pro PDV
-  // Nota: Adicione 'ROLE_FINANCEIRO' se criar esse perfil no futuro
-  const allowed = ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'];
+  console.log(`[AdminRoute] Role: ${role}, Permitido: ${allowed.includes(role)}`);
 
   if (!allowed.includes(role)) {
     return <Navigate to="/pdv" replace />;

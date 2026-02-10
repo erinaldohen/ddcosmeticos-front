@@ -1,32 +1,43 @@
 import api from './api';
 
-const login = async (email, senha) => {
-  // Envia 'email' no corpo, conforme o novo DTO do Java
-  const response = await api.post('/auth/login', { email, senha });
+const authService = {
+  login: async (credentials) => {
+    const response = await api.post('/auth/login', credentials);
 
-  if (response.data.token) {
-    localStorage.setItem('token', response.data.token);
-    // Salva dados do usuário para mostrar no menu/header
-    localStorage.setItem('usuario', JSON.stringify({
-      nome: response.data.nome,
-      perfil: response.data.perfil
-    }));
+    // O Backend agora retorna { user: {...} }, o token vem via Cookie invisível
+    if (response.data.user) {
+      // Salvamos apenas os dados não sensíveis do usuário para a UI
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+    }
+    return response.data;
+  },
+
+  logout: async () => {
+    try {
+        // Avisa o backend para apagar o cookie
+        await api.post('/auth/logout');
+    } catch (e) {
+        console.error("Erro ao fazer logout no servidor", e);
+    } finally {
+        // Limpa dados locais
+        localStorage.removeItem('user');
+        // Não existe mais 'token' para remover
+    }
+  },
+
+  getCurrentUser: () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      return userStr ? JSON.parse(userStr) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  isAuthenticated: () => {
+      // Verificação simples de UI. A verificação real acontece na chamada de API (401)
+      return !!localStorage.getItem('user');
   }
-  return response.data;
 };
 
-const logout = () => {
-  localStorage.removeItem('token');
-  localStorage.removeItem('usuario');
-  window.location.href = '/login';
-};
-
-const getCurrentUser = () => {
-  return JSON.parse(localStorage.getItem('usuario'));
-};
-
-export default {
-  login,
-  logout,
-  getCurrentUser
-};
+export default authService;
