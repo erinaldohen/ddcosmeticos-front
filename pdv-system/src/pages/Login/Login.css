@@ -1,117 +1,241 @@
-/* RESET BÁSICO */
-* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --primary: #F22998;
+  --primary-dark: #c01b76;
+  --primary-soft: #fce7f3;
+  --text-main: #1e293b;
+  --text-light: #64748b;
+  --bg-input: #f8fafc;
+  --border-color: #e2e8f0;
+  --shadow-card: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+}
 
-.login-page {
+.login-container {
+  min-height: 100vh;
   display: flex;
-  height: 100vh;
-  width: 100vw;
-  background-color: #F0F2F5; /* Cinza bem suave, padrão corporativo */
-  font-family: 'Inter', -apple-system, sans-serif;
-  align-items: center;
   justify-content: center;
+  align-items: center;
+  background-color: #f1f5f9;
+  position: relative;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+  padding: 20px;
 }
 
-/* O CARTÃO SÓLIDO */
+/* --- EFEITOS DE FUNDO --- */
+.login-bg-shape {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.5;
+  animation: float 10s ease-in-out infinite;
+  z-index: 0;
+}
+.shape-1 { width: 450px; height: 450px; background: #fbcfe8; top: -100px; right: -80px; }
+.shape-2 { width: 350px; height: 350px; background: #bae6fd; bottom: -80px; left: -80px; animation-delay: 5s; }
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(20px); }
+}
+
+/* --- CARTÃO DE LOGIN --- */
 .login-card {
-  background-color: #FFFFFF;
   width: 100%;
-  max-width: 420px;
-  padding: 40px;
-  border-radius: 12px; /* Cantos levemente arredondados */
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); /* Sombra difusa e elegante */
-  text-align: center;
+  max-width: 400px;
+  background: white;
+  padding: 2.5rem;
+  border-radius: 20px;
+  box-shadow: var(--shadow-card);
+  position: relative;
+  z-index: 1; /* Fica acima das formas de fundo */
+  border: 1px solid white;
 }
 
-/* LOGO E TÍTULO */
-.logo-area {
-  margin-bottom: 30px;
+/* Animação de entrada suave */
+.fade-in-up {
+  animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.logo-img {
-  width: 150px; /* Tamanho controlado */
-  margin-bottom: 20px;
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.login-title h2 {
-  font-size: 1.5rem;
-  color: #1A1A1A;
-  font-weight: 700;
-  margin-bottom: 8px;
+/* Cabeçalho */
+.login-header { text-align: center; margin-bottom: 2rem; }
+.logo-wrapper { height: 70px; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; }
+.login-logo { max-height: 100%; width: auto; object-fit: contain; }
+.login-header h1 { font-size: 1.5rem; color: var(--text-main); margin: 0; font-weight: 700; letter-spacing: -0.5px; }
+.login-header p { color: var(--text-light); font-size: 0.95rem; margin-top: 0.5rem; }
+
+/* --- FORMULÁRIO --- */
+.form-group {
+  margin-bottom: 1.5rem;
 }
 
-.login-title p {
-  color: #666666;
-  font-size: 0.95rem;
-}
-
-/* FORMULÁRIO */
-.form-area {
-  margin-top: 30px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px; /* Espaço entre os inputs */
-}
-
-.input-wrapper {
-  text-align: left;
-}
-
-.input-wrapper label {
+.form-group label {
   display: block;
-  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+  color: var(--text-main);
   font-weight: 600;
-  color: #333;
-  margin-bottom: 8px;
-}
-
-.custom-input {
-  width: 100%;
-  padding: 14px 16px;
-  font-size: 1rem;
-  color: #333;
-  background-color: #FAFAFA;
-  border: 1px solid #E0E0E0;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-  outline: none;
-}
-
-/* FOCO ELEGANTE: A cor da marca aparece aqui */
-.custom-input:focus {
-  background-color: #FFF;
-  border-color: #F22998; /* SEU ROSA */
-  box-shadow: 0 0 0 4px rgba(242, 41, 152, 0.1);
-}
-
-/* BOTÃO FORTE */
-.btn-login {
-  margin-top: 10px;
-  width: 100%;
-  padding: 16px;
-  background-color: #F22998; /* SEU ROSA */
-  color: white;
-  font-size: 1rem;
-  font-weight: 700;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.btn-login:hover {
-  background-color: #D11075; /* Rosa mais escuro no hover */
-}
-
-/* LINK SECUNDÁRIO */
-.forgot-pass {
-  margin-top: 20px;
-  display: block;
   font-size: 0.9rem;
-  color: #F22998;
-  text-decoration: none;
-  font-weight: 500;
 }
 
-.forgot-pass:hover {
-  text-decoration: underline;
+/* Wrapper do Input (A caixa cinza) */
+.input-wrapper-modern {
+  display: flex;
+  align-items: center;
+  background: var(--bg-input);
+  border: 2px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0 12px;
+  height: 50px;
+  transition: all 0.2s ease;
+}
+
+/* Efeito de Foco (A Mágica acontece aqui) */
+.input-wrapper-modern:focus-within {
+  border-color: var(--primary);
+  background: white;
+  box-shadow: 0 0 0 4px rgba(242, 41, 152, 0.15); /* Glow rosa suave */
+}
+
+/* Ícone dentro do input */
+.icon-slot {
+  color: var(--text-light);
+  display: flex;
+  align-items: center;
+  margin-right: 12px;
+  transition: color 0.2s;
+}
+
+.input-wrapper-modern:focus-within .icon-slot {
+  color: var(--primary); /* Ícone fica rosa ao focar */
+}
+
+.input-wrapper-modern input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 1rem;
+  color: var(--text-main);
+  width: 100%;
+}
+
+.input-wrapper-modern input::placeholder {
+  color: #94a3b8;
+}
+
+/* Botão Olho */
+.btn-eye {
+  background: none;
+  border: none;
+  color: var(--text-light);
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+.btn-eye:hover { color: var(--text-main); }
+
+/* --- BOTÃO PRINCIPAL --- */
+.btn-login-pulse {
+  width: 100%;
+  height: 52px;
+  border: none;
+  border-radius: 10px;
+  background: var(--primary);
+  color: white;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 1rem;
+  box-shadow: 0 4px 6px rgba(242, 41, 152, 0.2);
+}
+
+.btn-login-pulse:hover:not(:disabled) {
+  background: var(--primary-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 15px rgba(242, 41, 152, 0.3);
+}
+
+.btn-login-pulse:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-login-pulse:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* Efeito de Brilho animado no botão */
+.btn-glow {
+  position: absolute;
+  top: 0; left: -100%;
+  width: 50%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  animation: shine 3s infinite;
+}
+
+@keyframes shine {
+  0% { left: -100%; }
+  20% { left: 200%; }
+  100% { left: 200%; }
+}
+
+.spinner { animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+.login-footer {
+  margin-top: 2rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 1.5rem;
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .login-card { padding: 2rem 1.5rem; }
+  .login-container { padding: 10px; }
+}
+
+/* --- ESTADO DE ERRO (FEEDBACK VISUAL) --- */
+
+/* Texto do label fica vermelho */
+.has-error label {
+  color: #ef4444;
+  animation: shake 0.4s ease-in-out;
+}
+
+/* Input ganha borda vermelha, fundo leve e efeito de shake */
+.has-error .input-wrapper-modern {
+  border-color: #ef4444;
+  background-color: #fff5f5; /* Vermelho muito suave */
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15); /* Glow vermelho */
+  animation: shake 0.4s ease-in-out;
+}
+
+/* Ícone fica vermelho */
+.has-error .icon-slot {
+  color: #ef4444;
+}
+
+/* Animação "Shake" (Movimento de negação) */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
 }

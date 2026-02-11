@@ -1,465 +1,256 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Unlock, Lock, TrendingUp, TrendingDown,
-    CheckCircle, Wallet,
-    History as HistoryIcon,
-    Calendar, Info, Power, Edit3,
-    Eye, EyeOff, X, Printer
+  DollarSign, Lock, Unlock, TrendingUp, TrendingDown,
+  CreditCard, Smartphone, Banknote, Wallet, AlertCircle,
+  PlusCircle, MinusCircle, CheckCircle2
 } from 'lucide-react';
-import { toast } from 'react-toastify';
-import { useNavigate } from 'react-router-dom';
-import jsPDF from 'jspdf'; // NOVO
 import caixaService from '../../services/caixaService';
-import { MOTIVOS_PADRAO_CAIXA } from '../../utils/motivosFinanceiros';
+import { toast } from 'react-toastify';
 import './GerenciamentoCaixa.css';
 
 const GerenciamentoCaixa = () => {
-    const navigate = useNavigate();
+  const [caixa, setCaixa] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-    // Estados de Controle
-    const [status, setStatus] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [loadingAction, setLoadingAction] = useState(false);
+  // Estados de Modais e Inputs
+  const [modalAbertura, setModalAbertura] = useState(false);
+  const [modalFechamento, setModalFechamento] = useState(false);
+  const [modalSangria, setModalSangria] = useState(false);
+  const [modalSuprimento, setModalSuprimento] = useState(false);
 
-    // Regra de Negócio: Privacidade do Saldo
-    const [exibirSaldo, setExibirSaldo] = useState(false);
+  const [valorInput, setValorInput] = useState('');
+  const [observacaoInput, setObservacaoInput] = useState('');
 
-    // Regra de Negócio: Fechamento Cego
-    const [exibirModalFechamento, setExibirModalFechamento] = useState(false);
-    const [saldoFechamentoContado, setSaldoFechamentoContado] = useState('');
+  const carregarDados = async () => {
+    try {
+      setLoading(true);
+      const data = await caixaService.getStatus();
+      if (data && data.status === 'ABERTO') {
+          setCaixa(data.caixa || data);
+      } else {
+          setCaixa(null);
+      }
+    } catch (error) {
+      console.error("Erro ao carregar caixa:", error);
+      toast.error("Não foi possível sincronizar o caixa.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    // Inputs Gerais
-    const [valorInput, setValorInput] = useState('');
-    const [observacao, setObservacao] = useState('');
+  useEffect(() => { carregarDados(); }, []);
 
-    const [listaMotivos, setListaMotivos] = useState(MOTIVOS_PADRAO_CAIXA);
-    const [dadosCaixa, setDadosCaixa] = useState({
-        saldoInicial: 0,
-        totalEntradas: 0,
-        totalSaidas: 0,
-        saldoAtual: 0,
-        movimentacoes: []
-    });
+  // --- HANDLERS (Ações) ---
+  const limparInputs = () => { setValorInput(''); setObservacaoInput(''); };
 
-    const hoje = new Date().toLocaleDateString('pt-BR', {
-        weekday: 'long', day: '2-digit', month: 'long'
-    });
+  const executarAcao = async (tipo) => {
+    if(!valorInput) return toast.warning("Informe um valor.");
+    const valor = parseFloat(valorInput.replace(',', '.') || '0');
 
-    useEffect(() => {
-        carregarStatus();
-        carregarMotivosDoSistema();
-    }, []);
+    try {
+      if (tipo === 'ABRIR') {
+        await caixaService.abrir(valor);
+        setModalAbertura(false);
+        toast.success("Caixa aberto! Boas vendas. 🚀");
+      } else if (tipo === 'FECHAR') {
+        await caixaService.fechar(valor);
+        setModalFechamento(false);
+        toast.success("Caixa fechado e relatório gerado. ✅");
+      } else if (tipo === 'SANGRIA') {
+        await caixaService.sangria({ valor, observacao: observacaoInput });
+        setModalSangria(false);
+        toast.info("Sangria realizada.");
+      } else if (tipo === 'SUPRIMENTO') {
+        await caixaService.suprimento({ valor, observacao: observacaoInput });
+        setModalSuprimento(false);
+        toast.success("Suprimento adicionado.");
+      }
+      limparInputs();
+      carregarDados();
+    } catch (error) {
+      toast.error("Erro ao processar operação.");
+    }
+  };
 
-    // --- CARGAS DE DADOS ---
-    const carregarMotivosDoSistema = async () => {
-        try {
-            const response = await caixaService.getMotivosFrequentes();
-            const motivosDoBanco = response.data || [];
-            const listaCompleta = [...new Set([...MOTIVOS_PADRAO_CAIXA, ...motivosDoBanco])].sort();
-            setListaMotivos(listaCompleta);
-        } catch (error) {
-            setListaMotivos(MOTIVOS_PADRAO_CAIXA.sort());
-        }
-    };
+  if (loading) return <div className="loading-screen"><div className="loader"></div>Carregando Dashboard...</div>;
 
-    const carregarStatus = async () => {
-        setLoading(true);
-        try {
-            const res = await caixaService.getStatus();
-            if (res.data) {
-                setStatus('ABERTO');
-                const saldoAtualCalculado = (res.data.totalDinheiro || 0) +
-                                            (res.data.saldoInicial || 0) +
-                                            (res.data.totalEntradas || 0) -
-                                            (res.data.totalSaidas || 0);
+  return (
+    <div className="caixa-container fade-in">
+      {/* HEADER */}
+      <header className="caixa-header-modern">
+        <div>
+          <h1>Controle de Caixa</h1>
+          <p className="subtitle">Gestão financeira do ponto de venda</p>
+        </div>
+        <div className={`status-pill ${caixa ? 'active' : 'inactive'}`}>
+          <div className="pulsing-dot"></div>
+          {caixa ? `CAIXA ABERTO #${caixa.id}` : 'CAIXA FECHADO'}
+        </div>
+      </header>
 
-                setDadosCaixa({
-                    id: res.data.id,
-                    saldoInicial: res.data.saldoInicial,
-                    totalEntradas: res.data.totalEntradas || 0,
-                    totalSaidas: res.data.totalSaidas || 0,
-                    saldoAtual: saldoAtualCalculado,
-                    movimentacoes: res.data.movimentacoes || []
-                });
-            } else {
-                setStatus('FECHADO');
-            }
-        } catch (error) {
-            setStatus('FECHADO');
-        } finally {
-            setLoading(false);
-        }
-    };
+      {!caixa ? (
+        // --- ESTADO FECHADO ---
+        <div className="empty-state-modern">
+          <div className="icon-wrapper-large">
+            <Lock size={48} strokeWidth={1.5} />
+          </div>
+          <h2>O caixa está fechado</h2>
+          <p>Informe o fundo de troco inicial para começar a operar.</p>
+          <button className="btn-hero" onClick={() => { limparInputs(); setModalAbertura(true); }}>
+            <Unlock size={20} /> Abrir Caixa Agora
+          </button>
+        </div>
+      ) : (
+        // --- ESTADO ABERTO (DASHBOARD) ---
+        <div className="dashboard-grid">
 
-    // --- FORMATAÇÃO E VALIDAÇÃO ---
-    const formatarMoedaInput = (valor) => {
-        let v = valor.replace(/\D/g, "");
-        if (v === "") return "";
-        const numero = parseFloat(v) / 100;
-        return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    };
-
-    const getValorNumerico = (strValor) => {
-        if (!strValor) return 0;
-        return parseFloat(strValor.replace(/\D/g, "")) / 100;
-    };
-
-    // --- NOVO: GERADOR DE RECIBO PDF SOFISTICADO ---
-    const gerarReciboPDF = (tipo, dados, valorInformado = 0) => {
-        const doc = new jsPDF();
-
-        // Cores e Cabeçalho
-        const colorPrimary = [37, 99, 235]; // Azul
-        const colorDanger = [220, 38, 38];  // Vermelho
-
-        doc.setFillColor(...colorPrimary);
-        doc.rect(0, 0, 210, 20, 'F');
-
-        doc.setFontSize(18);
-        doc.setTextColor(255, 255, 255);
-        doc.text("DD Cosméticos - Comprovante", 105, 13, { align: 'center' });
-
-        // Info Básica
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(10);
-        doc.text(`Operação: ${tipo}`, 14, 30);
-        doc.text(`Data: ${new Date().toLocaleString()}`, 14, 35);
-        if(dados.id) doc.text(`ID Movimentação: #${dados.id}`, 14, 40);
-
-        // Box de Valor
-        doc.setDrawColor(200);
-        doc.setFillColor(248, 250, 252);
-        doc.roundedRect(14, 45, 180, 25, 3, 3, 'FD');
-
-        doc.setFontSize(12);
-        doc.text("Valor da Operação", 20, 55);
-
-        doc.setFontSize(16);
-        doc.setFont(undefined, 'bold');
-        if (tipo === 'SANGRIA') doc.setTextColor(...colorDanger);
-        else doc.setTextColor(...colorPrimary);
-
-        const valorFinal = tipo === 'FECHAMENTO' ? valorInformado : dados.valor;
-        doc.text(Number(valorFinal).toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'}), 20, 63);
-
-        // Se for Fechamento, mostra resumo
-        if (tipo === 'FECHAMENTO') {
-            doc.setFontSize(10);
-            doc.setTextColor(100);
-            doc.setFont(undefined, 'normal');
-            doc.text("Conferência de Fechamento (Cego)", 14, 80);
-            doc.text(`Saldo Contado: R$ ${valorInformado.toFixed(2)}`, 14, 85);
-            doc.text("O valor será auditado pelo gerente.", 14, 90);
-        }
-
-        // Rodapé
-        doc.setFontSize(8);
-        doc.setTextColor(150);
-        doc.text("Documento gerado eletronicamente.", 105, 280, { align: 'center' });
-
-        doc.save(`Recibo_${tipo}_${new Date().getTime()}.pdf`);
-    };
-
-    // --- AÇÕES DO CAIXA ---
-    const executarAcao = async (tipoAcao, payload) => {
-        const valorRaw = tipoAcao === 'FECHAR' ? saldoFechamentoContado : valorInput;
-        const valorCheck = getValorNumerico(valorRaw);
-
-        if (valorCheck <= 0 && tipoAcao !== 'ABRIR') return toast.warn("Valor inválido.");
-
-        if ((tipoAcao === 'SANGRIA' || tipoAcao === 'SUPRIMENTO') && !observacao) {
-            return toast.warn("Informe o motivo da movimentação.");
-        }
-
-        setLoadingAction(true);
-        try {
-            let response;
-
-            if (tipoAcao === 'ABRIR') {
-                await caixaService.abrir(payload);
-                toast.success("Caixa ABERTO com sucesso!");
-            }
-            else if (tipoAcao === 'FECHAR') {
-                response = await caixaService.fechar(payload);
-                toast.success("Caixa FECHADO! Gerando recibo... 📄");
-                setExibirModalFechamento(false);
-                gerarReciboPDF('FECHAMENTO', response?.data || {}, valorCheck);
-            }
-            else if (tipoAcao === 'SANGRIA') {
-                response = await caixaService.sangria(payload);
-                toast.success("Sangria realizada! 📄");
-                gerarReciboPDF('SANGRIA', response.data);
-            }
-            else if (tipoAcao === 'SUPRIMENTO') {
-                response = await caixaService.suprimento(payload);
-                toast.success("Suprimento realizado! 📄");
-                gerarReciboPDF('SUPRIMENTO', response.data);
-            }
-
-            // Atualiza lista de motivos
-            if (observacao && !listaMotivos.includes(observacao)) {
-                setListaMotivos(prev => [...prev, observacao].sort());
-            }
-
-            // Limpeza
-            setValorInput('');
-            setObservacao('');
-            setSaldoFechamentoContado('');
-            carregarStatus();
-
-        } catch (error) {
-            toast.error(error.response?.data?.message || "Erro ao realizar operação.");
-        } finally {
-            setLoadingAction(false);
-        }
-    };
-
-    if (loading) return <div className="caixa-loading"><div className="spinner"></div></div>;
-
-    return (
-        <div className="caixa-manager-container fade-in">
-            <header className="header-status-highlight">
-                <div className="header-left">
-                    <div className="badge-date"><Calendar size={14}/> {hoje}</div>
-                    <h1>Gerenciamento de Caixa</h1>
-                </div>
-                <div className={`status-banner ${status === 'ABERTO' ? 'is-open' : 'is-closed'}`}>
-                    <div className="status-icon-wrapper">
-                        {status === 'ABERTO' ? <Unlock size={28} /> : <Lock size={28} />}
-                        <div className="pulse-ring"></div>
-                    </div>
-                    <div className="status-text-group">
-                        <span className="status-label">STATUS ATUAL</span>
-                        <h2 className="status-main">{status === 'ABERTO' ? 'ABERTO' : 'FECHADO'}</h2>
-                    </div>
-                </div>
-            </header>
-
-            {status === 'ABERTO' && (
-                <div className="kpi-row fade-in">
-                    <div className="kpi-card" data-tooltip="Dinheiro inicial na gaveta">
-                        <span className="kpi-label">Fundo Inicial</span>
-                        <div className="kpi-value text-gray">
-                            R$ {dadosCaixa.saldoInicial.toFixed(2)}
-                        </div>
-                    </div>
-                    <div className="kpi-card" data-tooltip="Aportes manuais">
-                        <span className="kpi-label">Suprimentos</span>
-                        <div className="kpi-value text-green">
-                            <TrendingUp size={18}/>
-                            {dadosCaixa.totalEntradas.toFixed(2)}
-                        </div>
-                    </div>
-                    <div className="kpi-card" data-tooltip="Retiradas para despesas/sangrias">
-                        <span className="kpi-label">Sangrias</span>
-                        <div className="kpi-value text-red">
-                            <TrendingDown size={18}/>
-                            {dadosCaixa.totalSaidas.toFixed(2)}
-                        </div>
-                    </div>
-
-                    <div className="kpi-card highlight" data-tooltip="Saldo esperado (Sistema)">
-                        <div className="kpi-header-row" style={{display:'flex', justifyContent:'space-between', width:'100%'}}>
-                            <span className="kpi-label">Saldo Estimado</span>
-                            <button
-                                onClick={() => setExibirSaldo(!exibirSaldo)}
-                                className="btn-icon-sm"
-                                title={exibirSaldo ? "Ocultar valor" : "Ver valor"}
-                            >
-                                {exibirSaldo ? <EyeOff size={16}/> : <Eye size={16}/>}
-                            </button>
-                        </div>
-                        <div className="kpi-value text-primary">
-                            <Wallet size={18}/>
-                            {exibirSaldo ? `R$ ${dadosCaixa.saldoAtual.toFixed(2)}` : "••••••"}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            <div className="content-grid">
-                {/* ÁREA DE AÇÃO PRINCIPAL */}
-                <div className={`main-panel card-soft ${status === 'FECHADO' ? 'center-focus' : ''}`}>
-                    <div className="panel-header">
-                        <div className={`icon-box ${status === 'FECHADO' ? 'red-soft' : 'blue-soft'}`}>
-                            {status === 'FECHADO' ? <Power size={24}/> : <CheckCircle size={24}/>}
-                        </div>
-                        <div>
-                            <h3>{status === 'FECHADO' ? 'Iniciar Operação' : 'Operação Ativa'}</h3>
-                            <p>{status === 'FECHADO' ? 'Defina o fundo de troco para abrir.' : 'O caixa está registrando vendas.'}</p>
-                        </div>
-                    </div>
-
-                    {status === 'FECHADO' ? (
-                        <>
-                            <div className="input-hero-wrapper">
-                                <span className="currency-symbol">R$</span>
-                                <input
-                                    type="text"
-                                    placeholder="0,00"
-                                    value={valorInput}
-                                    onChange={(e) => setValorInput(formatarMoedaInput(e.target.value))}
-                                    className="input-hero"
-                                    autoFocus
-                                />
-                            </div>
-                            <button
-                                className="btn-primary-soft btn-open-action"
-                                onClick={() => executarAcao('ABRIR', { saldoInicial: getValorNumerico(valorInput) })}
-                                disabled={loadingAction}
-                            >
-                                {loadingAction ? 'Abrindo...' : 'ABRIR CAIXA'}
-                            </button>
-                        </>
-                    ) : (
-                        <div className="fechamento-container">
-                            <p className="info-text">Para encerrar o dia, realize o fechamento cego (contagem física).</p>
-                            <button
-                                className="btn-primary-soft btn-close-action"
-                                onClick={() => setExibirModalFechamento(true)}
-                                disabled={loadingAction}
-                            >
-                                ENCERRAR EXPEDIENTE
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                {/* MOVIMENTAÇÕES AVULSAS */}
-                {status === 'ABERTO' && (
-                    <div className="side-column fade-in">
-                        <div className="card-soft mov-card">
-                            <div className="card-title-row">
-                                <h4>Movimentação Avulsa</h4>
-                                <Info size={14} className="info-icon" title="Sangrias e Suprimentos não fiscais"/>
-                            </div>
-
-                            <div className="mov-form-grid">
-                                <div className="form-group">
-                                    <label>Valor (R$)</label>
-                                    <div className="input-with-icon">
-                                        <span className="input-icon-left">R$</span>
-                                        <input
-                                            className="input-soft"
-                                            type="text"
-                                            placeholder="0,00"
-                                            value={valorInput}
-                                            onChange={(e) => setValorInput(formatarMoedaInput(e.target.value))}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="form-group full-width">
-                                    <label>Motivo</label>
-                                    <div className="input-with-icon">
-                                        <Edit3 size={16} className="input-icon-left text-gray"/>
-                                        <input
-                                            id="input-motivo"
-                                            className="input-soft"
-                                            type="text"
-                                            list="motivos-list"
-                                            placeholder="Ex: Pagamento Motoboy..."
-                                            value={observacao}
-                                            onChange={e => setObservacao(e.target.value)}
-                                        />
-                                        <datalist id="motivos-list">
-                                            {listaMotivos.map((motivo, idx) => (
-                                                <option key={idx} value={motivo} />
-                                            ))}
-                                        </datalist>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="action-buttons-row">
-                                <button
-                                    className="btn-action sangria"
-                                    onClick={() => executarAcao('SANGRIA', { valor: getValorNumerico(valorInput), observacao })}
-                                >
-                                    <TrendingDown size={16}/> Sangria
-                                </button>
-                                <button
-                                    className="btn-action suprimento"
-                                    onClick={() => executarAcao('SUPRIMENTO', { valor: getValorNumerico(valorInput), observacao })}
-                                >
-                                    <TrendingUp size={16}/> Suprimento
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="card-soft history-card">
-                            <div className="card-title-row">
-                                <h4><HistoryIcon size={16}/> Últimas Ações</h4>
-                            </div>
-                            {dadosCaixa.movimentacoes && dadosCaixa.movimentacoes.length > 0 ? (
-                                <ul className="history-list">
-                                    {dadosCaixa.movimentacoes.slice(-5).reverse().map((mov, idx) => (
-                                        <li key={idx} className="history-item">
-                                            <div className={`indicator ${mov.tipo === 'SANGRIA' ? 'red' : 'green'}`}></div>
-                                            <div className="history-content">
-                                                <span className="h-desc">{mov.observacao || mov.tipo}</span>
-                                                <span className="h-time">
-                                                    {new Date(mov.dataHora).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                                                </span>
-                                            </div>
-                                            <span className="h-val">R$ {mov.valor.toFixed(2)}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            ) : (
-                                <div className="empty-state">Sem movimentações hoje.</div>
-                            )}
-                        </div>
-                    </div>
-                )}
+          {/* COLUNA 1: RESUMO GERAL (Dinheiro na Gaveta) */}
+          <section className="main-balance-card">
+            <div className="balance-header">
+              <span><Wallet size={18}/> Dinheiro em Gaveta</span>
+              <small>Saldo Físico Estimado</small>
+            </div>
+            <div className="balance-value">
+              R$ {(caixa.saldoAtual ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
             </div>
 
-            {/* --- MODAL DE FECHAMENTO CEGO (SEGURANÇA) --- */}
-            {exibirModalFechamento && (
-                <div className="modal-overlay fade-in">
-                    <div className="modal-content-blind">
-                        <div className="modal-header-blind">
-                            <Lock size={24} className="icon-lock"/>
-                            <h3>Conferência de Caixa</h3>
-                            <button className="btn-close-modal" onClick={() => setExibirModalFechamento(false)}>
-                                <X size={20}/>
-                            </button>
-                        </div>
+            <div className="quick-actions-row">
+              <button className="btn-icon-action success" onClick={() => {limparInputs(); setModalSuprimento(true)}} title="Adicionar Dinheiro">
+                <PlusCircle size={20}/> Suprimento
+              </button>
+              <button className="btn-icon-action danger" onClick={() => {limparInputs(); setModalSangria(true)}} title="Retirar Dinheiro">
+                <MinusCircle size={20}/> Sangria
+              </button>
+            </div>
 
-                        <div className="modal-body-blind">
-                            <p className="security-notice">
-                                <strong>Atenção:</strong> Conte o dinheiro físico na gaveta e informe o valor abaixo.
-                            </p>
+            <div className="mini-stats-row">
+              <div className="mini-stat">
+                <span className="label">Saldo Inicial</span>
+                <span className="value">R$ {(caixa.saldoInicial ?? 0).toFixed(2)}</span>
+              </div>
+              <div className="mini-stat text-green">
+                <span className="label">Entradas</span>
+                <span className="value">+ R$ {((caixa.totalEntradas ?? 0) + (caixa.totalVendasDinheiro ?? 0)).toFixed(2)}</span>
+              </div>
+              <div className="mini-stat text-red">
+                <span className="label">Saídas</span>
+                <span className="value">- R$ {(caixa.totalSaidas ?? 0).toFixed(2)}</span>
+              </div>
+            </div>
+          </section>
 
-                            <label>Valor Total em Dinheiro (Físico):</label>
-                            <div className="input-hero-wrapper blind-input">
-                                <span className="currency-symbol">R$</span>
-                                <input
-                                    type="text"
-                                    placeholder="0,00"
-                                    value={saldoFechamentoContado}
-                                    onChange={(e) => setSaldoFechamentoContado(formatarMoedaInput(e.target.value))}
-                                    className="input-hero"
-                                    autoFocus
-                                />
-                            </div>
-                        </div>
+          {/* COLUNA 2: VENDAS DIGITAIS (Detalhamento Solicitado) */}
+          <section className="digital-sales-panel">
+            <h3><TrendingUp size={20}/> Faturamento Digital</h3>
 
-                        <div className="modal-actions-blind">
-                            <button className="btn-cancelar" onClick={() => setExibirModalFechamento(false)}>Cancelar</button>
-                            <button
-                                className="btn-confirmar-fechamento"
-                                onClick={() => executarAcao('FECHAR', { saldoFinalInformado: getValorNumerico(saldoFechamentoContado) })}
-                                disabled={loadingAction || !saldoFechamentoContado}
-                            >
-                                {loadingAction ? 'Processando...' : 'CONFIRMAR FECHAMENTO'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <div className="method-card pix">
+              <div className="method-icon"><Smartphone size={20}/></div>
+              <div className="method-info">
+                <span>PIX</span>
+                <div className="progress-bg"><div className="progress-fill" style={{width: '100%'}}></div></div>
+              </div>
+              <strong>R$ {(caixa.totalVendasPix ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
+            </div>
+
+            <div className="method-card credit">
+              <div className="method-icon"><CreditCard size={20}/></div>
+              <div className="method-info">
+                <span>Crédito</span>
+                <small>Cartão</small>
+              </div>
+              <strong>R$ {(caixa.totalVendasCredito ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
+            </div>
+
+            <div className="method-card debit">
+              <div className="method-icon"><CreditCard size={20}/></div>
+              <div className="method-info">
+                <span>Débito</span>
+                <small>Cartão</small>
+              </div>
+              <strong>R$ {(caixa.totalVendasDebito ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
+            </div>
+
+            <div className="total-digital-row">
+              <span>Total Digital</span>
+              <span>R$ {((caixa.totalVendasPix??0) + (caixa.totalVendasCredito??0) + (caixa.totalVendasDebito??0)).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+            </div>
+          </section>
+
+          {/* BOTÃO FECHAR (Rodapé) */}
+          <div className="dashboard-footer">
+             <div className="audit-info">
+                <CheckCircle2 size={16} color="#10b981"/> Sistema Operacional
+             </div>
+             <button className="btn-close-register" onClick={() => { limparInputs(); setModalFechamento(true); }}>
+               Fechar Caixa
+             </button>
+          </div>
+
         </div>
-    );
+      )}
+
+      {/* --- MODAL GENÉRICO DE INPUT --- */}
+      {(modalAbertura || modalFechamento || modalSangria || modalSuprimento) && (
+        <div className="modal-overlay-modern">
+          <div className="modal-card-modern fade-in-up">
+            <div className={`modal-header ${modalFechamento || modalSangria ? 'warning' : 'primary'}`}>
+               {modalAbertura && <h3>Abrir Caixa</h3>}
+               {modalFechamento && <h3>Fechar Caixa</h3>}
+               {modalSangria && <h3>Realizar Sangria</h3>}
+               {modalSuprimento && <h3>Realizar Suprimento</h3>}
+            </div>
+
+            <div className="modal-body">
+              <label>Valor (R$)</label>
+              <div className="input-money-wrapper">
+                <span>R$</span>
+                <input
+                  autoFocus
+                  type="number"
+                  value={valorInput}
+                  onChange={e => setValorInput(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+
+              {(modalSangria || modalSuprimento) && (
+                <>
+                  <label style={{marginTop: 15}}>Motivo / Observação</label>
+                  <input
+                    className="input-text-modern"
+                    value={observacaoInput}
+                    onChange={e => setObservacaoInput(e.target.value)}
+                    placeholder="Ex: Pagamento de fornecedor..."
+                  />
+                </>
+              )}
+
+              {modalFechamento && (
+                <p className="modal-hint">
+                  <AlertCircle size={14}/> Conte as notas físicas na gaveta e informe o valor total.
+                </p>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn-text" onClick={() => {
+                setModalAbertura(false); setModalFechamento(false); setModalSangria(false); setModalSuprimento(false);
+              }}>Cancelar</button>
+
+              <button className={`btn-confirm ${modalFechamento || modalSangria ? 'danger' : 'primary'}`} onClick={() => {
+                 if(modalAbertura) executarAcao('ABRIR');
+                 if(modalFechamento) executarAcao('FECHAR');
+                 if(modalSangria) executarAcao('SANGRIA');
+                 if(modalSuprimento) executarAcao('SUPRIMENTO');
+              }}>
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default GerenciamentoCaixa;

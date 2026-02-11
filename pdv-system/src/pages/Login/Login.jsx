@@ -1,160 +1,189 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Lock, LogIn } from 'lucide-react';
+import { User, Lock, LogIn, Eye, EyeOff, Loader2 } from 'lucide-react';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
+import './Login.css';
 
 const Login = () => {
   const navigate = useNavigate();
-  // Mantive 'login' no estado para compatibilidade, mas representa o Email
-  const [credentials, setCredentials] = useState({ login: '', senha: '' });
+  const [credentials, setCredentials] = useState({ login: '', password: '' });
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Caminho da logo na pasta public
+  // Estado para feedback visual (borda vermelha e tremedeira)
+  const [inputError, setInputError] = useState(false);
+
   const logoUrl = "/logo.png";
 
   const handleChange = (e) => {
     setCredentials({ ...credentials, [e.target.name]: e.target.value });
+    // UX: Assim que o usuário digita algo novo, removemos o alerta de erro visual
+    if (inputError) setInputError(false);
   };
 
   const handleLogin = async (e) => {
       e.preventDefault();
       setLoading(true);
+      setInputError(false); // Reseta erro anterior antes de tentar
 
       try {
-        // AJUSTE CRÍTICO 2.0: Adaptação para o novo sistema de Login por EMAIL
-        // O Backend agora espera um LoginRequestDTO(String email, String senha)
+        const response = await api.post('/auth/login', credentials);
+        const usuarioRecebido = response.data.usuario || response.data.user;
 
-        const payload = {
-          email: credentials.login, // Mapeamos o campo 'login' do form para 'email' do DTO
-          senha: credentials.senha
-        };
+        if (usuarioRecebido) {
+          localStorage.setItem('user', JSON.stringify(usuarioRecebido));
 
-        const response = await api.post('/auth/login', payload);
+          toast.success(`Login realizado! Bem-vindo, ${usuarioRecebido.nome.split(' ')[0]}.`);
 
-        // O novo LoginResponseDTO retorna: { token, nome, perfil }
-        const { token, nome, perfil } = response.data;
-
-        if (token) {
-          localStorage.setItem('token', token);
-          // Salvamos o objeto completo para uso no menu/cabeçalho
-          localStorage.setItem('usuario', JSON.stringify({
-            nome,
-            perfil,
-            email: credentials.login // Guardamos o email para referência local
-          }));
-
-          toast.success(`Bem-vindo(a), ${nome ? nome.split(' ')[0] : 'Usuário'}!`);
-          navigate('/dashboard');
+          setTimeout(() => {
+              if (['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'].includes(usuarioRecebido.perfil)) {
+                 navigate('/dashboard');
+              } else {
+                 navigate('/pdv');
+              }
+          }, 500);
         } else {
-          toast.error("Erro: Token de acesso não recebido.");
+          throw new Error("RESPOSTA_VAZIA");
         }
 
       } catch (error) {
-        console.error("Erro Login:", error);
+        console.error("Erro no Login:", error);
 
-        if (error.response?.status === 400) {
-          // Erro de validação (ex: email inválido)
-          toast.warning("Verifique o e-mail e a senha informados.");
-        } else if (error.response?.status === 401 || error.response?.status === 403) {
-          toast.error("Credenciais inválidas. Tente novamente.");
-        } else {
-          toast.error("Servidor indisponível no momento.");
+        // --- TRATAMENTO PERSONALIZADO DE MENSAGENS ---
+
+        // CENÁRIO 1: Sem conexão (Internet caiu ou API desligada)
+        if (!error.response) {
+            toast.error("Sem conexão com o servidor. Verifique sua internet.");
+            return; // Encerra aqui, não marca os campos como erro do usuário
         }
+
+        const status = error.response.status;
+        const msgBackend = error.response.data?.message || "";
+
+        switch (status) {
+            case 401: // Unauthorized
+                setInputError(true); // Culpa do usuário (digitou errado)
+                toast.error("Credenciais inválidas. Verifique seu login e senha.");
+                break;
+
+            case 403: // Forbidden
+                setInputError(true);
+                toast.warning("Acesso negado. Sua conta pode estar inativa ou bloqueada.");
+                break;
+
+            case 404: // Not Found (Raro em login, mas possível)
+                setInputError(true);
+                toast.error("Usuário não encontrado no sistema.");
+                break;
+
+            case 429: // Too Many Requests
+                toast.warning("Muitas tentativas consecutivas. Aguarde alguns instantes.");
+                break;
+
+            case 500: // Internal Server Error
+                toast.error("Erro interno no servidor. Nossa equipe já foi notificada.");
+                break;
+
+            case 502: // Bad Gateway
+            case 503: // Service Unavailable
+            case 504: // Gateway Timeout
+                toast.error("O sistema está passando por instabilidade. Tente novamente em breve.");
+                break;
+
+            default:
+                // Erro genérico com mensagem do backend (se houver)
+                toast.error(msgBackend || "Ocorreu um erro inesperado ao tentar entrar.");
+        }
+
       } finally {
         setLoading(false);
       }
-};
+  };
 
   return (
-    // <main>: Conteúdo principal da página (LAYOUT INTACTO)
-    <main style={{
-      display: 'flex', justifyContent: 'center', alignItems: 'center',
-      minHeight: '100vh', background: '#F0F2F5', padding: '20px'
-    }}>
+    <main className="login-container">
+      <div className="login-bg-shape shape-1" aria-hidden="true"></div>
+      <div className="login-bg-shape shape-2" aria-hidden="true"></div>
 
-      {/* <section>: Card de login */}
-      <section className="chart-card" style={{ width: '100%', maxWidth: '420px', padding: '40px 30px', borderRadius: '16px' }} aria-labelledby="login-header">
-
-        {/* <header>: Identidade visual */}
-        <header style={{ textAlign: 'center', marginBottom: '35px' }}>
-          <img
-            src={logoUrl}
-            alt="Logo DD Cosméticos"
-            style={{
-              maxWidth: '200px',
-              maxHeight: '100px',
-              width: 'auto',
-              marginBottom: '10px',
-              objectFit: 'contain'
-            }}
-            onError={(e) => { e.target.style.display='none'; document.getElementById('alt-text').style.display='block'; }}
-          />
-
-          <h1 id="alt-text" style={{ display: 'none', color: '#F22998', marginBottom: '10px', fontSize: '1.5rem' }}>
-            DD Cosméticos
-          </h1>
-
-          <p id="login-header" className="text-muted" style={{ fontSize: '0.95rem' }}>
-            Faça login para acessar o sistema
-          </p>
+      <section className="login-card fade-in-up">
+        <header className="login-header">
+          <div className="logo-wrapper">
+            <img
+              src={logoUrl}
+              alt="Logo DD Cosméticos"
+              className="login-logo"
+              onError={(e) => { e.target.style.display='none'; }}
+            />
+          </div>
+          <h1>Acesso ao Sistema</h1>
+          <p>Informe suas credenciais para continuar</p>
         </header>
 
-        <form onSubmit={handleLogin}>
-          <div style={{ marginBottom: '20px' }}>
-            <label htmlFor="login" style={{ display: 'block', marginBottom: '8px', color: '#334155', fontWeight: '500' }}>
-              E-mail Corporativo
-            </label>
-            <div className="input-group" style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '12px', background: '#f8fafc' }}>
-              <User size={20} color="#F22998" style={{ marginRight: '12px' }} aria-hidden="true" />
+        <form onSubmit={handleLogin} autoComplete="off">
+
+          {/* O input recebe a classe 'has-error' se inputError for true */}
+          <div className={`form-group ${inputError ? 'has-error' : ''}`}>
+            <label htmlFor="login">Login</label>
+            <div className="input-wrapper-modern">
+              <div className="icon-slot">
+                <User size={20} />
+              </div>
               <input
                 id="login"
-                type="email" // Alterado para email para ativar validação do navegador
+                type="text"
                 name="login"
-                required
                 value={credentials.login}
                 onChange={handleChange}
-                placeholder="email@ddcosmeticos.com.br" // Placeholder atualizado
-                autoComplete="email"
-                style={{ border: 'none', outline: 'none', width: '100%', fontSize: '1rem', background: 'transparent', color: '#1e293b' }}
+                placeholder="E-mail ou Matrícula"
+                required
+                autoComplete="username"
               />
             </div>
           </div>
 
-          <div style={{ marginBottom: '30px' }}>
-            <label htmlFor="senha" style={{ display: 'block', marginBottom: '8px', color: '#334155', fontWeight: '500' }}>
-              Senha
-            </label>
-            <div className="input-group" style={{ display: 'flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '12px', background: '#f8fafc' }}>
-              <Lock size={20} color="#F22998" style={{ marginRight: '12px' }} aria-hidden="true" />
+          <div className={`form-group ${inputError ? 'has-error' : ''}`}>
+            <label htmlFor="password">Senha</label>
+            <div className="input-wrapper-modern">
+              <div className="icon-slot">
+                <Lock size={20} />
+              </div>
               <input
-                id="senha"
-                type="password"
-                name="senha"
-                required
-                value={credentials.senha}
+                id="password"
+                type={showPassword ? "text" : "password"}
+                name="password"
+                value={credentials.password}
                 onChange={handleChange}
-                placeholder="••••••••"
+                placeholder="Sua senha"
+                required
                 autoComplete="current-password"
-                style={{ border: 'none', outline: 'none', width: '100%', fontSize: '1rem', background: 'transparent', color: '#1e293b' }}
               />
+              <button
+                type="button"
+                className="btn-eye"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex="-1"
+                title={showPassword ? "Ocultar senha" : "Mostrar senha"}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
           </div>
 
           <button
             type="submit"
-            className="btn-confirm"
-            style={{
-              width: '100%', padding: '14px', justifyContent: 'center', fontSize: '1.05rem',
-              background: 'var(--primary)', borderRadius: '8px', fontWeight: '600',
-              boxShadow: '0 4px 12px rgba(242, 41, 152, 0.3)'
-            }}
+            className="btn-login-pulse"
             disabled={loading}
           >
-            {loading ? 'Autenticando...' : <><LogIn size={22} aria-hidden="true" /> Acessar Sistema</>}
+            {loading ? <Loader2 className="spinner" size={20} /> : <>Acessar Sistema <LogIn size={20} style={{marginLeft:8}}/></>}
+            {!loading && <div className="btn-glow"></div>}
           </button>
+
         </form>
 
+        <footer className="login-footer">
+          <p>© DD Cosméticos • Ambiente Seguro</p>
+        </footer>
       </section>
     </main>
   );

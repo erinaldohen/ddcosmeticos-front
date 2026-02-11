@@ -4,7 +4,7 @@ import {
   PauseCircle, ArrowLeft, X,
   MonitorCheck, UserCheck, AlertTriangle,
   Tag, RotateCcw, UserPlus, Barcode, Percent, ArrowRight, Clock,
-  DollarSign, Menu, LogOut, Printer
+  DollarSign, Menu, LogOut, Printer, Wifi, WifiOff, Loader
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
@@ -22,7 +22,13 @@ const PDV = () => {
   const inputDescontoRef = useRef(null);
   const dropdownRef = useRef(null);
 
-  // --- ESTADOS ---
+  // --- ESTADOS DE CONTROLE ---
+  // NOVO: Bloqueia a renderização até validar o caixa
+  const [validandoCaixa, setValidandoCaixa] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  // --- ESTADOS DE DADOS ---
   const [carrinho, setCarrinho] = useState(() => {
       try {
           const salvo = localStorage.getItem('@dd:carrinho');
@@ -32,7 +38,6 @@ const PDV = () => {
 
   const [vendasPausadas, setVendasPausadas] = useState([]);
   const [busca, setBusca] = useState('');
-  const [loading, setLoading] = useState(false);
   const [ultimoItemAdicionadoId, setUltimoItemAdicionadoId] = useState(null);
   const [horaAtual, setHoraAtual] = useState(new Date());
 
@@ -65,7 +70,43 @@ const PDV = () => {
   const saldoDevedor = Math.max(0, parseFloat((totalPagar - totalPago).toFixed(2)));
   const troco = Math.max(0, parseFloat((totalPago - totalPagar).toFixed(2)));
 
-  // --- EFEITOS GLOBAIS ---
+  // --- INICIALIZAÇÃO CRÍTICA (Validação de Caixa) ---
+  useEffect(() => {
+    const inicializarPDV = async () => {
+      try {
+        // Verifica status do caixa ANTES de mostrar a tela
+        const res = await caixaService.getStatus();
+
+        // Se estiver FECHADO ou se a resposta for inválida, bloqueia o acesso
+        if (!res || res.status === 'FECHADO' || res.aberto === false) {
+          toast.warning("Caixa Fechado. É necessário abrir o caixa.", { toastId: 'cx-closed' });
+          navigate('/caixa');
+          return; // Interrompe aqui, não carrega o PDV
+        }
+
+        // Se chegou aqui, caixa está aberto
+        setValidandoCaixa(false); // Libera a tela
+        carregarVendasSuspensas(); // Carrega dados iniciais
+
+      } catch (error) {
+        console.error("Erro ao verificar caixa", error);
+
+        // Em caso de erro de rede (Offline), permite operar com aviso
+        if (!navigator.onLine) {
+           toast.warning("Modo Offline: Operando sem verificação de caixa.");
+           setValidandoCaixa(false);
+        } else {
+           // Erro real do servidor (Ex: 403, 500) -> Redireciona
+           toast.error("Erro ao validar acesso ao caixa.");
+           navigate('/dashboard');
+        }
+      }
+    };
+
+    inicializarPDV();
+  }, [navigate]);
+
+  // --- OUTROS EFEITOS ---
   useEffect(() => {
     localStorage.setItem('@dd:carrinho', JSON.stringify(carrinho));
     const timer = setInterval(() => setHoraAtual(new Date()), 1000);
@@ -79,10 +120,24 @@ const PDV = () => {
     };
   }, [carrinho]);
 
+  useEffect(() => {
+    const handleOnline = () => { setIsOnline(true); toast.success("Conexão restabelecida!"); };
+    const handleOffline = () => { setIsOnline(false); toast.warning("Sem internet. Modo Offline."); };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   const getUserRole = () => {
     try {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
-        return user.perfil || user.perfilDoUsuario || user.role || 'ROLE_USUARIO';
+        const role = user.perfil || user.perfilDoUsuario || user.role || 'ROLE_USUARIO';
+        return String(role).toUpperCase();
     } catch (e) { return 'ROLE_USUARIO'; }
   };
 
@@ -93,34 +148,18 @@ const PDV = () => {
 
   const confirmExit = useCallback(() => {
       const role = getUserRole();
-      navigate(['ROLE_ADMIN', 'ROLE_GERENTE'].includes(role) ? '/dashboard' : '/caixa');
+      const allowedDashboard = ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'];
+      navigate(allowedDashboard.includes(role) ? '/dashboard' : '/caixa');
   }, [navigate]);
 
-  // --- INICIALIZAÇÃO ---
-  useEffect(() => {
-    carregarVendasSuspensas();
-    verificarCaixa();
-  }, []);
+  // --- LÓGICA DE NEGÓCIO (Carregar, Buscar, Adicionar) ---
 
-  const verificarCaixa = async () => {
-    try {
-      const res = await caixaService.getStatus();
-      if (!res.data || res.data.status === 'FECHADO') {
-        toast.warning("Caixa Fechado. É necessário abrir o caixa.", { toastId: 'cx-closed' });
-        navigate('/caixa');
-      }
-    } catch (error) {
-        console.error("Erro ao verificar caixa", error);
-    }
-  };
-
-  const carregarVendasSuspensas = useCallback(async () => {
+  const carregarVendasSuspensas = async () => {
       try {
-          // CORREÇÃO: Removemos o /api/v1 duplicado
           const res = await api.get('/vendas/suspensas');
           setVendasPausadas(res.data || []);
       } catch (e) { console.error(e); }
-  }, []);
+  };
 
   const limparEstadoVenda = () => {
       setCarrinho([]); setPagamentos([]); setCliente(null);
@@ -129,7 +168,6 @@ const PDV = () => {
       localStorage.removeItem('@dd:carrinho');
   };
 
-  // --- AÇÕES ---
   const pausarVenda = async () => {
     if (carrinho.length === 0) return toast.info("Carrinho vazio.");
     try {
@@ -144,7 +182,6 @@ const PDV = () => {
             })),
             pagamentos: []
         };
-        // CORREÇÃO: Removemos o /api/v1 duplicado
         await api.post('/vendas/suspender', payload);
         toast.success("Venda Pausada! ⏸️");
         limparEstadoVenda(); carregarVendasSuspensas();
@@ -155,7 +192,6 @@ const PDV = () => {
       if (carrinho.length > 0) return toast.warn("Finalize a venda atual antes.");
       setLoading(true);
       try {
-          // CORREÇÃO: Removemos o /api/v1 duplicado
           await api.delete(`/vendas/${vendaSuspensa.id}`, { data: { motivo: "Retomada PDV" } });
           const itensRecuperados = vendaSuspensa.itens.map(item => ({
               id: item.produtoId, descricao: item.produtoDescricao || item.produtoNome || "Item",
@@ -209,7 +245,7 @@ const PDV = () => {
                   formaPagamento: mapPgto(p.tipo), valor: p.valor, parcelas: 1
               }))
           };
-          // CORREÇÃO: Removemos o /api/v1 duplicado
+
           const res = await api.post('/vendas', payload);
 
           try { await api.post(`/vendas/${res.data.id}/imprimir`); toast.info("Imprimindo..."); }
@@ -228,7 +264,6 @@ const PDV = () => {
     if (/^\d{7,14}$/.test(termo)) { setSugestoesProdutos([]); return; }
     if (termo.length > 2) {
         try {
-            // CORREÇÃO: Removemos o /api/v1 duplicado
             const res = await api.get(`/produtos`, { params: { termo, size: 6 } });
             setSugestoesProdutos(res.data.content || []);
         } catch (err) {}
@@ -247,7 +282,6 @@ const PDV = () => {
     if (sugestoesProdutos.length > 0 && selectedIndex !== -1) return adicionarProdutoPorObjeto(sugestoesProdutos[selectedIndex]);
     try {
         setLoading(true);
-        // CORREÇÃO: Removemos o /api/v1 duplicado
         const res = await api.get(`/produtos`, { params: { termo: busca, size: 1 } });
         if (res.data.content?.[0]) adicionarProdutoPorObjeto(res.data.content[0]);
         else { toast.warning("Produto não encontrado"); setBusca(''); }
@@ -307,12 +341,30 @@ const PDV = () => {
 
   useEffect(() => { window.addEventListener('keydown', handleKeyDownGlobal); return () => window.removeEventListener('keydown', handleKeyDownGlobal); }, [handleKeyDownGlobal]);
 
+  // --- RENDERIZAÇÃO CONDICIONAL (BLOQUEIO) ---
+  if (validandoCaixa) {
+      return (
+          <div style={{
+              display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center',
+              height: '100vh', background: '#f8fafc', color: '#64748b'
+          }}>
+              <div className="spinner" style={{
+                  marginBottom: 20, width: 40, height: 40, border: '4px solid #cbd5e1',
+                  borderTopColor: '#F22998', borderRadius: '50%', animation: 'spin 1s linear infinite'
+              }}></div>
+              <h2 style={{fontWeight: 600, fontSize: '1.2rem'}}>Verificando Status do Caixa...</h2>
+              <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+          </div>
+      );
+  }
+
+  // --- RENDERIZAÇÃO PRINCIPAL DO PDV ---
   return (
     <div className="pdv-container fade-in">
       <div className="pdv-left">
         <header className="pdv-header-main">
           <button className="btn-action-soft" onClick={handleVoltar} data-tooltip="Menu (Esc)">
-            {['ROLE_ADMIN','ROLE_GERENTE'].includes(getUserRole()) ? <Menu size={22} /> : <ArrowLeft size={22} />}
+            {['ROLE_ADMIN','ROLE_GERENTE', 'ROLE_FINANCEIRO'].includes(getUserRole()) ? <Menu size={22} /> : <ArrowLeft size={22} />}
           </button>
           <button className="btn-action-soft" onClick={() => navigate('/caixa')} data-tooltip="Gerir Caixa" style={{marginLeft: 10}}>
             <DollarSign size={22} color="#16a34a" />
@@ -332,9 +384,24 @@ const PDV = () => {
               </div>
             )}
           </div>
-          <div className="pdv-clock-display" style={{marginLeft: 'auto', paddingRight: 10, display:'flex', alignItems:'center', gap: 8, color: '#334155'}}>
-             <Clock size={20} className="text-gray-400"/>
-             <span style={{fontSize: '1.2rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums'}}>{horaAtual.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}</span>
+
+          {/* --- INDICADOR DE REDE E RELÓGIO --- */}
+          <div className="pdv-status-display" style={{marginLeft: 'auto', display:'flex', alignItems:'center', gap: 15, paddingRight: 10}}>
+
+             {/* Indicador Visual de Conexão */}
+             <div className={`status-badge ${isOnline ? 'online' : 'offline'}`}
+                  title={isOnline ? "Sistema Online" : "Sem Conexão"}
+                  style={{display:'flex', alignItems:'center', gap:5, color: isOnline ? '#166534' : '#dc2626', fontWeight:'bold', fontSize:'0.85rem'}}>
+                {isOnline ? <Wifi size={20}/> : <WifiOff size={20}/>}
+                <span>{isOnline ? 'ON' : 'OFF'}</span>
+             </div>
+
+             <div className="clock-wrapper" style={{display:'flex', alignItems:'center', gap: 8, color: '#334155'}}>
+                <Clock size={20} className="text-gray-400"/>
+                <span style={{fontSize: '1.2rem', fontWeight: 800, fontVariantNumeric: 'tabular-nums'}}>
+                  {horaAtual.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'})}
+                </span>
+             </div>
           </div>
         </header>
 
@@ -429,7 +496,7 @@ const PDV = () => {
       {modalDesconto.open && (<div className="modal-exit-overlay"><div className="modal-exit-content" style={{width: 350}}><div className="exit-icon-wrapper" style={{background:'#eff6ff', color:'#2563eb'}}><Percent size={48}/></div><h3>Desconto</h3><div className="toggle-discount-type"><button className={tipoDesconto==='$'?'active':''} onClick={()=>setTipoDesconto('$')}>R$</button><button className={tipoDesconto==='%'?'active':''} onClick={()=>setTipoDesconto('%')}>%</button></div><div className="input-with-icon discount"><span style={{fontWeight:800, color:'#64748b'}}>{tipoDesconto}</span><input ref={inputDescontoRef} type="text" value={tipoDesconto==='$'?getValorFormatado(descontoInput):descontoInput} onChange={e=>{const v=e.target.value; if(tipoDesconto==='$')setDescontoInput(formatCurrencyInput(v)); else setDescontoInput(v.replace(/[^0-9.,]/g,''));}} onKeyDown={e=>e.key==='Enter'&&aplicarDesconto()}/></div><div className="modal-exit-actions"><button className="btn-exit-cancel" onClick={()=>setModalDesconto({...modalDesconto, open:false})}>Cancelar</button><button className="btn-exit-confirm" onClick={aplicarDesconto} style={{background:'#10b981'}}>Aplicar</button></div></div></div>)}
       {showCleanModal && (<div className="modal-exit-overlay"><div className="modal-exit-content"><div className="exit-icon-wrapper"><RotateCcw size={48}/></div><h3>Limpar Venda?</h3><p>O carrinho será esvaziado.</p><div className="modal-exit-actions"><button className="btn-exit-cancel" onClick={()=>setShowCleanModal(false)}>Não</button><button className="btn-exit-confirm" onClick={confirmarLimpeza}>Sim, Limpar</button></div></div></div>)}
       {showListaEspera && (<div className="modal-exit-overlay" onClick={()=>setShowListaEspera(false)}><div className="modal-exit-content" style={{width: 500, padding: 20}} onClick={e=>e.stopPropagation()}><h3>Vendas em Espera</h3><div style={{maxHeight: 300, overflowY:'auto', marginTop:10}}>{vendasPausadas.length===0?<p style={{color:'#94a3b8', padding:20}}>Vazia.</p>:vendasPausadas.map(v=><div key={v.id} className="paused-card" style={{display:'flex', justifyContent:'space-between', padding:15, marginBottom:10}} onClick={()=>retomVenda(v)}><div><strong>{v.clienteNome||'Consumidor'}</strong><br/><small>{new Date(v.dataVenda).toLocaleTimeString()}</small></div><div style={{textAlign:'right'}}><strong style={{color:'#059669'}}>R$ {v.valorTotal?.toFixed(2)}</strong><br/><small>{v.itens?.length} itens</small></div></div>)}</div><button className="btn-exit-cancel" style={{marginTop:20}} onClick={()=>setShowListaEspera(false)}>Fechar</button></div></div>)}
-      {showExitModal && (<div className="modal-exit-overlay"><div className="modal-exit-content"><div className="exit-icon-wrapper"><AlertTriangle size={48}/></div><h3>Deseja Sair?</h3><p>O que gostaria de fazer?</p><div className="modal-exit-actions" style={{flexDirection:'column', gap:10}}><button className="btn-exit-cancel" onClick={()=>setShowExitModal(false)} style={{width:'100%'}}>Cancelar</button><button className="btn-exit-confirm" onClick={confirmExit} style={{width:'100%', background:'#3b82f6'}}>Ir para {['ROLE_ADMIN','ROLE_GERENTE'].includes(getUserRole())?'Dashboard':'Caixa'}</button></div></div></div>)}
+      {showExitModal && (<div className="modal-exit-overlay"><div className="modal-exit-content"><div className="exit-icon-wrapper"><AlertTriangle size={48}/></div><h3>Deseja Sair?</h3><p>O que gostaria de fazer?</p><div className="modal-exit-actions" style={{flexDirection:'column', gap:10}}><button className="btn-exit-cancel" onClick={()=>setShowExitModal(false)} style={{width:'100%'}}>Cancelar</button><button className="btn-exit-confirm" onClick={confirmExit} style={{width:'100%', background:'#3b82f6'}}>Ir para {['ROLE_ADMIN','ROLE_GERENTE', 'ROLE_FINANCEIRO'].includes(getUserRole())?'Dashboard':'Caixa'}</button></div></div></div>)}
     </div>
   );
 };

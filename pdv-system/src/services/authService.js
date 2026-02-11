@@ -2,26 +2,29 @@ import api from './api';
 
 const authService = {
   login: async (credentials) => {
-    const response = await api.post('/auth/login', credentials);
+    // Adapter: Garante que enviamos 'login' e 'password' para o backend
+    // mesmo que o form use 'matricula' ou 'senha'
+    const payload = {
+        login: credentials.login || credentials.matricula || credentials.email,
+        password: credentials.password || credentials.senha
+    };
 
-    // O Backend agora retorna { user: {...} }, o token vem via Cookie invisível
-    if (response.data.user) {
-      // Salvamos apenas os dados não sensíveis do usuário para a UI
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+    const response = await api.post('/auth/login', payload);
+
+    if (response.data.usuario) {
+      localStorage.setItem('user', JSON.stringify(response.data.usuario));
     }
     return response.data;
   },
 
   logout: async () => {
     try {
-        // Avisa o backend para apagar o cookie
         await api.post('/auth/logout');
     } catch (e) {
-        console.error("Erro ao fazer logout no servidor", e);
+        console.error("Logout error", e);
     } finally {
-        // Limpa dados locais
         localStorage.removeItem('user');
-        // Não existe mais 'token' para remover
+        window.location.href = '/login';
     }
   },
 
@@ -29,15 +32,10 @@ const authService = {
     try {
       const userStr = localStorage.getItem('user');
       return userStr ? JSON.parse(userStr) : null;
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   },
 
-  isAuthenticated: () => {
-      // Verificação simples de UI. A verificação real acontece na chamada de API (401)
-      return !!localStorage.getItem('user');
-  }
+  isAuthenticated: () => !!localStorage.getItem('user')
 };
 
 export default authService;

@@ -16,23 +16,26 @@ const caixaService = {
 
   // Verifica se existe caixa aberto
   getStatus: async () => {
-    return await api.get('/caixas/status');
+    const response = await api.get('/caixas/status');
+    return response.data;
   },
 
   // Busca lista de motivos únicos já salvos no banco (Histórico de Observações)
-  // Requisito para o autocomplete inteligente funcionar via sistema
   getMotivosFrequentes: async () => {
-    return await api.get('/caixas/motivos');
+    const response = await api.get('/caixas/motivos');
+    return response.data;
   },
 
   // Busca dados completos de um fechamento específico
   buscarDetalhes: async (idCaixa) => {
-    return await api.get(`/caixas/${idCaixa}`);
+    const response = await api.get(`/caixas/${idCaixa}`);
+    return response.data;
   },
 
   // Busca movimentações do dia
   getHistoricoDiario: async (data) => {
-    return await api.get('/caixas/diario', { params: { data } });
+    const response = await api.get('/caixas/diario', { params: { data } });
+    return response.data;
   },
 
   // Busca lista paginada de caixas (Histórico)
@@ -46,48 +49,52 @@ const caixaService = {
       params.inicio = dataInicio;
       params.fim = dataFim;
 
-      return await api.get('/caixas', { params });
+      const response = await api.get('/caixas', { params });
+      return response.data;
   },
 
   // --- OPERAÇÕES (ABERTURA / FECHAMENTO) ---
 
   abrir: async (dados) => {
     const valor = typeof dados === 'object' ? dados.saldoInicial : dados;
-    return await api.post('/caixas/abrir', { saldoInicial: tratarValor(valor) });
+    const response = await api.post('/caixas/abrir', { saldoInicial: tratarValor(valor) });
+    return response.data;
   },
 
   fechar: async (dados) => {
     const valor = typeof dados === 'object' ? dados.saldoFinalInformado : dados;
-    return await api.post('/caixas/fechar', { saldoFinalInformado: tratarValor(valor) });
+    const response = await api.post('/caixas/fechar', { saldoFinalInformado: tratarValor(valor) });
+    return response.data;
   },
 
   // --- MOVIMENTAÇÕES (SANGRIA / SUPRIMENTO) ---
 
   sangria: async (dados) => {
-    return await api.post('/caixas/movimentacao', {
+    const response = await api.post('/caixas/sangria', {
       tipo: 'SANGRIA',
       valor: tratarValor(dados.valor),
-      observacao: dados.observacao || 'Sangria'
+      motivo: dados.observacao || 'Sangria'
     });
+    return response.data;
   },
 
   suprimento: async (dados) => {
-    return await api.post('/caixas/movimentacao', {
+    const response = await api.post('/caixas/suprimento', {
       tipo: 'SUPRIMENTO',
       valor: tratarValor(dados.valor),
-      observacao: dados.observacao || 'Suprimento'
+      motivo: dados.observacao || 'Suprimento'
     });
+    return response.data;
   },
 
   // Método genérico caso precise movimentar passando string
   movimentar: async (tipo, valor, descricao) => {
-    const tipoEnum = tipo.toUpperCase().includes('SANGRIA') ? 'SANGRIA' : 'SUPRIMENTO';
-
-    return await api.post('/caixas/movimentacao', {
-      tipo: tipoEnum,
+    const endpoint = tipo.toUpperCase().includes('SANGRIA') ? '/caixas/sangria' : '/caixas/suprimento';
+    const response = await api.post(endpoint, {
       valor: tratarValor(valor),
-      observacao: descricao
+      motivo: descricao
     });
+    return response.data;
   }
 };
 
