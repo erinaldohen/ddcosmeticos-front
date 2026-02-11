@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Outlet } from 'react-router-dom'; // <--- IMPORTANTE: Substitui o 'children'
+import { Outlet } from 'react-router-dom';
 import { Menu } from 'lucide-react';
-import Sidebar from '../Sidebar/Sidebar';
+import Sidebar from '../Sidebar/Sidebar'; // Verifique se o caminho está correto na sua pasta
 import './MainLayout.css';
 
 const MainLayout = () => {
@@ -10,7 +10,7 @@ const MainLayout = () => {
 
   return (
     <div className="layout-wrapper">
-      {/* Sidebar Controlada pelo Layout */}
+      {/* Sidebar Controlada */}
       <Sidebar
         isCollapsed={isSidebarCollapsed}
         isMobileOpen={isMobileOpen}
@@ -18,14 +18,13 @@ const MainLayout = () => {
         toggleMobile={() => setIsMobileOpen(!isMobileOpen)}
       />
 
-      {/* Botão Menu Flutuante (Aparece só no Mobile) */}
-      <button className="mobile-menu-btn" onClick={() => setIsMobileOpen(true)}>
+      {/* Botão Menu Flutuante (Mobile Only) */}
+      <button className="mobile-menu-btn" onClick={() => setIsMobileOpen(true)} aria-label="Abrir Menu">
         <Menu size={24} />
       </button>
 
       {/* Área de Conteúdo Principal */}
       <div className={`main-content ${isSidebarCollapsed ? 'expanded' : ''}`}>
-        {/* O Outlet renderiza a página atual (Dashboard, PDV, etc) */}
         <Outlet />
       </div>
     </div>

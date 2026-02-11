@@ -4,31 +4,29 @@ import {
   LayoutDashboard, ShoppingCart, Package, Users,
   Settings, LogOut, ChevronLeft, X, DollarSign,
   FileText, ShieldCheck, Truck, History, Clock,
-  Wallet, TrendingDown, Store // Adicionei Store para Frente de Loja
+  Wallet, TrendingDown, Store, ClipboardList // <--- Ícone do Inventário
 } from 'lucide-react';
 import './Sidebar.css';
 
 const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) => {
   const location = useLocation();
   const [userRole, setUserRole] = useState('');
-
-  // Relógio
   const [hora, setHora] = useState(new Date());
 
+  // Relógio
   useEffect(() => {
-    const timer = setInterval(() => {
-        setHora(new Date());
-    }, 1000);
+    const timer = setInterval(() => setHora(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
   // Recuperar perfil
   useEffect(() => {
     try {
-      const userStr = localStorage.getItem('user') || localStorage.getItem('usuario');
+      const userStr = localStorage.getItem('user');
       if (userStr) {
         const user = JSON.parse(userStr);
-        const role = user.perfil || user.perfilDoUsuario || user.role || 'ROLE_USUARIO';
+        // Normaliza para garantir compatibilidade com diferentes backends
+        const role = user.perfil || user.role || 'ROLE_USUARIO';
         setUserRole(role);
       }
     } catch (e) {
@@ -36,13 +34,6 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
     }
   }, []);
 
-  /* NOVA ESTRUTURA DE MENU:
-     1. Visão Geral (Dashboard)
-     2. Frente de Loja (Operacional: PDV e Caixa)
-     3. Gestão Financeira (Contas e Históricos)
-     4. Estoque e Cadastros (Produtos, Fornecedores, NFe)
-     5. Fiscal e Sistema (Relatórios, Auditoria, Config)
-  */
   const menuGroups = [
       {
         title: 'Visão Geral',
@@ -60,8 +51,8 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
       {
         title: 'Gestão Financeira',
         items: [
-          { path: '/financeiro/contas-receber', icon: <Wallet size={20} />, label: 'Contas a Receber', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
-          { path: '/financeiro/contas-pagar', icon: <TrendingDown size={20} />, label: 'Contas a Pagar', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+          { path: '/financeiro/contas-receber', icon: <Wallet size={20} />, label: 'Contas a Receber', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'] },
+          { path: '/financeiro/contas-pagar', icon: <TrendingDown size={20} />, label: 'Contas a Pagar', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'] },
           { path: '/historico-caixa', icon: <History size={20} />, label: 'Histórico de Caixa', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
         ]
       },
@@ -69,6 +60,7 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
         title: 'Estoque e Cadastros',
         items: [
           { path: '/produtos', icon: <Package size={20} />, label: 'Produtos', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
+          { path: '/inventario', icon: <ClipboardList size={20} />, label: 'Gestão de Inventário', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] }, // <--- NOVO ITEM
           { path: '/estoque/entrada', icon: <Truck size={20} />, label: 'Entrada de Nota', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/fornecedores', icon: <Users size={20} />, label: 'Fornecedores', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
         ]
@@ -98,7 +90,7 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
         {/* HEADER */}
         <div className="sidebar-header">
           <h1 className="logo-text">
-            {!isCollapsed ? <>DD<span>Cosméticos</span></> : <span style={{color:'#2563eb'}}>DD</span>}
+            {!isCollapsed ? <>DD<span>Cosméticos</span></> : <span style={{color:'#d11d7e'}}>DD</span>}
           </h1>
           <button className="btn-toggle-sidebar desktop-only" onClick={toggleCollapse}>
             <ChevronLeft size={20} className={isCollapsed ? 'rotate-180' : ''}/>
@@ -123,7 +115,6 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
 
         <nav className="sidebar-nav">
           {menuGroups.map((group, index) => {
-            // Filtra itens com base no perfil do usuário
             const visibleItems = group.items.filter(item => item.roles.includes(userRole));
             if (visibleItems.length === 0) return null;
 
@@ -136,7 +127,7 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
                     to={item.path}
                     className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
                     onClick={() => isMobileOpen && toggleMobile()}
-                    data-tooltip={isCollapsed ? item.label : null}
+                    title={isCollapsed ? item.label : null}
                   >
                     <span className="nav-icon">{item.icon}</span>
                     <span className="nav-label">{item.label}</span>
@@ -149,11 +140,7 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
         </nav>
 
         <div className="sidebar-footer">
-          <button
-            className="nav-item logout"
-            onClick={handleLogout}
-            data-tooltip={isCollapsed ? "Sair do Sistema" : null}
-          >
+          <button className="nav-item logout" onClick={handleLogout} title={isCollapsed ? "Sair" : null}>
             <span className="nav-icon"><LogOut size={20} /></span>
             <span className="nav-label">Sair</span>
           </button>
