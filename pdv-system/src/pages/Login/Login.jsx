@@ -12,8 +12,10 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [inputError, setInputError] = useState(false);
 
-  // Referência para focar no primeiro campo ao carregar
+  // Referência para focar no primeiro campo ao carregar (Acessibilidade Motora)
   const loginInputRef = useRef(null);
+
+  const logoUrl = "/logo.png";
 
   useEffect(() => {
     loginInputRef.current?.focus();
@@ -49,20 +51,27 @@ const Login = () => {
       }
 
     } catch (error) {
+      console.error("Erro no Login:", error);
+
       const toastOptions = {
         autoClose: 4000,
         position: "top-right",
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
         toastId: "login-error-toast"
       };
 
       if (!error.response) {
-        toast.error("Sem conexão com o servidor.", toastOptions);
+        toast.error("Sem conexão com o servidor. Verifique sua internet.", toastOptions);
         return;
       }
 
       const status = error.response.status;
       const msgBackend = error.response.data?.mensagem || error.response.data?.message;
 
+      // Mantendo sua estrutura exata de mensagens de erro
       switch (status) {
         case 401:
           setInputError(true);
@@ -70,10 +79,20 @@ const Login = () => {
           break;
         case 404:
           setInputError(true);
-          toast.error("Usuário não encontrado.", toastOptions);
+          toast.error("Usuário não encontrado. Verifique seu e-mail ou matrícula.", toastOptions);
+          break;
+        case 403:
+          setInputError(true);
+          toast.warning("Acesso negado. Sua conta pode estar inativa ou bloqueada.", toastOptions);
+          break;
+        case 429:
+          toast.warning("Muitas tentativas consecutivas. Aguarde alguns instantes.", toastOptions);
+          break;
+        case 500:
+          toast.error("Erro interno no sistema. Nossa equipe já foi notificada.", toastOptions);
           break;
         default:
-          toast.error(msgBackend || "Ocorreu um erro inesperado.", toastOptions);
+          toast.error(msgBackend || "Ocorreu um erro inesperado ao tentar entrar.", toastOptions);
       }
 
     } finally {
@@ -86,20 +105,21 @@ const Login = () => {
       <div className="login-bg-shape shape-1" aria-hidden="true"></div>
       <div className="login-bg-shape shape-2" aria-hidden="true"></div>
 
-      <section className="login-card fade-in-up" role="main" aria-labelledby="login-title">
+      <section className="login-card fade-in-up" role="region" aria-labelledby="login-title">
         <header className="login-header">
           <div className="logo-wrapper">
             <img
-              src="/logo.png"
-              alt="Logotipo DD Cosméticos"
+              src={logoUrl}
+              alt="Logo DD Cosméticos"
               className="login-logo"
+              onError={(e) => { e.target.style.display = 'none'; }}
             />
           </div>
           <h1 id="login-title">Acesso ao Sistema</h1>
           <p>Informe suas credenciais para continuar</p>
         </header>
 
-        <form onSubmit={handleLogin} autoComplete="off" role="form">
+        <form onSubmit={handleLogin} autoComplete="off" noValidate={false}>
           <div className={`form-group ${inputError ? 'has-error' : ''}`}>
             <label htmlFor="login">Login</label>
             <div className="input-wrapper-modern">
@@ -116,8 +136,9 @@ const Login = () => {
                 placeholder="E-mail ou Matrícula"
                 required
                 autoComplete="username"
+                inputMode="text"
                 aria-invalid={inputError}
-                aria-describedby={inputError ? "login-error-helper" : undefined}
+                aria-describedby={inputError ? "login-error-announcer" : undefined}
               />
             </div>
           </div>
@@ -143,16 +164,18 @@ const Login = () => {
                 type="button"
                 className="btn-eye"
                 onClick={() => setShowPassword(!showPassword)}
+                tabIndex="-1"
                 aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                title={showPassword ? "Ocultar senha" : "Mostrar senha"}
               >
                 {showPassword ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
               </button>
             </div>
           </div>
 
-          {/* Announcer Invisível: O software de leitura dirá isso quando o erro surgir */}
-          <div id="login-error-helper" className="sr-only" aria-live="assertive">
-            {inputError && "Erro na tentativa de login. Verifique se o usuário e senha estão corretos."}
+          {/* Announcer para leitores de tela: Ativado apenas em erro */}
+          <div id="login-error-announcer" className="sr-only" aria-live="assertive">
+            {inputError && "Erro na tentativa de login. Verifique seus dados nos campos destacados."}
           </div>
 
           <button
@@ -162,10 +185,11 @@ const Login = () => {
             aria-busy={loading}
           >
             {loading ? (
-              <Loader2 className="spinner" size={24} aria-label="Carregando" />
+              <Loader2 className="spinner" size={24} aria-label="Processando login" />
             ) : (
               <>Acessar Sistema <LogIn size={20} style={{ marginLeft: 8 }} aria-hidden="true" /></>
             )}
+            {!loading && <div className="btn-glow" aria-hidden="true"></div>}
           </button>
         </form>
 
