@@ -1,11 +1,15 @@
+/* --- VARIÁVEIS DE CORES AJUSTADAS PARA CONTRASTE E ACESSIBILIDADE --- */
 :root {
-  --primary: #F22998;
-  --primary-dark: #c01b76;
+  /* Rosa ajustado para passar no teste de contraste sobre branco (#d11d7e) */
+  --primary: #d11d7e;
+  --primary-dark: #b01568;
   --primary-soft: #fce7f3;
   --text-main: #1e293b;
+  --text-muted: #475569; /* Cinza mais escuro para melhor leitura */
   --text-light: #64748b;
   --bg-input: #f8fafc;
   --border-color: #e2e8f0;
+  --error-color: #dc2626; /* Vermelho acessível */
   --shadow-card: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
 }
 
@@ -21,7 +25,7 @@
   padding: 20px;
 }
 
-/* --- EFEITOS DE FUNDO --- */
+/* --- EFEITOS DE FUNDO (Escondidos no mobile para performance) --- */
 .login-bg-shape {
   position: absolute;
   border-radius: 50%;
@@ -47,11 +51,10 @@
   border-radius: 20px;
   box-shadow: var(--shadow-card);
   position: relative;
-  z-index: 1; /* Fica acima das formas de fundo */
+  z-index: 1;
   border: 1px solid white;
 }
 
-/* Animação de entrada suave */
 .fade-in-up {
   animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -63,15 +66,13 @@
 
 /* Cabeçalho */
 .login-header { text-align: center; margin-bottom: 2rem; }
-.logo-wrapper { height: 70px; display: flex; align-items: center; justify-content: center; margin-bottom: 1rem; }
+.logo-wrapper { height: 75px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.5rem; }
 .login-logo { max-height: 100%; width: auto; object-fit: contain; }
-.login-header h1 { font-size: 1.5rem; color: var(--text-main); margin: 0; font-weight: 700; letter-spacing: -0.5px; }
-.login-header p { color: var(--text-light); font-size: 0.95rem; margin-top: 0.5rem; }
+.login-header h1 { font-size: 1.75rem; color: var(--text-main); margin: 0; font-weight: 700; letter-spacing: -0.5px; }
+.login-header p { color: var(--text-muted); font-size: 1rem; margin-top: 0.5rem; }
 
 /* --- FORMULÁRIO --- */
-.form-group {
-  margin-bottom: 1.5rem;
-}
+.form-group { margin-bottom: 1.5rem; }
 
 .form-group label {
   display: block;
@@ -81,26 +82,25 @@
   font-size: 0.9rem;
 }
 
-/* Wrapper do Input (A caixa cinza) */
+/* Wrapper do Input */
 .input-wrapper-modern {
   display: flex;
   align-items: center;
   background: var(--bg-input);
   border: 2px solid var(--border-color);
-  border-radius: 10px;
-  padding: 0 12px;
-  height: 50px;
+  border-radius: 12px;
+  padding: 0 16px;
+  height: 52px;
   transition: all 0.2s ease;
 }
 
-/* Efeito de Foco (A Mágica acontece aqui) */
+/* Efeito de Foco (Navegação via Teclado e Clique) */
 .input-wrapper-modern:focus-within {
   border-color: var(--primary);
   background: white;
-  box-shadow: 0 0 0 4px rgba(242, 41, 152, 0.15); /* Glow rosa suave */
+  box-shadow: 0 0 0 4px rgba(209, 29, 126, 0.15);
 }
 
-/* Ícone dentro do input */
 .icon-slot {
   color: var(--text-light);
   display: flex;
@@ -110,7 +110,7 @@
 }
 
 .input-wrapper-modern:focus-within .icon-slot {
-  color: var(--primary); /* Ícone fica rosa ao focar */
+  color: var(--primary);
 }
 
 .input-wrapper-modern input {
@@ -123,32 +123,30 @@
   width: 100%;
 }
 
-.input-wrapper-modern input::placeholder {
-  color: #94a3b8;
-}
-
-/* Botão Olho */
+/* Botão Olho (Área de clique otimizada) */
 .btn-eye {
   background: none;
   border: none;
   color: var(--text-light);
   cursor: pointer;
-  padding: 8px;
+  padding: 10px;
   display: flex;
   align-items: center;
+  justify-content: center;
   transition: color 0.2s;
+  border-radius: 8px;
 }
-.btn-eye:hover { color: var(--text-main); }
+.btn-eye:hover { color: var(--primary); }
 
 /* --- BOTÃO PRINCIPAL --- */
 .btn-login-pulse {
   width: 100%;
-  height: 52px;
+  height: 56px; /* Altura ideal para toque mobile */
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--primary);
   color: white;
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   font-weight: 600;
   cursor: pointer;
   position: relative;
@@ -157,18 +155,14 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-top: 1rem;
-  box-shadow: 0 4px 6px rgba(242, 41, 152, 0.2);
+  margin-top: 1.5rem;
+  box-shadow: 0 4px 12px rgba(209, 29, 126, 0.25);
 }
 
 .btn-login-pulse:hover:not(:disabled) {
   background: var(--primary-dark);
   transform: translateY(-2px);
-  box-shadow: 0 8px 15px rgba(242, 41, 152, 0.3);
-}
-
-.btn-login-pulse:active:not(:disabled) {
-  transform: translateY(0);
+  box-shadow: 0 6px 15px rgba(209, 29, 126, 0.35);
 }
 
 .btn-login-pulse:disabled {
@@ -177,18 +171,17 @@
   box-shadow: none;
 }
 
-/* Efeito de Brilho animado no botão */
 .btn-glow {
   position: absolute;
   top: 0; left: -100%;
   width: 50%; height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-  animation: shine 3s infinite;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  animation: shine 3.5s infinite;
 }
 
 @keyframes shine {
   0% { left: -100%; }
-  20% { left: 200%; }
+  30% { left: 200%; }
   100% { left: 200%; }
 }
 
@@ -198,44 +191,112 @@
 .login-footer {
   margin-top: 2rem;
   text-align: center;
-  font-size: 0.8rem;
-  color: #94a3b8;
+  font-size: 0.875rem;
+  color: var(--text-muted);
   border-top: 1px solid #f1f5f9;
   padding-top: 1.5rem;
 }
 
-/* Mobile */
-@media (max-width: 480px) {
-  .login-card { padding: 2rem 1.5rem; }
-  .login-container { padding: 10px; }
-}
-
 /* --- ESTADO DE ERRO (FEEDBACK VISUAL) --- */
+.has-error label { color: var(--error-color); }
 
-/* Texto do label fica vermelho */
-.has-error label {
-  color: #ef4444;
-  animation: shake 0.4s ease-in-out;
-}
-
-/* Input ganha borda vermelha, fundo leve e efeito de shake */
 .has-error .input-wrapper-modern {
-  border-color: #ef4444;
-  background-color: #fff5f5; /* Vermelho muito suave */
-  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.15); /* Glow vermelho */
+  border-color: var(--error-color);
+  background-color: #fff5f5;
   animation: shake 0.4s ease-in-out;
 }
 
-/* Ícone fica vermelho */
-.has-error .icon-slot {
-  color: #ef4444;
-}
+.has-error .icon-slot { color: var(--error-color); }
 
-/* Animação "Shake" (Movimento de negação) */
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-6px); }
-  40% { transform: translateX(6px); }
-  60% { transform: translateX(-4px); }
-  80% { transform: translateX(4px); }
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+/* --- AJUSTES MOBILE (Acesso em Smartphones) --- */
+@media (max-width: 480px) {
+  .login-container {
+    padding: 1rem;
+    align-items: flex-start; /* Ajuda a não cobrir o form com teclado virtual */
+    padding-top: 8vh;
+  }
+
+  .login-card {
+    padding: 2rem 1.5rem;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  }
+
+  .login-bg-shape { display: none; } /* Melhora performance mobile */
+
+  .input-wrapper-modern {
+    height: 56px; /* Área de toque ampliada */
+  }
+
+  .input-wrapper-modern input {
+    font-size: 16px; /* Impede zoom automático do iOS ao focar */
+  }
+
+  .btn-login-pulse {
+    height: 60px;
+    font-size: 1.15rem;
+  }
+}
+
+/* Utilitário para Acessibilidade (Leitores de tela) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Adicione ou atualize estas regras no seu Login.css */
+
+/* Melhora a visibilidade do foco para navegação via teclado (TAB) */
+.input-wrapper-modern:focus-within {
+  border-color: var(--primary);
+  background: white;
+  /* Glow rosa que já tínhamos */
+  box-shadow: 0 0 0 4px rgba(209, 29, 126, 0.15);
+  /* Outline para garantir visibilidade em modos de alto contraste */
+  outline: 2px solid transparent;
+}
+
+/* Garante que o botão tenha um foco claro quando selecionado via teclado */
+.btn-login-pulse:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 3px;
+}
+
+.btn-eye:focus-visible {
+  outline: 2px solid var(--primary);
+  border-radius: 4px;
+}
+
+/* Utilitário Screen Reader Only: Essencial para W3C */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Melhora a legibilidade do placeholder para deficientes visuais parciais */
+input::placeholder {
+  color: #94a3b8;
+  opacity: 1;
 }
