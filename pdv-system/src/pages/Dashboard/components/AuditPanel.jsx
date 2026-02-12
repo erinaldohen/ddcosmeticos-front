@@ -1,69 +1,86 @@
 import React from 'react';
-import { ShieldAlert, AlertTriangle, CheckCircle, MessageCircle } from 'lucide-react';
+import { ShieldAlert, Bell, Info, ArrowRight, ShieldCheck } from 'lucide-react';
 
-const AuditPanel = ({ loading, alertas, onNavigate }) => {
-    return (
-        <div className="chart-card audit-panel">
-            <div className="audit-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <h3><ShieldAlert size={20} /> Auditoria & Alertas</h3>
-                    <span className="pulse-dot"></span>
+const AuditPanel = ({ alertas, loading, onNavigate }) => {
+
+  // Função que mapeia o evento para a gravidade visual (CSS)
+  const getAlertConfig = (evento) => {
+    const tipo = String(evento || '').toUpperCase();
+
+    // NÍVEL ALTO: Ações destrutivas ou erros críticos
+    if (tipo.includes('DELETE') || tipo.includes('EXCLUSAO') || tipo.includes('NEGADO') || tipo.includes('ERRO')) {
+      return { class: 'alto', icon: <ShieldAlert size={18} /> };
+    }
+
+    // NÍVEL MÉDIO: Alterações sensíveis (Preço, Estoque, Desconto)
+    if (tipo.includes('UPDATE') || tipo.includes('PRECO') || tipo.includes('DESCONTO') || tipo.includes('ESTOQUE')) {
+      return { class: 'medio', icon: <Bell size={18} /> };
+    }
+
+    // NÍVEL BAIXO: Operações de rotina (Login, Cadastro, Consultas)
+    return { class: 'baixo', icon: <Info size={18} /> };
+  };
+
+  return (
+    <div className="audit-panel shadow-luxury">
+      {/* HEADER */}
+      <div className="audit-header">
+        <h3><ShieldCheck size={20} /> Segurança & Auditoria</h3>
+        {!loading && alertas.length > 0 && (
+          <span className="badge-count">{alertas.length}</span>
+        )}
+      </div>
+
+      {/* LEGENDA DE CORES */}
+      <div className="audit-legend-container">
+        <div className="legend-row"><span className="dot alto"></span> Crítico</div>
+        <div className="legend-row"><span className="dot medio"></span> Atenção</div>
+        <div className="legend-row"><span className="dot baixo"></span> Info</div>
+      </div>
+
+      {/* LISTA COM SCROLL INTERNO */}
+      <div className="audit-list">
+        {loading ? (
+          <div className="p-20">
+            <div className="skeleton-text" style={{ width: '80%' }}></div>
+            <div className="skeleton-text" style={{ width: '60%' }}></div>
+            <div className="skeleton-text" style={{ width: '90%' }}></div>
+          </div>
+        ) : alertas.length > 0 ? (
+          alertas.map((item, idx) => {
+            const config = getAlertConfig(item.tipoEvento);
+            return (
+              <div key={idx} className={`audit-item ${config.class}`}>
+                <div className="audit-icon-area">{config.icon}</div>
+                <div className="audit-info">
+                  <strong>{item.mensagem}</strong>
+                  <div className="audit-meta">
+                    <span className="user-name">{item.usuarioResponsavel || 'Sistema'}</span>
+                    <span className="meta-separator">•</span>
+                    <span className="time-stamp">
+                      {new Date(item.dataHora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
                 </div>
-            </div>
+              </div>
+            );
+          })
+        ) : (
+          <div className="empty-state-container">
+            <ShieldCheck size={32} opacity={0.2} />
+            <span className="empty-subtext">Operação segura: Nenhum alerta.</span>
+          </div>
+        )}
+      </div>
 
-            <div className="audit-legend-container">
-                <div className="legend-row">
-                    <span className="dot alto"></span>
-                    <span><strong>Crítico:</strong> Ação Imediata (Zap).</span>
-                </div>
-                <div className="legend-row">
-                    <span className="dot medio"></span>
-                    <span><strong>Atenção:</strong> Revisar processo.</span>
-                </div>
-            </div>
-
-            <div className="audit-list">
-                {loading ? (
-                    <div style={{ padding: 20 }}>
-                        <div className="skeleton skeleton-text" style={{ marginBottom: 10 }}></div>
-                        <div className="skeleton skeleton-text"></div>
-                    </div>
-                ) : alertas.length > 0 ? (
-                    alertas.map((alerta) => (
-                        <div key={alerta.id} className={`audit-item ${alerta.nivel}`}>
-                            <div className="audit-icon-area">
-                                <AlertTriangle size={18} />
-                            </div>
-                            <div style={{ flex: 1 }}>
-                                <strong>
-                                    {alerta.msg}
-                                    {alerta.notificado && (
-                                        <span className="whatsapp-sent" title="Mensagem enviada">
-                                            <MessageCircle size={10} fill="white" /> Enviado
-                                        </span>
-                                    )}
-                                </strong>
-                                <p className="audit-meta">
-                                    {alerta.nivel === 'alto' ? 'Risco Financeiro' : 'Conformidade'}
-                                </p>
-                            </div>
-                        </div>
-                    ))
-                ) : (
-                    <div className="audit-empty">
-                        <CheckCircle size={40} color="#10b981" />
-                        <p>Tudo certo!</p>
-                    </div>
-                )}
-            </div>
-
-            <div className="audit-footer">
-                <button className="btn-audit-action" onClick={onNavigate}>
-                    Ver Logs Completos
-                </button>
-            </div>
-        </div>
-    );
+      {/* FOOTER */}
+      <div className="audit-footer">
+        <button className="btn-audit-action" onClick={onNavigate}>
+          Ver Histórico Completo <ArrowRight size={16} />
+        </button>
+      </div>
+    </div>
+  );
 };
 
 export default AuditPanel;
