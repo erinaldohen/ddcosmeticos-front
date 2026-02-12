@@ -1,5 +1,6 @@
 import React from 'react';
-import { Sparkles, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+// CORREÇÃO: Adicionado 'Info' na importação
+import { Sparkles, TrendingUp, TrendingDown, Minus, Info } from 'lucide-react';
 
 const KPICard = ({ title, value, icon, loading, trend, isCurrency, isWarning, footer }) => {
   if (loading) {

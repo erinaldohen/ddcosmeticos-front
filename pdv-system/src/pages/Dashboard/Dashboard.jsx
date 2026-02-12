@@ -1,386 +1,281 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
 import {
-  ShoppingBag, TrendingUp, Tags, Hash, ListChecks,
-  Sparkles, Info, Inbox, PieChart as PieIcon
-} from 'lucide-react';
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
+import {
+  DollarSign, ShoppingBag, Users, AlertTriangle,
+  Package, TrendingUp, Activity, ShieldAlert,
+  ArrowUpRight, Clock
+} from 'lucide-react';
 import api from '../../services/api';
-import './Dashboard.css';
-
-// Componentes (Assumindo que existem na pasta components)
-import KPICard from './components/KPICard';
-import AuditPanel from './components/AuditPanel';
+import './Dashboard.css'; // Importante: Importar o CSS
 
 const Dashboard = () => {
-  const navigate = useNavigate();
+  const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [filtroPeriodo, setFiltroPeriodo] = useState('mes');
-
-  // ESTADO INICIAL
-  const [resumo, setResumo] = useState({
-    faturamentoTotal: 0,
-    qtdVendas: 0,
-    ticketMedio: 0,
-    metaFaturamento: 2000.00,
-    graficoVendas: [],
-    graficoPagamentos: [],
-    ultimasVendas: [],
-    topProdutos: []
-  });
-
-  const [insightGeral, setInsightGeral] = useState("Analisando dados...");
 
   useEffect(() => {
-    carregarDadosDashboard();
+    carregarDados();
   }, []);
 
-  // --- HELPER DE FORMATAÇÃO ---
-  const format = (val) => {
-      const num = Number(val);
-      return isNaN(num) ? "R$ 0,00" : num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  };
-
-  // --- TOOLTIP CUSTOMIZADO ---
-  const CustomTooltip = ({ active, payload, label }) => {
-      if (active && payload && payload.length) {
-          const dadosOriginais = payload[0].payload;
-          const valor = dadosOriginais.valor ?? payload[0].value ?? 0;
-
-          return (
-              <div className="custom-tooltip-chart">
-                  <p className="tooltip-label">Dia: {label}</p>
-                  <p className="tooltip-value">
-                      Faturado: <span>{format(valor)}</span>
-                  </p>
-              </div>
-          );
-      }
-      return null;
-  };
-
-  // --- LÓGICA DE DADOS ---
-  const dadosProcessados = useMemo(() => {
-      const safeNumber = (val) => {
-          if (val === null || val === undefined) return 0;
-          if (typeof val === 'number') return val;
-          if (typeof val === 'string') {
-              if (val.includes(',')) return parseFloat(val.replace(/\./g, '').replace(',', '.')) || 0;
-              return parseFloat(val) || 0;
-          }
-          return 0;
-      };
-
-      // 1. Processa Vendas Diárias
-      const todasVendas = (resumo.graficoVendas || []).map((item, index) => ({
-          data: String(item.data || item.dataVenda || item.dia || (index + 1)),
-          valor: safeNumber(item.valor ?? item.total ?? item.valorTotal ?? item.faturamento)
-      }));
-
-      // 2. Filtra Período
-      let vendasFiltradas = todasVendas;
-      if (todasVendas.length > 0) {
-          if (filtroPeriodo === '7dias') vendasFiltradas = todasVendas.slice(-7);
-          else if (filtroPeriodo === '15dias') vendasFiltradas = todasVendas.slice(-15);
-      }
-
-      // 3. Processa Pagamentos
-      const pagamentos = (resumo.graficoPagamentos || []).map(item => ({
-          formaPagamento: item.formaPagamento || item.tipo || 'Outros',
-          valor: safeNumber(item.valor ?? item.total ?? item.amount ?? 0)
-      }));
-
-      // 4. Trends (Cálculo de tendência vs média do período)
-      const diasComVenda = todasVendas.filter(d => d.valor > 0).length || 1;
-      const totalMes = todasVendas.reduce((acc, curr) => acc + curr.valor, 0);
-      const mediaDiaria = totalMes / diasComVenda;
-      const baseFat = mediaDiaria > 0 ? mediaDiaria : 1;
-      const varFat = ((resumo.faturamentoTotal - baseFat) / baseFat) * 100;
-      const varQtd = varFat * 0.8; // Estimativa simples para qtd
-
-      return {
-          vendas: vendasFiltradas,
-          pagamentos: pagamentos,
-          trends: {
-              fat: { value: Math.abs(varFat).toFixed(1), isPositive: varFat >= 0, label: 'vs. média' },
-              qtd: { value: Math.abs(varQtd).toFixed(1), isPositive: varQtd >= 0, label: 'vs. média' },
-              ticket: { value: '0.0', isPositive: true, isNeutral: true, label: 'estável' }
-          },
-          maxVal: resumo.topProdutos.length > 0 ? Math.max(...resumo.topProdutos.map(p => safeNumber(p.valorTotal))) : 1
-      };
-  }, [resumo, filtroPeriodo]);
-
-  // Atualiza insight ao mudar dados
-  useEffect(() => {
-    if (!loading) gerarInsightGeral();
-  }, [resumo, loading]);
-
-  const carregarDadosDashboard = async () => {
-    setLoading(true);
+  const carregarDados = async () => {
     try {
-      const res = await api.get('/dashboard');
-      const d = res.data;
-      if (d) {
-        setResumo({
-          faturamentoTotal: d.faturamentoHoje || 0,
-          qtdVendas: d.vendasHoje || 0,
-          ticketMedio: d.ticketMedioMes || 0,
-          metaFaturamento: 2000.00,
-          graficoVendas: d.graficoVendas || [],
-          graficoPagamentos: d.graficoPagamentos || [],
-          ultimasVendas: d.ultimasVendas || [],
-          topProdutos: d.rankingProdutos || []
-        });
-      }
+      const response = await api.get('/dashboard');
+      setData(response.data);
     } catch (error) {
-      console.warn("Erro dashboard (usando dados zerados):", error);
+      console.error("Erro ao carregar dashboard:", error);
     } finally {
-        setLoading(false);
+      setLoading(false);
     }
   };
 
-  const gerarInsightGeral = () => {
-    const { ticketMedio, faturamentoTotal, metaFaturamento, qtdVendas } = resumo;
-    if (qtdVendas === 0) setInsightGeral("Loja aberta. Aguardando a primeira venda do dia.");
-    else if (faturamentoTotal >= metaFaturamento) setInsightGeral("🚀 Meta batida! O desempenho de hoje está excelente.");
-    else setInsightGeral(`📊 Faltam ${format(metaFaturamento - faturamentoTotal)} para atingir a meta diária.`);
+  // Funções Auxiliares de Estilo
+  const getEventStyle = (tipo) => {
+    switch (tipo) {
+      case 'ERRO': return { color: 'text-red-600', badge: 'badge-erro', iconColor: '#dc2626' };
+      case 'VENDA': return { color: 'text-green-600', badge: 'badge-venda', iconColor: '#059669' };
+      case 'ESTOQUE': return { color: 'text-orange-600', badge: 'badge-estoque', iconColor: '#ea580c' };
+      case 'LOGIN': return { color: 'text-blue-600', badge: 'badge-login', iconColor: '#2563eb' };
+      default: return { color: 'text-gray-600', badge: 'badge-default', iconColor: '#6b7280' };
+    }
   };
 
-  const COLORS_PIE = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ec4899'];
-
-  const getBadgeClass = (tipo) => {
-      const t = String(tipo || '').toUpperCase();
-      if (t.includes('PIX')) return 'info';
-      if (t.includes('DINHEIRO')) return 'success';
-      if (t.includes('CREDITO') || t.includes('DEBITO')) return 'warning';
-      return 'secondary';
+  const getEventIcon = (tipo) => {
+    const color = getEventStyle(tipo).iconColor;
+    switch (tipo) {
+      case 'ERRO': return <AlertTriangle size={20} color={color} />;
+      case 'VENDA': return <DollarSign size={20} color={color} />;
+      case 'ESTOQUE': return <Package size={20} color={color} />;
+      case 'LOGIN': return <Users size={20} color={color} />;
+      default: return <Activity size={20} color={color} />;
+    }
   };
 
-  const getRankClass = (i) => {
-      if (i === 0) return 'gold';
-      if (i === 1) return 'silver';
-      if (i === 2) return 'bronze';
-      return 'default';
+  const formatCurrency = (val) => {
+    if (val === undefined || val === null) return 'R$ 0,00';
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
-  const temDadosVendas = dadosProcessados.vendas && dadosProcessados.vendas.length > 0;
-  const temDadosPagamentos = dadosProcessados.pagamentos && dadosProcessados.pagamentos.length > 0;
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  if (!data) return <div className="p-8 text-center text-gray-500">Não foi possível carregar os dados.</div>;
+
+  const financeiro = data.financeiro || { faturamentoHoje: 0, vendasHoje: 0, ticketMedio: 0, graficoVendas: [] };
+  const inventario = data.inventario || { produtosVencidos: 0, baixoEstoque: 0 };
+  const auditoria = data.auditoria || [];
+  const topProdutos = data.topProdutos || [];
 
   return (
-    <div className="dashboard-container fade-in">
-      <header className="page-header">
-        <div>
-            <h1>Visão Geral</h1>
-            <p className="text-muted">Acompanhamento em tempo real</p>
-        </div>
-        <div>
-            {!loading && <span className="badge success" style={{padding: '8px 16px', fontSize:'0.85rem'}}>Loja Aberta</span>}
-        </div>
-      </header>
+    <div className="dashboard-container">
 
-      {/* Caixa de Insight IA */}
-      <div className="ai-insight-box">
-        <div className="ai-icon"><Sparkles size={24} /></div>
-        <div className="ai-content">
-            <h4>Análise Inteligente</h4>
-            <p>{insightGeral}</p>
+      {/* HEADER */}
+      <div className="dashboard-header">
+        <div className="header-title">
+          <h1>Visão Geral</h1>
+          <p>Resumo estratégico da DD Cosméticos</p>
+        </div>
+        <div className="last-update">
+           <Clock size={14} />
+           <span>Atualizado: {new Date().toLocaleTimeString()}</span>
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* KPI CARDS (Grid Superior) */}
       <div className="kpi-grid">
-        <KPICard title="Faturamento Hoje" icon={<ShoppingBag size={24} color="#ffffff" />} value={format(resumo.faturamentoTotal)} loading={loading} className="highlight-revenue" trend={dadosProcessados.trends.fat} />
-        <KPICard title="Vendas Realizadas" icon={<Hash size={24} color="#8b5cf6" />} value={resumo.qtdVendas} loading={loading} trend={dadosProcessados.trends.qtd} />
-        <KPICard title="Ticket Médio" icon={<Tags size={24} color="#ec4899" />} value={format(resumo.ticketMedio)} loading={loading} trend={dadosProcessados.trends.ticket} />
+
+        {/* Card Faturamento */}
+        <div className="kpi-card">
+          <div className="kpi-bg-icon"><DollarSign size={80} color="#ec4899" /></div>
+          <div>
+            <div className="kpi-header-row">
+              <div className="kpi-icon-box icon-pink"><DollarSign size={20} /></div>
+              <span className="kpi-title">Faturamento Hoje</span>
+            </div>
+            <h3 className="kpi-value">{formatCurrency(financeiro.faturamentoHoje)}</h3>
+          </div>
+          <div className="kpi-footer trend-up">
+            <TrendingUp size={14} style={{marginRight: 4}} />
+            <span>Resumo Diário</span>
+          </div>
+        </div>
+
+        {/* Card Vendas */}
+        <div className="kpi-card">
+          <div className="kpi-bg-icon"><ShoppingBag size={80} color="#2563eb" /></div>
+          <div>
+            <div className="kpi-header-row">
+              <div className="kpi-icon-box icon-blue"><ShoppingBag size={20} /></div>
+              <span className="kpi-title">Vendas Realizadas</span>
+            </div>
+            <h3 className="kpi-value">{financeiro.vendasHoje}</h3>
+          </div>
+          <div className="kpi-footer trend-neutral">
+            <span>Tickets emitidos hoje</span>
+          </div>
+        </div>
+
+        {/* Card Ticket Médio */}
+        <div className="kpi-card">
+          <div className="kpi-bg-icon"><ArrowUpRight size={80} color="#9333ea" /></div>
+          <div>
+            <div className="kpi-header-row">
+              <div className="kpi-icon-box icon-purple"><ArrowUpRight size={20} /></div>
+              <span className="kpi-title">Ticket Médio</span>
+            </div>
+            <h3 className="kpi-value">{formatCurrency(financeiro.ticketMedio)}</h3>
+          </div>
+          <div className="kpi-footer trend-up">
+            <span>Média por venda</span>
+          </div>
+        </div>
+
+        {/* Card Estoque */}
+        <div className="kpi-card">
+          <div className="kpi-bg-icon"><AlertTriangle size={80} color="#ea580c" /></div>
+          <div>
+            <div className="kpi-header-row">
+              <div className="kpi-icon-box icon-orange"><Package size={20} /></div>
+              <span className="kpi-title">Estoque Crítico</span>
+            </div>
+            <h3 className="kpi-value">{inventario.baixoEstoque}</h3>
+          </div>
+          <div className="kpi-footer trend-down" style={{cursor: 'pointer'}}>
+            <span>Ver produtos em baixa</span> <ArrowUpRight size={12} style={{marginLeft: 4}} />
+          </div>
+        </div>
       </div>
 
-      <div className="dashboard-grid">
+      {/* CONTEÚDO PRINCIPAL (Gráfico + Top Produtos) */}
+      <div className="main-content-grid">
 
-        {/* COLUNA ESQUERDA (2/3) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '25px', flex: 2, minWidth: 0 }}>
+        {/* Gráfico */}
+        <div className="dashboard-section">
+          <div className="section-title">
+            <Activity size={20} color="#db2777" /> Desempenho de Vendas (Mês)
+          </div>
+          <div className="chart-container">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={financeiro.graficoVendas}>
+                <defs>
+                  <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ec4899" stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis
+                  dataKey="data"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{fill: '#9ca3af', fontSize: 12}}
+                  dy={10}
+                />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{fill: '#9ca3af', fontSize: 12}}
+                  tickFormatter={(val) => `R$${val}`}
+                />
+                <Tooltip
+                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  formatter={(value) => [`R$ ${value}`, 'Total']}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="total"
+                  stroke="#ec4899"
+                  strokeWidth={3}
+                  fillOpacity={1}
+                  fill="url(#colorTotal)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
 
-          {/* GRÁFICO EVOLUÇÃO */}
-          <div className="chart-card" style={{ padding: '24px' }}>
-            <div className="chart-header-row">
-                <h3 className="chart-title"><TrendingUp size={20} /> Evolução de Vendas</h3>
-                <div className="filter-group">
-                    <button className={`filter-btn ${filtroPeriodo === '7dias' ? 'active' : ''}`} onClick={() => setFiltroPeriodo('7dias')}>7 Dias</button>
-                    <button className={`filter-btn ${filtroPeriodo === '15dias' ? 'active' : ''}`} onClick={() => setFiltroPeriodo('15dias')}>15 Dias</button>
-                    <button className={`filter-btn ${filtroPeriodo === 'mes' ? 'active' : ''}`} onClick={() => setFiltroPeriodo('mes')}>Mês</button>
+        {/* Top Produtos */}
+        <div className="dashboard-section">
+          <div className="section-title">
+            <ShoppingBag size={20} color="#7c3aed" /> Top Produtos
+          </div>
+          <div className="product-list">
+            {topProdutos.length > 0 ? (
+              topProdutos.map((prod, idx) => (
+                <div key={idx} className="product-item">
+                  <div style={{display: 'flex', alignItems: 'center'}}>
+                    <div className={`rank-badge ${idx === 0 ? 'rank-1' : idx === 1 ? 'rank-2' : idx === 2 ? 'rank-3' : 'rank-other'}`}>
+                      {idx + 1}
+                    </div>
+                    <div className="product-info">
+                      <h4>{prod.produto}</h4>
+                      <span>{prod.quantidade} unid.</span>
+                    </div>
+                  </div>
+                  <span className="product-value">{formatCurrency(prod.valorTotal)}</span>
                 </div>
-            </div>
-
-            <div className="chart-wrapper">
-              {loading ? <div className="skeleton skeleton-box"></div> :
-                temDadosVendas ? (
-                    <ResponsiveContainer width="99%" height={300}>
-                        <AreaChart data={dadosProcessados.vendas} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                            <defs>
-                                <linearGradient id="colorVendas" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
-                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                            <XAxis
-                                dataKey="data"
-                                axisLine={false}
-                                tickLine={false}
-                                dy={10}
-                                tick={{ fontSize: 11, fill: '#64748b' }}
-                                interval="preserveStartEnd"
-                            />
-                            <YAxis
-                                axisLine={false}
-                                tickLine={false}
-                                tickFormatter={(val) => `R$${val}`}
-                                tick={{ fontSize: 11, fill: '#64748b' }}
-                            />
-                            <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#3b82f6', strokeWidth: 1 }} />
-                            <Area type="monotone" dataKey="valor" stroke="#3b82f6" fillOpacity={1} fill="url(#colorVendas)" animationDuration={1000} />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                ) : <div className="empty-state-container"><Info size={32} /><span className="empty-subtext">Sem dados no período.</span></div>
-              }
-            </div>
+              ))
+            ) : (
+              <p style={{textAlign: 'center', color: '#9ca3af', marginTop: '2rem'}}>Nenhuma venda registrada.</p>
+            )}
           </div>
-
-          {/* TOP PRODUTOS */}
-          <div className="chart-card" style={{ padding: '24px' }}>
-             <h3 style={{ marginBottom: '20px' }}>Top Produtos Mais Vendidos</h3>
-             {loading ? <div className="skeleton skeleton-text"></div> : (
-               <ul className="ranking-list">
-                  {resumo.topProdutos.map((p, i) => (
-                      <li key={i} className="ranking-item">
-                          <div className={`rank-medal ${getRankClass(i)}`}>{i + 1}</div>
-                          <div className="rank-info">
-                              <span className="rank-name">{p.produto || p.marca || 'Produto'}</span>
-                              <div className="rank-bar-bg">
-                                  <div className="rank-bar-fill" style={{ width: `${((p.valorTotal || 0) / dadosProcessados.maxVal) * 100}%` }}></div>
-                              </div>
-                          </div>
-                          <div className="rank-stats">
-                              <span className="rank-value">{format(p.valorTotal)}</span>
-                              <span className="rank-qty">{p.quantidade} {p.unidade || 'UN'}</span>
-                          </div>
-                      </li>
-                  ))}
-                  {resumo.topProdutos.length === 0 && <div className="empty-state-container"><span className="empty-subtext">Nenhum produto vendido hoje.</span></div>}
-               </ul>
-             )}
-          </div>
-
-           {/* ÚLTIMAS TRANSAÇÕES */}
-           <div className="chart-card" style={{ padding: '0px', overflow: 'hidden' }}>
-             <div style={{ padding: '20px 24px', borderBottom: '1px solid #f1f5f9', background:'#fafafa' }}>
-                <h3 style={{ margin: 0 }}><ListChecks size={20} /> Transações Recentes</h3>
-             </div>
-             {loading ? <div style={{padding: 20}}><div className="skeleton skeleton-text"></div></div> :
-               resumo.ultimasVendas.length > 0 ? (
-                 <div className="table-container">
-                     <table className="table-fixed">
-                        <thead>
-                           <tr style={{ color: '#64748b', fontSize: '0.75rem', textAlign: 'left', textTransform:'uppercase' }}>
-                              <th className="col-cliente">Cliente</th>
-                              <th className="col-metodo">Método</th>
-                              <th className="col-valor">Valor</th>
-                           </tr>
-                        </thead>
-                        <tbody>
-                           {resumo.ultimasVendas.map((venda, idx) => (
-                              <tr key={idx} style={{ borderBottom: '1px solid #f8fafc' }}>
-                                 <td className="col-cliente">
-                                     <div style={{fontWeight:600, color:'#334155'}}>#{venda.id}</div>
-                                     <div style={{fontSize:'0.75rem', color:'#94a3b8'}}>{venda.clienteNome || 'Consumidor Final'}</div>
-                                 </td>
-                                 <td className="col-metodo">
-                                    <div style={{display:'flex', gap:4, justifyContent:'center', flexWrap:'wrap'}}>
-                                        {venda.pagamentos && venda.pagamentos.length > 0 ? (
-                                            venda.pagamentos.map((pag, pIdx) => (
-                                                <span key={pIdx} className={`badge ${getBadgeClass(pag.formaPagamento)}`}>{pag.formaPagamento}</span>
-                                            ))
-                                        ) : <span className="badge secondary">ND</span>}
-                                    </div>
-                                 </td>
-                                 <td className="col-valor" style={{fontWeight: 700, color: '#0f172a'}}>{format(venda.valorTotal)}</td>
-                              </tr>
-                           ))}
-                        </tbody>
-                     </table>
-                 </div>
-             ) : <div className="empty-state-container"><Inbox size={32} className="empty-icon" /><span className="empty-subtext">Nenhuma transação recente.</span></div>}
-          </div>
-        </div>
-
-        {/* COLUNA DIREITA (1/3) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '25px', flex: 1, minWidth: 0 }}>
-
-          {/* GRÁFICO PAGAMENTOS */}
-          <div className="chart-card" style={{ padding: '24px' }}>
-             <h3 style={{ marginBottom: '5px' }}><PieIcon size={20} style={{marginRight:8}}/> Meios de Pagamento</h3>
-             <p className="text-muted" style={{marginBottom:'20px', fontSize:'0.85rem'}}>Distribuição percentual</p>
-
-             <div className="chart-wrapper">
-                {loading ? <div className="skeleton skeleton-box"></div> :
-                    temDadosPagamentos ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={dadosProcessados.pagamentos}
-                                    cx="50%" cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    paddingAngle={5}
-                                    dataKey="valor"
-                                    nameKey="formaPagamento"
-                                    label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                                        const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
-                                        const x = cx + (outerRadius + 20) * Math.cos(-midAngle * (Math.PI / 180));
-                                        const y = cy + (outerRadius + 20) * Math.sin(-midAngle * (Math.PI / 180));
-                                        return percent > 0.05 ? (
-                                            <text x={x} y={y} fill="#334155" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" style={{fontSize: '11px', fontWeight:'700'}}>
-                                                {`${(percent * 100).toFixed(0)}%`}
-                                            </text>
-                                        ) : null;
-                                    }}
-                                >
-                                    {dadosProcessados.pagamentos.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS_PIE[index % COLORS_PIE.length]} strokeWidth={0} />
-                                    ))}
-                                </Pie>
-                                <Tooltip formatter={(val) => format(val)} contentStyle={{borderRadius:'8px'}} />
-                                <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    ) : <div className="empty-state-container"><Info size={32} className="empty-icon"/><span className="empty-subtext">Sem dados de pagamento.</span></div>
-                }
-             </div>
-
-             {/* ANÁLISE IA - Insight de Pagamento */}
-             {temDadosPagamentos && (
-                 <div style={{marginTop: 15, padding: 12, background:'#f0fdf4', borderRadius: 8, fontSize:'0.85rem', color:'#166534', display:'flex', gap:8, alignItems:'flex-start'}}>
-                     <Sparkles size={16} style={{marginTop:2, flexShrink:0}} />
-                     <span>
-                        <strong>Insight:</strong> O método
-                        {(() => {
-                            if (dadosProcessados.pagamentos.length > 0) {
-                                const max = dadosProcessados.pagamentos.reduce((p, c) => (p.valor > c.valor ? p : c));
-                                return ` ${max.formaPagamento} `;
-                            }
-                            return ' Principal ';
-                        })()}
-                        é o favorito dos clientes hoje.
-                     </span>
-                 </div>
-             )}
-          </div>
-
-          <AuditPanel loading={loading} alertas={[]} onNavigate={() => navigate('/auditoria')} />
         </div>
       </div>
+
+      {/* AUDITORIA (Timeline) */}
+      <div className="dashboard-section">
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem'}}>
+          <div className="section-title" style={{marginBottom: 0}}>
+            <ShieldAlert size={20} color="#2563eb" /> Auditoria & Segurança
+          </div>
+          <button className="btn-link">Ver Histórico Completo</button>
+        </div>
+
+        <div className="timeline-container">
+          <div className="timeline-line"></div>
+
+          <div className="timeline-events">
+            {auditoria.length > 0 ? (
+              auditoria.map((log, index) => {
+                const style = getEventStyle(log.tipoEvento);
+                return (
+                  <div key={index} className="timeline-item">
+                    <div className="timeline-icon">
+                      {getEventIcon(log.tipoEvento)}
+                    </div>
+                    <div className="timeline-content">
+                      <div className="timeline-header">
+                        <span className={`event-badge ${style.badge}`}>
+                          {log.tipoEvento}
+                        </span>
+                        <div className="timeline-time">
+                          <Clock size={12} />
+                          {new Date(log.dataHora).toLocaleString('pt-BR')}
+                        </div>
+                      </div>
+                      <p className="timeline-msg">{log.mensagem}</p>
+                      <div className="timeline-user">
+                        <div className="user-avatar">
+                          {log.usuarioResponsavel ? log.usuarioResponsavel.charAt(0) : 'S'}
+                        </div>
+                        <span>Executado por: <strong>{log.usuarioResponsavel || 'Sistema'}</strong></span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <p style={{paddingLeft: '2rem', color: '#9ca3af'}}>Nenhum evento recente.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 };
