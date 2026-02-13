@@ -1,0 +1,52 @@
+/* Esconde o cupom na tela normal do computador */
+.cupom-fiscal-container {
+    display: none;
+}
+
+/* Regras que só aplicam na hora de imprimir */
+@media print {
+    /* Esconde todo o resto da aplicação (PDV, Menus, etc) */
+    body * {
+        visibility: hidden;
+    }
+
+    /* Mostra apenas o container do cupom */
+    .cupom-fiscal-container, .cupom-fiscal-container * {
+        visibility: visible;
+    }
+
+    /* Posiciona o cupom no topo da folha */
+    .cupom-fiscal-container {
+        display: block;
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 80mm; /* Largura padrão térmica (ajuste para 58mm se for daquelas amarelinhas) */
+        padding: 0 5px;
+        font-family: 'Courier New', Courier, monospace; /* Fonte monoespaçada estilo cupom */
+        font-size: 10px;
+        color: black;
+        background: white;
+    }
+
+    .cupom-header { text-align: center; margin-bottom: 10px; }
+    .loja-nome { font-size: 14px; font-weight: bold; margin: 0; }
+    .doc-titulo { margin: 5px 0; font-size: 11px; }
+    .separator { border-top: 1px dashed #000; margin: 5px 0; }
+
+    .cupom-itens table { width: 100%; border-collapse: collapse; }
+    .cupom-itens th { text-align: left; border-bottom: 1px solid #000; }
+    .cupom-itens td { padding: 2px 0; vertical-align: top; }
+
+    .col-codigo { width: 10%; }
+    .col-desc { width: 40%; }
+    .col-total { text-align: right; }
+
+    .linha-total { display: flex; justify-content: space-between; margin: 2px 0; }
+    .destaque { font-weight: bold; font-size: 12px; margin-top: 5px; }
+
+    .cupom-footer { text-align: center; margin-top: 15px; }
+    .chave-acesso { font-size: 9px; word-break: break-all; margin: 5px 0; font-weight: bold; }
+    .qr-code-box { display: flex; justify-content: center; margin-top: 10px; }
+    .qr-code-box img { width: 100px; height: 100px; } /* Tamanho QR Code */
+}

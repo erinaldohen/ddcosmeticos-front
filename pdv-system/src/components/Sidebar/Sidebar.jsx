@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingCart, Package, Users,
-  Settings, LogOut, ChevronLeft, X, DollarSign,
+  Settings, LogOut, ChevronLeft, X,
   FileText, ShieldCheck, Truck, History, Clock,
-  Wallet, TrendingDown, Store, ClipboardList // <--- Ícone do Inventário
+  Wallet, TrendingDown, Store, ClipboardList
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -25,7 +25,6 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
       const userStr = localStorage.getItem('user');
       if (userStr) {
         const user = JSON.parse(userStr);
-        // Normaliza para garantir compatibilidade com diferentes backends
         const role = user.perfil || user.role || 'ROLE_USUARIO';
         setUserRole(role);
       }
@@ -34,6 +33,7 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
     }
   }, []);
 
+  // Menu Reestruturado e em Ordem Alfabética
   const menuGroups = [
       {
         title: 'Visão Geral',
@@ -44,33 +44,37 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
       {
         title: 'Frente de Loja',
         items: [
-          { path: '/pdv', icon: <ShoppingCart size={20} />, label: 'PDV (Vendas)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA', 'ROLE_USUARIO'] },
+          // C -> P
           { path: '/caixa', icon: <Store size={20} />, label: 'Controle de Caixa', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA', 'ROLE_USUARIO'] },
+          { path: '/pdv', icon: <ShoppingCart size={20} />, label: 'PDV (Vendas)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA', 'ROLE_USUARIO'] },
         ]
       },
       {
         title: 'Gestão Financeira',
         items: [
-          { path: '/financeiro/contas-receber', icon: <Wallet size={20} />, label: 'Contas a Receber', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'] },
+          // C (Pagar) -> C (Receber) -> H
           { path: '/financeiro/contas-pagar', icon: <TrendingDown size={20} />, label: 'Contas a Pagar', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'] },
+          { path: '/financeiro/contas-receber', icon: <Wallet size={20} />, label: 'Contas a Receber', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'] },
           { path: '/historico-caixa', icon: <History size={20} />, label: 'Histórico de Caixa', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
         ]
       },
       {
         title: 'Estoque e Cadastros',
         items: [
-          { path: '/produtos', icon: <Package size={20} />, label: 'Produtos', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
-          { path: '/inventario', icon: <ClipboardList size={20} />, label: 'Gestão de Inventário', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] }, // <--- NOVO ITEM
+          // E -> F -> G -> P
           { path: '/estoque/entrada', icon: <Truck size={20} />, label: 'Entrada de Nota', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/fornecedores', icon: <Users size={20} />, label: 'Fornecedores', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+          { path: '/inventario', icon: <ClipboardList size={20} />, label: 'Gestão de Inventário', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
+          { path: '/produtos', icon: <Package size={20} />, label: 'Produtos', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
         ]
       },
       {
         title: 'Fiscal e Sistema',
         items: [
-          { path: '/fiscal', icon: <FileText size={20} />, label: 'Relatórios Fiscais', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+          // A -> C -> R
           { path: '/auditoria', icon: <ShieldCheck size={20} />, label: 'Auditoria', roles: ['ROLE_ADMIN'] },
           { path: '/configuracoes', icon: <Settings size={20} />, label: 'Configurações', roles: ['ROLE_ADMIN'] },
+          { path: '/fiscal', icon: <FileText size={20} />, label: 'Relatórios Fiscais', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
         ]
       }
   ];
@@ -115,7 +119,12 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
 
         <nav className="sidebar-nav">
           {menuGroups.map((group, index) => {
-            const visibleItems = group.items.filter(item => item.roles.includes(userRole));
+            // Filtra os itens baseados na permissão do usuário
+            const visibleItems = group.items.filter(item =>
+              !item.roles || item.roles.includes(userRole)
+            );
+
+            // Se o grupo não tiver nenhum item visível para este usuário, não renderiza o título
             if (visibleItems.length === 0) return null;
 
             return (

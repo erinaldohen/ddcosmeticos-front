@@ -1,28 +1,34 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// Layout
+// Layout (Menu Lateral + Topo)
 import MainLayout from './components/Layout/MainLayout';
 
-// Páginas
+// --- PÁGINAS ---
+
+// Acesso
 import Login from './pages/Login/Login';
-import Dashboard from './pages/Dashboard/Dashboard';
+
+// Operacional
 import PDV from './pages/PDV/PDV';
+import Dashboard from './pages/Dashboard/Dashboard';
+
+// Configurações
 import Configuracoes from './pages/Configuracoes/Configuracoes';
 
 // Produtos & Estoque
 import ProdutoList from './pages/Produtos/ProdutoList';
 import ProdutoForm from './pages/Produtos/ProdutoForm';
 import EntradaEstoque from './pages/Estoque/EntradaEstoque';
-import Inventario from './pages/Inventario/Inventario'; // <--- NOVA IMPORTAÇÃO
+import Inventario from './pages/Inventario/Inventario';
 
-// Parceiros
+// Parceiros (Fornecedores/Clientes)
 import FornecedorList from './pages/Fornecedores/FornecedorList';
 import FornecedorForm from './pages/Fornecedores/FornecedorForm';
 
-// Caixa
+// Caixa (Gestão)
 import GerenciamentoCaixa from './pages/Caixa/GerenciamentoCaixa';
 import HistoricoCaixa from './pages/Caixa/HistoricoCaixa';
 
@@ -45,22 +51,32 @@ const getUser = () => {
   }
 };
 
-// Rota Privada (Operacional)
+/**
+ * Rota Privada Básica:
+ * Apenas verifica se está logado. Usado para o PDV e Caixa Operacional.
+ */
 const PrivateRoute = ({ children }) => {
   const user = getUser();
   return user ? children : <Navigate to="/login" replace />;
 };
 
-// Rota Administrativa (Backoffice)
+/**
+ * Rota Administrativa (Backoffice):
+ * Verifica login E permissão. Se for apenas operador, joga para o PDV.
+ */
 const AdminRoute = ({ children }) => {
   const user = getUser();
 
   if (!user) return <Navigate to="/login" replace />;
 
+  // Normaliza o perfil (alguns backends mandam 'perfil', outros 'role')
   const role = String(user.perfil || user.role || 'ROLE_USUARIO').toUpperCase();
+
+  // Lista de quem pode acessar o painel administrativo
   const allowed = ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA', 'ROLE_FINANCEIRO'];
 
   if (!allowed.includes(role)) {
+    // Se for operador comum tentando acessar admin, manda pro caixa
     return <Navigate to="/pdv" replace />;
   }
 
@@ -72,33 +88,43 @@ const AdminRoute = ({ children }) => {
 export default function App() {
   return (
     <BrowserRouter>
+      {/* Container de notificações global */}
       <ToastContainer position="top-right" autoClose={3000} theme="colored" />
 
       <Routes>
+        {/* 1. ROTA PÚBLICA */}
         <Route path="/login" element={<Login />} />
 
-        {/* PDV TELA CHEIA */}
-        <Route path="/pdv" element={<PrivateRoute><PDV /></PrivateRoute>} />
+        {/* 2. ROTA OPERACIONAL (TELA CHEIA - SEM MENU LATERAL) */}
+        <Route
+          path="/pdv"
+          element={
+            <PrivateRoute>
+              <PDV />
+            </PrivateRoute>
+          }
+        />
 
-        {/* LAYOUT ADMINISTRATIVO */}
+        {/* 3. ROTAS ADMINISTRATIVAS (COM LAYOUT/MENU) */}
+        {/* O MainLayout deve conter um <Outlet /> para renderizar os filhos */}
         <Route element={<MainLayout />}>
 
-            {/* Caixa Operacional */}
-            <Route path="/caixa" element={<PrivateRoute><GerenciamentoCaixa /></PrivateRoute>} />
-
-            {/* --- BACKOFFICE --- */}
+            {/* Dashboard & Visão Geral */}
             <Route path="/dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
+
+            {/* Gestão de Caixa (Abertura/Fechamento/Conferência) */}
+            <Route path="/caixa" element={<PrivateRoute><GerenciamentoCaixa /></PrivateRoute>} />
             <Route path="/historico-caixa" element={<AdminRoute><HistoricoCaixa /></AdminRoute>} />
 
-            {/* Produtos */}
+            {/* Produtos & Catálogo */}
             <Route path="/produtos" element={<AdminRoute><ProdutoList /></AdminRoute>} />
             <Route path="/produtos/novo" element={<AdminRoute><ProdutoForm /></AdminRoute>} />
             <Route path="/produtos/editar/:id" element={<AdminRoute><ProdutoForm /></AdminRoute>} />
 
-            {/* Estoque e Inventário */}
+            {/* Estoque & Inventário */}
             <Route path="/estoque" element={<AdminRoute><ProdutoList /></AdminRoute>} />
             <Route path="/estoque/entrada" element={<AdminRoute><EntradaEstoque /></AdminRoute>} />
-            <Route path="/inventario" element={<AdminRoute><Inventario /></AdminRoute>} /> {/* <--- NOVA ROTA */}
+            <Route path="/inventario" element={<AdminRoute><Inventario /></AdminRoute>} />
 
             {/* Financeiro */}
             <Route path="/financeiro/contas-pagar" element={<AdminRoute><ContasPagar /></AdminRoute>} />
@@ -109,15 +135,17 @@ export default function App() {
             <Route path="/fornecedores/novo" element={<AdminRoute><FornecedorForm /></AdminRoute>} />
             <Route path="/fornecedores/editar/:id" element={<AdminRoute><FornecedorForm /></AdminRoute>} />
 
-            {/* Fiscal & Sistema */}
+            {/* Fiscal, Configurações & Segurança */}
             <Route path="/fiscal" element={<AdminRoute><RelatorioImpostos /></AdminRoute>} />
             <Route path="/configuracoes" element={<AdminRoute><Configuracoes /></AdminRoute>} />
             <Route path="/auditoria" element={<AdminRoute><Auditoria /></AdminRoute>} />
 
         </Route>
 
+        {/* Rota Default: Redireciona para login ou dashboard */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
+
       </Routes>
     </BrowserRouter>
   );
