@@ -75,24 +75,27 @@ const GerenciamentoCaixa = () => {
   if (loading) return <div className="loading-screen"><div className="loader"></div>Carregando Dashboard...</div>;
 
   return (
-    <div className="caixa-container fade-in">
-      {/* HEADER */}
-      <header className="caixa-header-modern">
-        <div>
-          <h1>Controle de Caixa</h1>
-          <p className="subtitle">Gestão financeira do ponto de venda</p>
-        </div>
-        <div className={`status-pill ${caixa ? 'active' : 'inactive'}`}>
-          <div className="pulsing-dot"></div>
-          {caixa ? `CAIXA ABERTO #${caixa.id}` : 'CAIXA FECHADO'}
-        </div>
-      </header>
+    <div className={`caixa-container fade-in ${!caixa ? 'layout-fechado' : ''}`}>
+
+      {/* HEADER: SÓ APARECE SE O CAIXA ESTIVER ABERTO */}
+      {caixa && (
+        <header className="caixa-header-modern">
+          <div>
+            <h1>Controle de Caixa</h1>
+            <p className="subtitle">Gestão financeira do ponto de venda</p>
+          </div>
+          <div className="status-pill active">
+            <div className="pulsing-dot"></div>
+            CAIXA ABERTO #{caixa.id}
+          </div>
+        </header>
+      )}
 
       {!caixa ? (
-        // --- ESTADO FECHADO ---
+        // --- ESTADO FECHADO (MENSAGEM SUSPENSA) ---
         <div className="empty-state-modern">
           <div className="icon-wrapper-large">
-            <Lock size={48} strokeWidth={1.5} />
+            <Lock size={56} strokeWidth={1.5} />
           </div>
           <h2>O caixa está fechado</h2>
           <p>Informe o fundo de troco inicial para começar a operar.</p>

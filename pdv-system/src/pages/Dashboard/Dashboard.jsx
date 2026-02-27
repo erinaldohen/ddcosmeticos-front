@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip
 } from 'recharts';
 import {
   DollarSign, ShoppingBag, Users, AlertTriangle,
@@ -8,14 +8,35 @@ import {
   ArrowUpRight, Clock
 } from 'lucide-react';
 import api from '../../services/api';
-import './Dashboard.css'; // Importante: Importar o CSS
+import './Dashboard.css';
 
 const Dashboard = () => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // SOLUÇÃO DEFINITIVA: Medição manual do container
+  const chartContainerRef = useRef(null);
+  const [chartDimensions, setChartDimensions] = useState({ width: 0, height: 300 });
+
   useEffect(() => {
     carregarDados();
+
+    // ResizeObserver: Monitora mudanças reais no tamanho da div
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (!entries || entries.length === 0) return;
+      const entry = entries[0];
+      // Atualiza o estado com a largura exata disponível
+      setChartDimensions({
+        width: entry.contentRect.width,
+        height: entry.contentRect.height || 300
+      });
+    });
+
+    if (chartContainerRef.current) {
+      resizeObserver.observe(chartContainerRef.current);
+    }
+
+    return () => resizeObserver.disconnect();
   }, []);
 
   const carregarDados = async () => {
@@ -29,7 +50,7 @@ const Dashboard = () => {
     }
   };
 
-  // Funções Auxiliares de Estilo
+  // --- FUNÇÕES AUXILIARES DE ESTILO ---
   const getEventStyle = (tipo) => {
     switch (tipo) {
       case 'ERRO': return { color: 'text-red-600', badge: 'badge-erro', iconColor: '#dc2626' };
@@ -57,23 +78,18 @@ const Dashboard = () => {
   };
 
   if (loading) {
-    return (
-      <div className="loading-container">
-        <div className="spinner"></div>
-      </div>
-    );
+    return <div className="loading-container"><div className="spinner"></div></div>;
   }
 
-  if (!data) return <div className="p-8 text-center text-gray-500">Não foi possível carregar os dados.</div>;
-
-  const financeiro = data.financeiro || { faturamentoHoje: 0, vendasHoje: 0, ticketMedio: 0, graficoVendas: [] };
-  const inventario = data.inventario || { produtosVencidos: 0, baixoEstoque: 0 };
-  const auditoria = data.auditoria || [];
-  const topProdutos = data.topProdutos || [];
+  // Fallback seguro de dados
+  const safeData = data || {};
+  const financeiro = safeData.financeiro || { faturamentoHoje: 0, vendasHoje: 0, ticketMedio: 0, graficoVendas: [] };
+  const inventario = safeData.inventario || { produtosVencidos: 0, baixoEstoque: 0 };
+  const auditoria = safeData.auditoria || [];
+  const topProdutos = safeData.topProdutos || [];
 
   return (
     <div className="dashboard-container">
-
       {/* HEADER */}
       <div className="dashboard-header">
         <div className="header-title">
@@ -86,10 +102,8 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* KPI CARDS (Grid Superior) */}
+      {/* KPI CARDS */}
       <div className="kpi-grid">
-
-        {/* Card Faturamento */}
         <div className="kpi-card">
           <div className="kpi-bg-icon"><DollarSign size={80} color="#ec4899" /></div>
           <div>
@@ -105,7 +119,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Card Vendas */}
         <div className="kpi-card">
           <div className="kpi-bg-icon"><ShoppingBag size={80} color="#2563eb" /></div>
           <div>
@@ -120,7 +133,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Card Ticket Médio */}
         <div className="kpi-card">
           <div className="kpi-bg-icon"><ArrowUpRight size={80} color="#9333ea" /></div>
           <div>
@@ -135,7 +147,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Card Estoque */}
         <div className="kpi-card">
           <div className="kpi-bg-icon"><AlertTriangle size={80} color="#ea580c" /></div>
           <div>
@@ -151,55 +162,71 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* CONTEÚDO PRINCIPAL (Gráfico + Top Produtos) */}
+      {/* CONTEÚDO PRINCIPAL */}
       <div className="main-content-grid">
 
-        {/* Gráfico */}
+        {/* GRÁFICO MANUALMENTE CONTROLADO */}
         <div className="dashboard-section">
           <div className="section-title">
             <Activity size={20} color="#db2777" /> Desempenho de Vendas (Mês)
           </div>
-          <div className="chart-container">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={financeiro.graficoVendas}>
-                <defs>
-                  <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ec4899" stopOpacity={0.2}/>
-                    <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                <XAxis
-                  dataKey="data"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{fill: '#9ca3af', fontSize: 12}}
-                  dy={10}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{fill: '#9ca3af', fontSize: 12}}
-                  tickFormatter={(val) => `R$${val}`}
-                />
-                <Tooltip
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                  formatter={(value) => [`R$ ${value}`, 'Total']}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="total"
-                  stroke="#ec4899"
-                  strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#colorTotal)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+
+          {/* REF CONTAINER: AQUI QUE O RESIZEOBSERVER OLHA */}
+          <div
+            className="chart-container"
+            ref={chartContainerRef}
+            style={{ width: '100%', height: 300, minHeight: 300, overflow: 'hidden' }}
+          >
+            {/* Só renderiza o AreaChart se tivermos largura > 0 */}
+            {chartDimensions.width > 0 && financeiro.graficoVendas && financeiro.graficoVendas.length > 0 ? (
+                <AreaChart
+                  width={chartDimensions.width}
+                  height={chartDimensions.height}
+                  data={financeiro.graficoVendas}
+                >
+                  <defs>
+                    <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ec4899" stopOpacity={0.2}/>
+                      <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                  <XAxis
+                    dataKey="data"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{fill: '#9ca3af', fontSize: 12}}
+                    dy={10}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{fill: '#9ca3af', fontSize: 12}}
+                    tickFormatter={(val) => `R$${val}`}
+                  />
+                  <Tooltip
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    formatter={(value) => [`R$ ${value}`, 'Total']}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="total"
+                    stroke="#ec4899"
+                    strokeWidth={3}
+                    fillOpacity={1}
+                    fill="url(#colorTotal)"
+                    isAnimationActive={false} // Desativa animação para reduzir VIOLATION
+                  />
+                </AreaChart>
+            ) : (
+              <div style={{height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af'}}>
+                {chartDimensions.width === 0 ? 'Calculando layout...' : 'Sem dados.'}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Top Produtos */}
+        {/* TOP PRODUTOS */}
         <div className="dashboard-section">
           <div className="section-title">
             <ShoppingBag size={20} color="#7c3aed" /> Top Produtos
@@ -227,7 +254,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* AUDITORIA (Timeline) */}
+      {/* AUDITORIA */}
       <div className="dashboard-section">
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem'}}>
           <div className="section-title" style={{marginBottom: 0}}>
@@ -238,7 +265,6 @@ const Dashboard = () => {
 
         <div className="timeline-container">
           <div className="timeline-line"></div>
-
           <div className="timeline-events">
             {auditoria.length > 0 ? (
               auditoria.map((log, index) => {
@@ -275,7 +301,6 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
-
     </div>
   );
 };

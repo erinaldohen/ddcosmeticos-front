@@ -27,78 +27,94 @@ const Login = () => {
   };
 
   const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setInputError(false);
+      e.preventDefault();
+      setLoading(true);
+      setInputError(false);
 
-    try {
-      const response = await api.post('/auth/login', credentials);
-      const usuarioRecebido = response.data.usuario || response.data.user;
+      try {
+        // 1. Envia as credenciais para o Back-end
+        const response = await api.post('/auth/login', credentials);
 
-      if (usuarioRecebido) {
-        localStorage.setItem('user', JSON.stringify(usuarioRecebido));
-        toast.success(`Login realizado! Bem-vindo, ${usuarioRecebido.nome.split(' ')[0]}.`);
+        // 2. Extrai os dados mapeando exatamente com o LoginResponseDTO do Spring
+        const usuarioRecebido = response.data.usuario;
+        const tokenRecebido = response.data.token;
 
-        setTimeout(() => {
-          if (['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'].includes(usuarioRecebido.perfil)) {
-            navigate('/dashboard');
-          } else {
-            navigate('/pdv');
-          }
-        }, 500);
-      } else {
-        throw new Error("RESPOSTA_VAZIA");
+        if (usuarioRecebido && tokenRecebido) {
+          // 3. Salva no LocalStorage
+          localStorage.setItem('token', tokenRecebido);
+          localStorage.setItem('user', JSON.stringify(usuarioRecebido));
+
+          // Pega o primeiro nome com fallback de segurança
+          const primeiroNome = usuarioRecebido.nome ? usuarioRecebido.nome.split(' ')[0] : 'Usuário';
+          toast.success(`Login realizado! Bem-vindo, ${primeiroNome}.`);
+
+          setTimeout(() => {
+            // 4. Correção: usando perfilDoUsuario (conforme vem do Back-end)
+            const perfil = usuarioRecebido.perfilDoUsuario;
+
+            if (['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'].includes(perfil)) {
+              navigate('/dashboard');
+            } else {
+              navigate('/pdv');
+            }
+          }, 500);
+        } else {
+          // O Back-end respondeu 200 OK, mas o JSON não tem 'token' ou 'usuario'
+          throw new Error("FORMATO_INVALIDO");
+        }
+
+      } catch (error) {
+        console.error("Erro detalhado no Login:", error);
+
+        const toastOptions = {
+          autoClose: 4000,
+          position: "top-right",
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          toastId: "login-error-toast"
+        };
+
+        // Se o erro foi o nosso 'throw' customizado de formato
+        if (error.message === "FORMATO_INVALIDO") {
+          toast.error("O servidor respondeu, mas os dados estão incompletos. Contate o suporte.", toastOptions);
+          return;
+        }
+
+        // Se não há resposta da API (Servidor fora ou erro de CORS)
+        if (!error.response) {
+          toast.error("Sem conexão com o servidor. Verifique sua internet.", toastOptions);
+          return;
+        }
+
+        const status = error.response.status;
+        const msgBackend = error.response.data?.mensagem || error.response.data?.message;
+
+        switch (status) {
+          case 401:
+          case 403:
+            setInputError(true);
+            toast.error("Credenciais inválidas ou acesso negado.", toastOptions);
+            break;
+          case 404:
+            setInputError(true);
+            toast.error("Usuário não encontrado.", toastOptions);
+            break;
+          case 429:
+            toast.warning("Muitas tentativas consecutivas. Aguarde alguns instantes.", toastOptions);
+            break;
+          case 500:
+            toast.error("Erro interno no sistema. Nossa equipe já foi notificada.", toastOptions);
+            break;
+          default:
+            toast.error(msgBackend || "Ocorreu um erro inesperado ao tentar entrar.", toastOptions);
+        }
+
+      } finally {
+        setTimeout(() => setLoading(false), 100);
       }
-
-    } catch (error) {
-      console.error("Erro no Login:", error);
-
-      const toastOptions = {
-        autoClose: 4000,
-        position: "top-right",
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        toastId: "login-error-toast"
-      };
-
-      if (!error.response) {
-        toast.error("Sem conexão com o servidor. Verifique sua internet.", toastOptions);
-        return;
-      }
-
-      const status = error.response.status;
-      const msgBackend = error.response.data?.mensagem || error.response.data?.message;
-
-      // Mantendo sua estrutura exata de mensagens de erro
-      switch (status) {
-        case 401:
-          setInputError(true);
-          toast.error("Senha incorreta. Por favor, tente novamente.", toastOptions);
-          break;
-        case 404:
-          setInputError(true);
-          toast.error("Usuário não encontrado. Verifique seu e-mail ou matrícula.", toastOptions);
-          break;
-        case 403:
-          setInputError(true);
-          toast.warning("Acesso negado. Sua conta pode estar inativa ou bloqueada.", toastOptions);
-          break;
-        case 429:
-          toast.warning("Muitas tentativas consecutivas. Aguarde alguns instantes.", toastOptions);
-          break;
-        case 500:
-          toast.error("Erro interno no sistema. Nossa equipe já foi notificada.", toastOptions);
-          break;
-        default:
-          toast.error(msgBackend || "Ocorreu um erro inesperado ao tentar entrar.", toastOptions);
-      }
-
-    } finally {
-      setTimeout(() => setLoading(false), 100);
-    }
-  };
+    };
 
   return (
     <main className="login-container">
@@ -173,7 +189,6 @@ const Login = () => {
             </div>
           </div>
 
-          {/* Announcer para leitores de tela: Ativado apenas em erro */}
           <div id="login-error-announcer" className="sr-only" aria-live="assertive">
             {inputError && "Erro na tentativa de login. Verifique seus dados nos campos destacados."}
           </div>

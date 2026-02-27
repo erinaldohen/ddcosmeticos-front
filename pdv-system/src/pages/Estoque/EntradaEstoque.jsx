@@ -76,7 +76,8 @@ const EntradaEstoque = () => {
       setListaProdutosDb(resProd.data.content || []);
     } catch (e) {
         console.error("Erro init:", e);
-        toast.error("Erro ao carregar dados de apoio.");
+        // CORREÇÃO: Adicionado toastId para evitar duplicação em Strict Mode
+        toast.error("Erro ao carregar dados de apoio.", { toastId: 'erro-carga-inicial-estoque' });
     }
   };
 
@@ -170,7 +171,7 @@ const EntradaEstoque = () => {
     const formData = new FormData();
     formData.append("arquivo", file);
     setLoading(true);
-    const toastId = toast.loading("Analisando XML...");
+    const toastIdMsg = toast.loading("Analisando XML...");
 
     try {
        const res = await api.post('/estoque/importar-xml', formData, {
@@ -247,12 +248,12 @@ const EntradaEstoque = () => {
        });
 
        setItens(prev => [...prev, ...novosItens]);
-       toast.update(toastId, { render: "XML Importado com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
+       toast.update(toastIdMsg, { render: "XML Importado com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
 
     } catch (error) {
        console.error(error);
        const msg = error.response?.data?.message || "Erro ao processar o arquivo XML.";
-       toast.update(toastId, { render: msg, type: "error", isLoading: false, autoClose: 4000 });
+       toast.update(toastIdMsg, { render: msg, type: "error", isLoading: false, autoClose: 4000 });
     } finally {
       setLoading(false);
       e.target.value = null; // Reseta o input file para permitir re-upload

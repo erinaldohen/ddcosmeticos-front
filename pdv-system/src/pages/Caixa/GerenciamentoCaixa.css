@@ -21,6 +21,15 @@
   color: var(--cx-text-main);
 }
 
+/* NOVO: Centraliza tudo na tela quando o caixa está fechado */
+.layout-fechado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+}
+
 /* --- HEADER --- */
 .caixa-header-modern {
   display: flex;
@@ -402,26 +411,59 @@
   .caixa-header-modern { flex-direction: column; gap: 1rem; }
 }
 
-/* Empty State */
+/* --- ESTADO FECHADO (MENSAGEM SUSPENSA) --- */
 .empty-state-modern {
   text-align: center;
-  padding: 4rem 1rem;
+  padding: 4rem 2rem;
   background: white;
   border-radius: 24px;
-  border: 2px dashed #e2e8f0;
+  border: none;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  max-width: 500px;
+  width: 100%;
 }
+
+.empty-state-modern h2 {
+  font-size: 2rem;
+  color: var(--cx-danger);
+  margin-bottom: 0.5rem;
+}
+
+.empty-state-modern p {
+  color: var(--cx-text-muted);
+  margin-bottom: 1.5rem;
+}
+
+.icon-wrapper-large {
+  color: var(--cx-danger);
+  background: #fef2f2;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.5rem auto;
+}
+
 .btn-hero {
-  margin-top: 1.5rem;
+  margin-top: 1rem;
   background: var(--cx-primary);
   color: white;
   border: none;
-  padding: 14px 28px;
+  padding: 16px 32px;
   border-radius: 12px;
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
-  box-shadow: 0 4px 10px rgba(242, 41, 152, 0.25);
+  box-shadow: 0 10px 15px -3px rgba(242, 41, 152, 0.3);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.btn-hero:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 20px -3px rgba(242, 41, 152, 0.4);
 }
