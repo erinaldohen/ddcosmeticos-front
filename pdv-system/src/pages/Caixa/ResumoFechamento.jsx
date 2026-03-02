@@ -1,65 +1,101 @@
 import React from 'react';
-import { CheckCircle, AlertCircle, Smartphone, CreditCard, ArrowDownRight, ArrowUpRight, AlertTriangle } from 'lucide-react';
+import {
+  CheckCircle, AlertCircle, AlertTriangle,
+  ArrowDownRight, ArrowUpRight, Banknote,
+  CreditCard, Smartphone, Calculator, User
+} from 'lucide-react';
+
+// IMPORTAÇÃO DO SEU CSS AQUI 👇
+import './ResumoFechamento.css';
 
 const ResumoFechamento = ({ dados }) => {
+  // Proteção contra renderização prematura (Null Safety)
+  if (!dados) return <div className="text-center p-3 text-secondary">Carregando resumo do caixa...</div>;
+
   const format = (val) => (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const quebraCritica = Math.abs(dados.diferenca || 0) > 50;
+
+  const diferenca = dados.diferenca || 0;
+  const quebraCritica = Math.abs(diferenca) > 50;
+
+  const isFalta = diferenca < 0;
+  const isSobra = diferenca > 0;
+  const isExato = diferenca === 0;
 
   return (
-    <div className="resumo-fechamento">
+    <div className="resumo-fechamento-container">
+
+      {/* 1. ALERTAS DE TOPO */}
       {quebraCritica && (
-        <div className="alerta-critico-banner">
-          <AlertTriangle size={24} />
-          <div>
-            <strong>Diferença Crítica Detectada!</strong>
-            <p>A divergência excede o limite de segurança (R$ 50,00). Verifique os comprovantes.</p>
+        <div className="alert-box danger-critico mb-3">
+          <AlertTriangle size={28} />
+          <div className="alert-content">
+            <strong>Divergência Crítica Detectada!</strong>
+            <p>A diferença excede o limite de segurança (R$ 50,00). Exija a recontagem da gaveta ou verifique os comprovantes.</p>
           </div>
         </div>
       )}
 
-      <div className={`status-banner ${dados.diferenca !== 0 ? 'warning' : 'success'}`}>
-        {dados.diferenca !== 0 ? <AlertCircle size={20} /> : <CheckCircle size={20} />}
-        <strong>{dados.diferenca !== 0 ? 'FECHAMENTO COM DIVERGÊNCIA' : 'FECHAMENTO CONFERIDO'}</strong>
+      <div className={`status-banner ${isExato ? 'success' : 'warning'} mb-4`}>
+        {isExato ? <CheckCircle size={24} /> : <AlertCircle size={24} />}
+        <strong>{isExato ? 'FECHAMENTO CONFERIDO E EXATO' : 'FECHAMENTO COM DIVERGÊNCIA'}</strong>
       </div>
 
-      <div className="resumo-grid">
-        <div className="resumo-section">
-          <h4>Fluxo de Caixa (Dinheiro)</h4>
-          <div className="resumo-row"><span>Fundo Inicial:</span> <span>{format(dados.saldoInicial)}</span></div>
-          <div className="resumo-row"><span>Vendas Dinheiro:</span> <span>{format(dados.totalVendasDinheiro)}</span></div>
-          <div className="resumo-row"><span>Suprimentos:</span> <span>{format(dados.totalSuprimentos)}</span></div>
-          <div className="resumo-row"><span>Sangrias:</span> <span>({format(dados.totalSangrias)})</span></div>
-          <div className="resumo-row total">
-            <strong>Saldo Esperado:</strong>
-            <strong>{format(dados.saldoFinalCalculado)}</strong>
+      {/* 2. COMPARAÇÃO DIRETA DO DINHEIRO FÍSICO (Destaque Principal) */}
+      <div className="conferencia-cards mb-4">
+        <div className="conf-card system-calc">
+          <div className="conf-header"><Calculator size={16}/> Sistema Esperava</div>
+          <div className="conf-value">{format(dados.saldoFinalCalculado)}</div>
+          <small>Fundo + Vendas - Sangrias</small>
+        </div>
+
+        <div className="conf-card operator-count">
+          <div className="conf-header"><Banknote size={16}/> Operador Informou</div>
+          <div className="conf-value">{format(dados.saldoFinalInformado)}</div>
+          <small>Total contado na gaveta</small>
+        </div>
+
+        <div className={`conf-card diff-result ${isFalta ? 'is-falta' : isSobra ? 'is-sobra' : 'is-exato'}`}>
+          <div className="conf-header">
+            {isFalta ? 'Falta no Caixa' : isSobra ? 'Sobra no Caixa' : 'Diferença'}
+          </div>
+          <div className="conf-value diff">
+            {isFalta ? <ArrowDownRight size={20}/> : isSobra ? <ArrowUpRight size={20}/> : null}
+            {format(diferenca)}
+          </div>
+          <small>{isExato ? 'Tudo certo!' : 'Requer atenção'}</small>
+        </div>
+      </div>
+
+      {/* 3. DETALHAMENTO DOS FLUXOS */}
+      <div className="resumo-detalhado-grid">
+        <div className="detalhe-section">
+          <h4 className="section-title"><Banknote size={16}/> Movimentação em Dinheiro</h4>
+          <div className="detalhe-row"><span>Fundo Inicial:</span> <span>{format(dados.saldoInicial)}</span></div>
+          <div className="detalhe-row"><span>Vendas (Espécie):</span> <span className="text-success">+{format(dados.totalVendasDinheiro)}</span></div>
+          <div className="detalhe-row"><span>Suprimentos (Entradas):</span> <span className="text-success">+{format(dados.totalSuprimentos)}</span></div>
+          <div className="detalhe-row"><span>Sangrias (Retiradas):</span> <span className="text-danger">-{format(dados.totalSangrias)}</span></div>
+        </div>
+
+        <div className="detalhe-section">
+          <h4 className="section-title">Outros Meios (Digitais)</h4>
+          <div className="detalhe-row"><span className="flex items-center gap-2"><Smartphone size={14}/> PIX:</span> <span>{format(dados.totalVendasPix)}</span></div>
+          <div className="detalhe-row"><span className="flex items-center gap-2"><CreditCard size={14}/> Cartões:</span> <span>{format(dados.totalVendasCartao)}</span></div>
+
+          <div className="total-digital-box mt-3">
+             <span>Total Faturado (Digital):</span>
+             <strong>{format((dados.totalVendasPix || 0) + (dados.totalVendasCartao || 0))}</strong>
           </div>
         </div>
+      </div>
 
-        <div className="resumo-section">
-          <h4>Outros Meios</h4>
-          <div className="resumo-row"><small>PIX:</small> <span>{format(dados.totalVendasPix)}</span></div>
-          <div className="resumo-row"><small>Cartões:</small> <span>{format(dados.totalVendasCartao)}</span></div>
+      {/* 4. RODAPÉ DE AUDITORIA */}
+      <div className="print-footer mt-4 pt-3 border-t">
+        <div className="flex items-center justify-between text-secondary" style={{fontSize: '0.85rem'}}>
+          <span className="flex items-center gap-2"><User size={14}/> Operador: <strong>{dados.usuarioAbertura?.nome || 'Sistema'}</strong></span>
+          <span>Fechado em: {new Date().toLocaleString('pt-BR')}</span>
         </div>
       </div>
 
-      <div className={`conferencia-final ${dados.diferenca < 0 ? 'negative' : dados.diferenca > 0 ? 'positive' : ''}`}>
-        <div className="conf-item">
-          <label>Informado pelo Operador</label>
-          <strong>{format(dados.saldoFinalInformado)}</strong>
-        </div>
-        <div className="conf-item">
-          <label>Diferença / Quebra</label>
-          <strong className="val-diff">
-            {dados.diferenca > 0 ? <ArrowUpRight size={18}/> : dados.diferenca < 0 ? <ArrowDownRight size={18}/> : null}
-            {format(dados.diferenca)}
-          </strong>
-        </div>
-      </div>
-
-      <div className="print-footer" style={{marginTop: '20px', fontSize: '10px', textAlign: 'center'}}>
-        <p>Documento gerado em: {new Date().toLocaleString()}</p>
-        <p>Operador: {dados.usuarioAbertura?.nome || 'Sistema'}</p>
-      </div>
     </div>
   );
 };

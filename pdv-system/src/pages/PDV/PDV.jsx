@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
-  Search, Trash2, User, Plus, Minus, PauseCircle, ArrowLeft, X,
-  MonitorCheck, UserCheck, Tag, RotateCcw, UserPlus, Barcode, Percent,
-  ArrowRight, Clock, DollarSign, Menu, Wifi, WifiOff, CreditCard, Banknote, Smartphone, FileText
+  Search, Trash2, Plus, Minus, ArrowLeft, X,
+  UserCheck, RotateCcw, UserPlus, ArrowRight,
+  Clock, Banknote, Smartphone, CreditCard, ShieldCheck, Tag, AlertCircle, Building, ShoppingBag, CheckCircle2, ChevronRight
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
@@ -10,50 +10,59 @@ import api from '../../services/api';
 import caixaService from '../../services/caixaService';
 import './PDV.css';
 
+const getUserRole = () => {
+    const userStr = localStorage.getItem('user');
+    try { return userStr ? JSON.parse(userStr).nome.split(' ')[0] : 'Operador'; }
+    catch { return 'Operador'; }
+};
+
 const PDV = () => {
   const navigate = useNavigate();
 
-  // --- REFS & ESTADOS ---
+  // Refs
   const inputBuscaRef = useRef(null);
   const inputValorRef = useRef(null);
   const inputClienteRef = useRef(null);
   const inputDescontoRef = useRef(null);
+  const dropdownRef = useRef(null); // NOVO: Controla a rolagem da busca
 
+  // Estados de Fluxo
+  const [painelAtivo, setPainelAtivo] = useState('VENDA');
   const [validandoCaixa, setValidandoCaixa] = useState(true);
   const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-
-  const [carrinho, setCarrinho] = useState(() => {
-      try { return JSON.parse(localStorage.getItem('@dd:carrinho')) || []; } catch { return []; }
-  });
-
-  const [vendasPausadas, setVendasPausadas] = useState([]);
-  const [busca, setBusca] = useState('');
-  const [ultimoItemAdicionadoId, setUltimoItemAdicionadoId] = useState(null);
   const [horaAtual, setHoraAtual] = useState(new Date());
+  const [regraCancelamentoVenda, setRegraCancelamentoVenda] = useState('SENHA');
 
-  // Modais e UI States
-  const [modalPagamento, setModalPagamento] = useState(false);
-  const [showExitModal, setShowExitModal] = useState(false);
-  const [showListaEspera, setShowListaEspera] = useState(false);
-  const [showCleanModal, setShowCleanModal] = useState(false);
-  const [modalDesconto, setModalDesconto] = useState({ open: false, tipo: 'TOTAL', itemId: null });
-  const [showClienteInput, setShowClienteInput] = useState(false);
+  // Estados de Dados
+  const [carrinho, setCarrinho] = useState(() => { try { return JSON.parse(localStorage.getItem('@dd:carrinho')) || []; } catch { return []; } });
+  const [pagamentos, setPagamentos] = useState([]);
+  const [cliente, setCliente] = useState(null);
+  const [clienteAvulso, setClienteAvulso] = useState({ documento: '', nome: '' });
+  const [buscaCliente, setBuscaCliente] = useState('');
+  const [descontoTotalRaw, setDescontoTotalRaw] = useState(0);
 
-  // Dados Transacionais
-  const [descontoInput, setDescontoInput] = useState('');
-  const [tipoDesconto, setTipoDesconto] = useState('$');
+  // Estados de Busca
+  const [busca, setBusca] = useState('');
   const [sugestoesProdutos, setSugestoesProdutos] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [pagamentos, setPagamentos] = useState([]);
+  const [ultimoItemAdicionadoId, setUltimoItemAdicionadoId] = useState(null);
+  const [ultimoPagamentoId, setUltimoPagamentoId] = useState(null);
+
+  // Modais
+  const [senhaAdmin, setSenhaAdmin] = useState('');
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showCleanModal, setShowCleanModal] = useState(false);
+  const [showExitModal, setShowExitModal] = useState(false);
+  const [showCnpjModal, setShowCnpjModal] = useState(false);
+
+  // Pagamento & Desconto
   const [metodoAtual, setMetodoAtual] = useState('PIX');
   const [valorInputRaw, setValorInputRaw] = useState('');
-  const [descontoTotalRaw, setDescontoTotalRaw] = useState(0);
-  const [cliente, setCliente] = useState(null);
-  const [buscaCliente, setBuscaCliente] = useState('');
-  const [sugestoesClientes, setSugestoesClientes] = useState([]);
+  const [descontoInputRaw, setDescontoInputRaw] = useState('');
+  const [tipoDesconto, setTipoDesconto] = useState('R$');
 
-  // --- CÁLCULOS ---
+  // Cálculos Financeiros
   const subtotalItens = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoVenda * item.quantidade), 0), [carrinho]);
   const descontoItens = useMemo(() => carrinho.reduce((acc, item) => acc + (item.desconto || 0), 0), [carrinho]);
   const totalPagar = Math.max(0, subtotalItens - descontoItens - descontoTotalRaw);
@@ -61,397 +70,521 @@ const PDV = () => {
   const saldoDevedor = Math.max(0, parseFloat((totalPagar - totalPago).toFixed(2)));
   const troco = Math.max(0, parseFloat((totalPago - totalPagar).toFixed(2)));
 
-  // --- EFEITOS (Otimizados) ---
-
-  // 1. Verificação de Caixa e Online Status
+  // Inicialização
   useEffect(() => {
     const init = async () => {
       try {
         const res = await caixaService.getStatus();
         if (!res || res.status === 'FECHADO' || res.aberto === false) {
-          // CORREÇÃO: Adicionado o toastId para não duplicar a mensagem
-          toast.warning("O Caixa está Fechado.", { toastId: 'caixa-fechado-alerta' });
-          navigate('/caixa');
-          return;
+          toast.warning("O Caixa está Fechado.", { toastId: 'cx-fechado' });
+          navigate('/caixa'); return;
         }
+        try { const { data } = await api.get('/configuracoes'); if (data?.sistema?.cancelamentoVenda) setRegraCancelamentoVenda(data.sistema.cancelamentoVenda); } catch (e) {}
         setValidandoCaixa(false);
-        carregarVendasSuspensas();
       } catch (error) {
-        if (!navigator.onLine) {
-          toast.warning("Modo Offline ativo.", { toastId: 'caixa-offline-alerta' });
-          setValidandoCaixa(false);
-        } else {
-          toast.error("Erro no caixa.");
-          navigate('/dashboard');
-        }
+        if (!navigator.onLine) { toast.warning("Modo Offline ativo."); setValidandoCaixa(false); }
+        else { toast.error("Erro ao validar o caixa."); navigate('/dashboard'); }
       }
     };
     init();
-
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
+    const handleOnline = () => setIsOnline(true); const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline); window.addEventListener('offline', handleOffline);
+    return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
   }, [navigate]);
 
-  // 2. Persistência do Carrinho
+  useEffect(() => { localStorage.setItem('@dd:carrinho', JSON.stringify(carrinho)); }, [carrinho]);
+  useEffect(() => { const timer = setInterval(() => setHoraAtual(new Date()), 1000); return () => clearInterval(timer); }, []);
+
+  // Foco Automático
   useEffect(() => {
-    localStorage.setItem('@dd:carrinho', JSON.stringify(carrinho));
-  }, [carrinho]);
+      if (showPasswordModal || showCleanModal || showExitModal || showCnpjModal) return;
+      if (painelAtivo === 'VENDA') setTimeout(() => inputBuscaRef.current?.focus(), 50);
+      else if (painelAtivo === 'PAGAMENTO') setTimeout(() => inputValorRef.current?.focus(), 50);
+      else if (painelAtivo === 'CLIENTE') setTimeout(() => inputClienteRef.current?.focus(), 50);
+      else if (painelAtivo === 'DESCONTO') setTimeout(() => inputDescontoRef.current?.focus(), 50);
+  }, [painelAtivo, showPasswordModal, showCleanModal, showExitModal, showCnpjModal]);
 
-  // 3. Relógio isolado (Melhora performance ao não recriar no carrinho change)
+  // NOVO: Scroll Automático na Busca via Teclado
   useEffect(() => {
-    const timer = setInterval(() => setHoraAtual(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+      if (selectedIndex >= 0 && dropdownRef.current) {
+          const selectedElement = dropdownRef.current.children[selectedIndex];
+          if (selectedElement) {
+              selectedElement.scrollIntoView({ block: 'nearest' });
+          }
+      }
+  }, [selectedIndex]);
 
+  // Atalhos de Teclado
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+        const isModalOpen = showExitModal || showCleanModal || showPasswordModal || showCnpjModal;
+        if (isModalOpen) return;
 
-  // --- HANDLERS ---
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            setBusca(''); setSugestoesProdutos([]); setBuscaCliente(''); setDescontoInputRaw('');
+            setPainelAtivo('VENDA'); return;
+        }
+
+        // CORREÇÃO: F2 força o foco mesmo se já estiver na tela de VENDA
+        if (e.key === 'F2') {
+            e.preventDefault();
+            setPainelAtivo('VENDA');
+            setTimeout(() => inputBuscaRef.current?.focus(), 50);
+        }
+        if (e.key === 'F3') { e.preventDefault(); setPainelAtivo('CLIENTE'); }
+        if (e.key === 'F4') { e.preventDefault(); if (carrinho.length > 0) setPainelAtivo('DESCONTO'); else toast.warn("Carrinho vazio"); }
+        if (e.key === 'F8') { e.preventDefault(); if (carrinho.length > 0) iniciarPagamento(); else toast.warn("Carrinho vazio"); }
+        if (e.key === 'Delete' && painelAtivo === 'VENDA') { e.preventDefault(); handleLimparVenda(); }
+
+        if (painelAtivo === 'PAGAMENTO' && e.target.tagName !== 'INPUT') {
+            if (e.key === '1') { e.preventDefault(); setMetodoAtual('PIX'); inputValorRef.current?.focus(); }
+            if (e.key === '2') { e.preventDefault(); setMetodoAtual('DINHEIRO'); inputValorRef.current?.focus(); }
+            if (e.key === '3') { e.preventDefault(); setMetodoAtual('CREDITO'); inputValorRef.current?.focus(); }
+            if (e.key === '4') { e.preventDefault(); setMetodoAtual('DEBITO'); inputValorRef.current?.focus(); }
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  });
+
+  const cleanNumeric = (v) => v ? v.replace(/\D/g, '') : '';
   const formatCurrencyInput = (v) => v.replace(/\D/g, "");
   const getValorFormatado = (r) => r ? (parseInt(r, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : "";
 
-  // CORREÇÃO: Puxa o nome real em vez de ser estático
-  const getUserRole = () => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      const userObj = JSON.parse(userStr);
-      return userObj.nome ? userObj.nome.split(' ')[0] : 'Operador';
-    }
-    return 'Operador';
+  // Busca Inteligente
+  useEffect(() => {
+      if (busca.trim().length < 3) { setSugestoesProdutos([]); setSelectedIndex(-1); return; }
+      const delay = setTimeout(async () => {
+          try {
+              const { data } = await api.get(`/produtos?termo=${busca}&size=10`);
+              setSugestoesProdutos(data.content ? data.content : data); setSelectedIndex(-1);
+          } catch (error) {}
+      }, 300);
+      return () => clearTimeout(delay);
+  }, [busca]);
+
+  const adicionarProdutoPorObjeto = useCallback((prod) => {
+      setCarrinho(prev => {
+          const index = prev.findIndex(i => i.id === prod.id);
+          if (index >= 0) { const nc = [...prev]; nc[index].quantidade += 1; return nc; }
+          return [...prev, { ...prod, quantidade: 1, desconto: 0 }];
+      });
+      setBusca(''); setSugestoesProdutos([]);
+      setUltimoItemAdicionadoId(prod.id);
+      setTimeout(() => setUltimoItemAdicionadoId(null), 800);
+      setTimeout(() => inputBuscaRef.current?.focus(), 100);
+  }, []);
+
+  const processarBuscaManual = async () => {
+      try {
+          const { data } = await api.get(`/produtos/ean/${busca}`);
+          if (data && (data.id || data.codigoBarras)) adicionarProdutoPorObjeto(data);
+          else toast.error("Produto não encontrado.");
+      } catch (e) { toast.error("Produto inexistente."); }
   };
 
-  const carregarVendasSuspensas = async () => {};
-  const handleBuscaChange = (e) => { setBusca(e.target.value); };
-  const handleSearchKeyDown = (e) => { if(e.key === 'Enter') processarBuscaManual() };
-  const processarBuscaManual = () => { };
-  const adicionarProdutoPorObjeto = (prod) => { };
-  const atualizarQtd = (id, d) => setCarrinho(prev => prev.map(i => i.id === id ? { ...i, quantidade: Math.max(1, i.quantidade + d) } : i));
-  const removerItem = (id) => setCarrinho(prev => prev.filter(i => i.id !== id));
-  const limparEstadoVenda = () => { setCarrinho([]); setPagamentos([]); setCliente(null); setDescontoTotalRaw(0); setModalPagamento(false); };
-  const handleLimparVenda = () => { if(carrinho.length > 0) setShowCleanModal(true); };
-  const confirmarLimpeza = () => { limparEstadoVenda(); setShowCleanModal(false); };
-  const pausarVenda = () => { toast.info("Funcionalidade de pausar"); };
-  const handleVoltar = () => { if(carrinho.length) setShowExitModal(true); else navigate('/dashboard'); };
-  const confirmExit = () => navigate('/dashboard');
+  const handleSearchKeyDown = (e) => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIndex(prev => Math.min(prev + 1, sugestoesProdutos.length - 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedIndex(prev => Math.max(prev - 1, 0)); }
+      else if (e.key === 'Enter') {
+          e.preventDefault();
+          if (selectedIndex >= 0 && sugestoesProdutos[selectedIndex]) adicionarProdutoPorObjeto(sugestoesProdutos[selectedIndex]);
+          else if (sugestoesProdutos.length === 1) adicionarProdutoPorObjeto(sugestoesProdutos[0]);
+          else if (busca.length > 0) processarBuscaManual();
+      }
+  };
 
-  const abrirPagamento = () => {
-      if (carrinho.length === 0) return toast.warn("Carrinho vazio.");
-      setModalPagamento(true);
-      const valorCentavos = Math.round(saldoDevedor * 100);
-      setValorInputRaw(valorCentavos.toString());
-      setTimeout(() => inputValorRef.current?.focus(), 100);
+  const atualizarQtd = (id, d) => setCarrinho(prev => prev.map(i => i.id === id ? { ...i, quantidade: Math.max(1, i.quantidade + d) } : i));
+  const removerItem = async (id) => setCarrinho(prev => prev.filter(i => i.id !== id));
+
+  const limparEstadoVenda = () => {
+      setCarrinho([]); setPagamentos([]); setCliente(null); setClienteAvulso({documento:'', nome:''}); setBuscaCliente('');
+      setDescontoTotalRaw(0); setPainelAtivo('VENDA'); setBusca(''); setSugestoesProdutos([]);
+  };
+
+  const handleLimparVenda = () => {
+      if(carrinho.length === 0) return;
+      if (regraCancelamentoVenda === 'SENHA') setShowPasswordModal(true); else setShowCleanModal(true);
+  };
+
+  const confirmarLimpezaComSenha = async () => {
+      if (!senhaAdmin) return toast.warning("Digite a senha.");
+      try {
+          await api.post('/auth/validar-gerente', { senha: senhaAdmin });
+          limparEstadoVenda(); setShowPasswordModal(false); setSenhaAdmin(''); toast.success("Venda cancelada.");
+      } catch (e) { toast.error("Senha incorreta!"); }
+  };
+  const confirmarLimpezaLivre = () => { limparEstadoVenda(); setShowCleanModal(false); };
+
+  const handleIdentificarCliente = async () => {
+      const docLimpo = cleanNumeric(buscaCliente);
+      if (docLimpo.length === 11) {
+          setClienteAvulso({ documento: docLimpo, nome: 'Cliente CPF ' + docLimpo });
+          toast.success("CPF vinculado à nota!");
+          setPainelAtivo('VENDA');
+      } else if (docLimpo.length === 14) {
+          setLoading(true);
+          try {
+              const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${docLimpo}`);
+              const data = await res.json();
+              setClienteAvulso({ documento: docLimpo, nome: data.razao_social || '', ie: data.cnae_fiscal || '' });
+              setPainelAtivo('VENDA'); setShowCnpjModal(true);
+          } catch (e) {
+              setClienteAvulso({ documento: docLimpo, nome: '' });
+              setPainelAtivo('VENDA'); setShowCnpjModal(true);
+          } finally { setLoading(false); }
+      } else { toast.error("Digite um CPF (11) ou CNPJ (14) válido."); }
+  };
+
+  const aplicarDescontoGlobal = () => {
+      const valorBase = parseInt(descontoInputRaw || '0', 10) / 100;
+      if (valorBase <= 0) return setPainelAtivo('VENDA');
+      let valorReal = (tipoDesconto === '%') ? subtotalItens * (valorBase / 100) : valorBase;
+      if (tipoDesconto === '%' && valorBase > 100) return toast.error("Máximo é 100%");
+      if (tipoDesconto === 'R$' && valorBase > subtotalItens) return toast.error("Maior que o subtotal");
+      setDescontoTotalRaw(valorReal); setPainelAtivo('VENDA'); setDescontoInputRaw(''); toast.success("Desconto aplicado!");
+  };
+
+  const iniciarPagamento = () => {
+      if (totalPagar >= 5000 && !cliente && !clienteAvulso.documento) {
+          toast.error("SEFAZ: Vendas acima de R$ 5.000 exigem identificação.", { autoClose: 5000 });
+          setPainelAtivo('CLIENTE'); return;
+      }
+      setPainelAtivo('PAGAMENTO');
+      setValorInputRaw(Math.round(saldoDevedor * 100).toString());
   };
 
   const handleAdicionarPagamento = () => {
-    const rawVal = parseInt(valorInputRaw.replace(/\D/g, '') || '0', 10);
-    let valor = rawVal / 100;
-    if (valor <= 0 && saldoDevedor > 0) valor = saldoDevedor;
-    if (valor <= 0) return;
+      let valor = parseInt(valorInputRaw.replace(/\D/g, '') || '0', 10) / 100;
+      if (valor <= 0 && saldoDevedor > 0) valor = saldoDevedor;
+      if (valor <= 0) return;
 
-    setPagamentos([...pagamentos, { id: Date.now(), tipo: metodoAtual, valor }]);
-    const novoSaldo = Math.max(0, saldoDevedor - valor);
+      const idPagamento = Date.now();
+      const novosPagamentos = [...pagamentos, { id: idPagamento, tipo: metodoAtual, valor }];
+      setPagamentos(novosPagamentos);
 
-    if (novoSaldo > 0) {
-        setValorInputRaw((Math.round(novoSaldo * 100)).toString());
-        setTimeout(() => inputValorRef.current?.focus(), 50);
-    } else {
-        setValorInputRaw('');
-    }
+      setUltimoPagamentoId(idPagamento);
+      toast.info(`R$ ${valor.toFixed(2)} em ${metodoAtual} registrado!`, { autoClose: 1500, position: "top-center" });
+      setTimeout(() => setUltimoPagamentoId(null), 1000);
+
+      const novoSaldo = Math.max(0, saldoDevedor - valor);
+      if (novoSaldo > 0) {
+          setValorInputRaw((Math.round(novoSaldo * 100)).toString());
+          setTimeout(() => inputValorRef.current?.focus(), 50);
+      } else {
+          setValorInputRaw('');
+      }
   };
 
-  const finalizarVenda = async () => {
-      if (saldoDevedor > 0.01) return toast.error(`Falta R$ ${saldoDevedor.toFixed(2)}`);
+  const finalizarVendaReal = async (pagamentosFinais = pagamentos) => {
+      const saldoFinal = totalPagar - pagamentosFinais.reduce((acc, p) => acc + p.valor, 0);
+      if (saldoFinal > 0.01) return toast.error(`Falta R$ ${saldoFinal.toFixed(2)}`);
       setLoading(true);
-      setTimeout(() => {
-          setLoading(false);
-          toast.success("Venda Finalizada!");
+
+      try {
+          const payloadVenda = {
+              subtotal: subtotalItens, descontoTotal: descontoItens + descontoTotalRaw,
+              totalPago: totalPagar, troco: Math.max(0, parseFloat((pagamentosFinais.reduce((acc, p) => acc + p.valor, 0) - totalPagar).toFixed(2))),
+              clienteId: cliente ? cliente.id : null,
+              clienteNome: cliente ? cliente.nome : (clienteAvulso.nome || 'Consumidor Final'),
+              clienteDocumento: cliente ? cliente.documento : (clienteAvulso.documento || null),
+              itens: carrinho.map(item => ({ produtoId: item.id, quantidade: item.quantidade, precoUnitario: item.precoVenda, desconto: item.desconto || 0 })),
+              pagamentos: pagamentosFinais.map(p => ({ formaPagamento: p.tipo, valor: p.valor, parcelas: 1 }))
+          };
+          await api.post('/vendas', payloadVenda);
+          toast.success("Venda Finalizada com Sucesso!");
           limparEstadoVenda();
-      }, 1000);
+      } catch (error) { toast.error(error.response?.data?.message || "Erro ao registrar a venda."); }
+      finally { setLoading(false); }
   };
 
-  const sugestoesDinheiro = useMemo(() => {
-      if (metodoAtual !== 'DINHEIRO' || saldoDevedor <= 0) return [];
-      const exato = saldoDevedor;
-      const proximaNota5 = Math.ceil(saldoDevedor / 5) * 5;
-      const proximaNota10 = Math.ceil(saldoDevedor / 10) * 10;
-      const proximaNota50 = Math.ceil(saldoDevedor / 50) * 50;
+  const nomeExibicaoCliente = cliente ? cliente.nome : (clienteAvulso.documento ? `${clienteAvulso.nome} (${clienteAvulso.documento})` : 'Consumidor Final');
 
-      const sugestoes = new Set([exato, proximaNota5, proximaNota10, proximaNota50, 20, 50, 100]);
-      return Array.from(sugestoes).filter(v => v >= saldoDevedor).sort((a,b) => a-b).slice(0, 4);
-  }, [saldoDevedor, metodoAtual]);
-
-  // --- RENDERIZAÇÃO ---
-  if (validandoCaixa) return <div className="loading-screen"><div className="spinner"></div><p>Validando Caixa...</p></div>;
+  if (validandoCaixa) return <div className="pos-loader"><div className="pos-spinner"></div><h2 style={{color:'#ec4899'}}>Iniciando Terminal</h2></div>;
 
   return (
-    <div className="pdv-layout">
-      {/* ESQUERDA: OPERAÇÃO */}
-      <section className="pdv-operation-area">
-        <header className="pdv-header">
-            <div className="brand">
-                <div className="brand-icon">DD</div>
-                <div className="brand-info">
-                    <h1>PDV <span className="status-badge">{isOnline ? 'ONLINE' : 'OFFLINE'}</span></h1>
-                    <span className="operator-name">Operador: {getUserRole()}</span>
-                </div>
-            </div>
+    <div className="pos-container">
 
-            <div className="search-bar-container">
-                <Search className="search-icon" />
-                <input
-                    ref={inputBuscaRef}
-                    type="text"
-                    className="search-input"
-                    placeholder="EAN, Código ou Nome do Produto (F1)"
-                    value={busca}
-                    onChange={handleBuscaChange}
-                    onKeyDown={handleSearchKeyDown}
-                    autoComplete="off"
-                />
-                {busca && <button onClick={() => setBusca('')} className="clear-search"><X size={16}/></button>}
+      {/* =========================================================
+          LADO ESQUERDO: O CARRINHO
+          ========================================================= */}
+      <section className="pos-cart-section">
 
-                {sugestoesProdutos.length > 0 && (
-                    <div className="search-dropdown">
-                        {sugestoesProdutos.map((prod, idx) => (
-                            <div key={prod.id} className={`dropdown-row ${idx === selectedIndex ? 'selected' : ''}`} onClick={() => adicionarProdutoPorObjeto(prod)}>
-                                <div className="prod-info">
-                                    <span className="prod-name">{prod.descricao}</span>
-                                    <span className="prod-sku">{prod.codigoBarras}</span>
-                                </div>
-                                <span className="prod-price">R$ {prod.precoVenda.toFixed(2)}</span>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-        </header>
+          <header className="pos-header">
+              <div className="pos-brand">
+                  <div className="brand-badge">DD</div>
+                  <div className="brand-text">
+                      <h1>DD Cosméticos</h1>
+                      <span>{isOnline ? 'Terminal Online' : 'Terminal Offline'} • Operador: {getUserRole()}</span>
+                  </div>
+              </div>
+              <button className="btn-exit" onClick={() => carrinho.length ? setShowExitModal(true) : navigate('/dashboard')}>
+                  <ArrowLeft size={20}/> Sair
+              </button>
+          </header>
 
-        <div className="cart-list-container">
-            {carrinho.length === 0 ? (
-                <div className="empty-cart-state">
-                    <MonitorCheck size={64} opacity={0.2} />
-                    <h2>Caixa Livre</h2>
-                    <p>Bipe um produto ou digite o código para iniciar</p>
-                    <div className="shortcuts-hint">
-                        <span><strong>F1</strong> Busca</span>
-                        <span><strong>F2</strong> Pausar</span>
-                        <span><strong>F3</strong> Cliente</span>
-                        <span><strong>F5</strong> Pagar</span>
-                    </div>
-                </div>
-            ) : (
-                <table className="cart-table">
-                    <thead>
-                        <tr>
-                            <th>Item</th>
-                            <th className="text-center">Qtd</th>
-                            <th className="text-right">Unitário</th>
-                            <th className="text-right">Total</th>
-                            <th className="text-center">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {carrinho.map((item, index) => (
-                            <tr key={item.id} className={ultimoItemAdicionadoId === item.id ? 'new-item' : ''}>
-                                <td>
-                                    <div className="cart-item-info">
-                                        <span className="item-seq">{index + 1}</span>
-                                        <div>
-                                            <span className="item-name">{item.descricao}</span>
-                                            <small className="item-sku">{item.codigoBarras || 'SEM GTIN'}</small>
-                                        </div>
-                                        {item.desconto > 0 && <span className="tag-discount">-{item.desconto.toFixed(2)}</span>}
-                                    </div>
-                                </td>
-                                <td className="text-center">
-                                    <div className="qty-stepper">
-                                        <button onClick={() => atualizarQtd(item.id, -1)}><Minus size={14}/></button>
-                                        <span>{item.quantidade}</span>
-                                        <button onClick={() => atualizarQtd(item.id, 1)}><Plus size={14}/></button>
-                                    </div>
-                                </td>
-                                <td className="text-right">R$ {item.precoVenda.toFixed(2)}</td>
-                                <td className="text-right font-bold">R$ {((item.precoVenda * item.quantidade) - (item.desconto || 0)).toFixed(2)}</td>
-                                <td className="text-center">
-                                    <button className="btn-icon danger" onClick={() => removerItem(item.id)}><Trash2 size={18}/></button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            )}
-        </div>
+          <div className="pos-cart-body">
+              {carrinho.length === 0 ? (
+                  <div className="cart-empty-state">
+                      <ShoppingBag size={80} strokeWidth={1} />
+                      <h3>Caixa Livre</h3>
+                      <p>Bipe um produto ou digite o código de barras.</p>
+                  </div>
+              ) : (
+                  <div className="cart-list">
+                      {carrinho.map((item, index) => (
+                          <div key={item.id} className={`cart-item ${ultimoItemAdicionadoId === item.id ? 'flash-item' : ''}`}>
+                              <div className="item-index">{String(index + 1).padStart(3, '0')}</div>
+                              <div className="item-details">
+                                  <strong>{item.descricao}</strong>
+                                  <span>{item.codigoBarras || 'SEM GTIN'}</span>
+                              </div>
+                              <div className="item-price-calc">
+                                  <div className="item-unit-price">R$ {item.precoVenda.toFixed(2)}</div>
+                                  <div className="item-qty-control">
+                                      <button onClick={() => atualizarQtd(item.id, -1)}><Minus size={16}/></button>
+                                      <span>{item.quantidade}</span>
+                                      <button onClick={() => atualizarQtd(item.id, 1)}><Plus size={16}/></button>
+                                  </div>
+                              </div>
+                              <div className="item-total">
+                                  R$ {(item.precoVenda * item.quantidade).toFixed(2)}
+                              </div>
+                              <button className="item-remove" onClick={() => removerItem(item.id)}><Trash2 size={20}/></button>
+                          </div>
+                      ))}
+                  </div>
+              )}
+          </div>
 
-        <footer className="pdv-footer">
-            <div className="footer-clock">
-                <Clock size={16}/> {horaAtual.toLocaleTimeString()}
-            </div>
-            <div className="footer-actions">
-                <button className="btn-secondary" onClick={() => setShowListaEspera(true)}>
-                    <PauseCircle size={16}/> Espera ({vendasPausadas.length})
-                </button>
-                <button className="btn-secondary danger" onClick={handleLimparVenda}>
-                    <RotateCcw size={16}/> Cancelar (Del)
-                </button>
-            </div>
-        </footer>
+          <footer className="pos-cart-footer">
+              <div className="footer-calc">
+                  <div className="calc-row text-muted"><span>Subtotal dos itens</span> <span>R$ {subtotalItens.toFixed(2)}</span></div>
+                  <div className="calc-row text-pink"><span>Descontos Aplicados</span> <span>- R$ {descontoTotalRaw.toFixed(2)}</span></div>
+                  <div className="calc-row grand-total">
+                      <span>TOTAL A PAGAR</span>
+                      <span className="total-value">R$ {totalPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+              </div>
+          </footer>
       </section>
 
-      {/* DIREITA: COMANDO */}
-      <aside className="pdv-command-area">
-        <div className="command-header">
-            <button className="btn-back" onClick={handleVoltar}><ArrowLeft/></button>
-            <div className="store-status">
-                <span className="dot online"></span> Caixa Aberto
-            </div>
-        </div>
+      {/* =========================================================
+          LADO DIREITO: ACTION CENTER
+          ========================================================= */}
+      <section className="pos-action-section">
 
-        <div className="customer-panel" onClick={() => { setShowClienteInput(!showClienteInput); setTimeout(() => inputClienteRef.current?.focus(), 100); }}>
-            <div className="cp-icon">
-                {cliente ? <UserCheck size={24} /> : <UserPlus size={24} />}
-            </div>
-            <div className="cp-info">
-                <label>Cliente (F3)</label>
-                <span>{cliente ? cliente.nome : 'Consumidor Final'}</span>
-            </div>
-            {showClienteInput && (
-                <div className="client-dropdown" onClick={(e) => e.stopPropagation()}>
-                    <input ref={inputClienteRef} placeholder="Buscar cliente..." onChange={(e) => setBuscaCliente(e.target.value)} />
-                </div>
-            )}
-        </div>
+          {/* --- TELA 1: VENDA (PADRÃO) --- */}
+          {painelAtivo === 'VENDA' && (
+              <div className="action-panel panel-venda animate-fade">
 
-        <div className="financial-summary">
-            <div className="summary-row">
-                <span>Subtotal</span>
-                <span>R$ {subtotalItens.toFixed(2)}</span>
-            </div>
-            <div className="summary-row discount" onClick={() => setModalDesconto({...modalDesconto, open: true})}>
-                <span>Descontos (F4)</span>
-                <span>- R$ {(descontoItens + descontoTotalRaw).toFixed(2)}</span>
-            </div>
-            <div className="total-display">
-                <small>TOTAL A PAGAR</small>
-                <div className="value">R$ {totalPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
-            </div>
-        </div>
+                  <div className="search-premium-box">
+                      <Search className="sp-icon" size={26}/>
+                      <input
+                          ref={inputBuscaRef} type="text" className="sp-input"
+                          placeholder="Buscar produto (F2)..."
+                          value={busca} onChange={(e) => setBusca(e.target.value)} onKeyDown={handleSearchKeyDown} autoComplete="off"
+                      />
+                      {busca && <button className="sp-clear" onClick={() => {setBusca(''); inputBuscaRef.current?.focus();}}><X size={22}/></button>}
 
-        <div className="payment-trigger">
-            <button
-                className="btn-pay-large"
-                disabled={carrinho.length === 0}
-                onClick={abrirPagamento}
-            >
-                <div className="pay-label">
-                    <span>FINALIZAR VENDA</span>
-                    <small>F5</small>
-                </div>
-                <div className="pay-icon"><ArrowRight size={32}/></div>
-            </button>
-        </div>
-      </aside>
-
-      {/* MODAL PAGAMENTO */}
-      {modalPagamento && (
-          <div className="payment-overlay-backdrop">
-              <div className="payment-drawer">
-                  <header className="drawer-header">
-                      <h2>Pagamento</h2>
-                      <button className="btn-close" onClick={() => setModalPagamento(false)}><X/></button>
-                  </header>
-
-                  <div className="drawer-body">
-                      <div className="payment-split">
-                          <div className="methods-grid">
-                              {[
-                                {id: 'PIX', icon: <Smartphone/>, label: 'PIX'},
-                                {id: 'DINHEIRO', icon: <Banknote/>, label: 'Dinheiro'},
-                                {id: 'CREDITO', icon: <CreditCard/>, label: 'Crédito'},
-                                {id: 'DEBITO', icon: <CreditCard/>, label: 'Débito'},
-                                {id: 'CREDIARIO', icon: <FileText/>, label: 'Crediário'}
-                              ].map(m => (
-                                  <button
-                                    key={m.id}
-                                    className={`method-card ${metodoAtual === m.id ? 'active' : ''}`}
-                                    onClick={() => { setMetodoAtual(m.id); inputValorRef.current?.focus(); }}
-                                  >
-                                      {m.icon}
-                                      <span>{m.label}</span>
-                                  </button>
+                      {/* O Dropdown agora possui a REF e rola automaticamente */}
+                      {sugestoesProdutos.length > 0 && (
+                          <div className="sp-dropdown" ref={dropdownRef}>
+                              {sugestoesProdutos.map((prod, idx) => (
+                                  <div key={prod.id} className={`spd-row ${idx === selectedIndex ? 'selected' : ''}`} onClick={() => adicionarProdutoPorObjeto(prod)}>
+                                      <div className="spd-info">
+                                          <strong>{prod.descricao}</strong>
+                                          <span>{prod.codigoBarras}</span>
+                                      </div>
+                                      <div className="spd-price">R$ {prod.precoVenda.toFixed(2)}</div>
+                                  </div>
                               ))}
                           </div>
+                      )}
+                  </div>
 
-                          <div className="value-input-area">
-                              <label>Valor a receber em {metodoAtual}</label>
-                              <div className="input-money-wrapper">
-                                  <span>R$</span>
-                                  <input
-                                    ref={inputValorRef}
-                                    value={getValorFormatado(valorInputRaw)}
-                                    onChange={e => setValorInputRaw(formatCurrencyInput(e.target.value))}
-                                    onKeyDown={e => e.key === 'Enter' && handleAdicionarPagamento()}
-                                    placeholder="0,00"
-                                  />
-                              </div>
-
-                              {metodoAtual === 'DINHEIRO' && (
-                                  <div className="quick-money-chips">
-                                      {sugestoesDinheiro.map(val => (
-                                          <button key={val} onClick={() => {
-                                              setValorInputRaw((val * 100).toString());
-                                              inputValorRef.current?.focus();
-                                          }}>R$ {val.toFixed(2)}</button>
-                                      ))}
-                                  </div>
-                              )}
-
-                              <button className="btn-add-payment" onClick={handleAdicionarPagamento}>
-                                  Confirmar Valor <ArrowRight size={16}/>
-                              </button>
-                          </div>
+                  <div className="customer-soft-card" onClick={() => setPainelAtivo('CLIENTE')}>
+                      <div className="csc-icon"><UserCheck size={26}/></div>
+                      <div className="csc-info">
+                          <label>Identificação na Nota</label>
+                          <strong>{nomeExibicaoCliente}</strong>
                       </div>
+                      <ChevronRight className="csc-arrow" size={24}/>
+                  </div>
 
-                      <div className="payments-log">
-                          {pagamentos.map(p => (
-                              <div key={p.id} className="payment-log-item">
-                                  <span className="p-type">{p.tipo}</span>
-                                  <span className="p-value">R$ {p.valor.toFixed(2)}</span>
-                                  <button onClick={() => setPagamentos(pagamentos.filter(x => x.id !== p.id))}><Trash2 size={14}/></button>
-                              </div>
-                          ))}
-                          {pagamentos.length === 0 && <span className="empty-log">Nenhum pagamento lançado</span>}
+                  <div className="quick-actions-grid">
+                      <button className="qa-btn" onClick={() => setPainelAtivo('CLIENTE')}>
+                          <kbd>F3</kbd> <span>Cliente</span>
+                      </button>
+                      <button className="qa-btn" onClick={() => { if(carrinho.length) setPainelAtivo('DESCONTO'); else toast.warn("Carrinho vazio"); }}>
+                          <kbd>F4</kbd> <span>Desconto</span>
+                      </button>
+                      <button className="qa-btn btn-cancel-venda" onClick={handleLimparVenda} disabled={!carrinho.length}>
+                          <kbd className="kbd-danger">DEL</kbd> <span>Cancelar</span>
+                      </button>
+                  </div>
+
+                  <button className="btn-checkout-soft" disabled={!carrinho.length} onClick={iniciarPagamento}>
+                      <div className="bcs-content">
+                          <span className="bcs-label">IR PARA PAGAMENTO</span>
+                          <span className="bcs-shortcut">Aperte F8</span>
+                      </div>
+                      <div className="bcs-icon"><ArrowRight size={36}/></div>
+                  </button>
+              </div>
+          )}
+
+          {/* --- TELA 2: PAGAMENTO (REORGANIZADA HIERARQUICAMENTE) --- */}
+          {painelAtivo === 'PAGAMENTO' && (
+              <div className="action-panel panel-pagamento animate-slide-left">
+                  <header className="panel-header">
+                      <button className="btn-voltar" onClick={() => setPainelAtivo('VENDA')}><ArrowLeft size={20}/> VOLTAR (ESC)</button>
+                      <h2>Concluir Venda</h2>
+                  </header>
+
+                  <div className="payment-methods-grid">
+                      {[
+                        {id: 'PIX', key: '1', icon: <Smartphone size={20}/>, label: 'Pix'},
+                        {id: 'DINHEIRO', key: '2', icon: <Banknote size={20}/>, label: 'Dinheiro'},
+                        {id: 'CREDITO', key: '3', icon: <CreditCard size={20}/>, label: 'Crédito'},
+                        {id: 'DEBITO', key: '4', icon: <CreditCard size={20}/>, label: 'Débito'}
+                      ].map(m => (
+                          <button key={m.id} className={`pm-soft-card ${metodoAtual === m.id ? 'active' : ''}`} onClick={() => { setMetodoAtual(m.id); inputValorRef.current?.focus(); }}>
+                              <div className="pms-top"><kbd>{m.key}</kbd> {m.icon}</div>
+                              <span className="pms-label">{m.label}</span>
+                          </button>
+                      ))}
+                  </div>
+
+                  <div className="payment-input-area">
+                      <label>VALOR A INSERIR ({metodoAtual})</label>
+                      <div className="pia-wrapper">
+                          <span className="currency">R$</span>
+                          <input ref={inputValorRef} value={getValorFormatado(valorInputRaw)} onChange={e => setValorInputRaw(formatCurrencyInput(e.target.value))} onKeyDown={e => e.key === 'Enter' && handleAdicionarPagamento()} placeholder="0,00" />
+                          <button className="pia-btn" onClick={handleAdicionarPagamento}><CheckCircle2 size={32}/></button>
                       </div>
                   </div>
 
-                  <footer className="drawer-footer">
-                      <div className="footer-balance">
-                          <span>Restante:</span>
-                          <span className={saldoDevedor > 0 ? 'debt' : 'ok'}>R$ {saldoDevedor.toFixed(2)}</span>
-                      </div>
-                      <div className="footer-balance">
-                          <span>Troco:</span>
-                          <span className="change">R$ {troco.toFixed(2)}</span>
-                      </div>
-                      <button
-                        className="btn-finalize-drawer"
-                        disabled={saldoDevedor > 0.01 || loading}
-                        onClick={finalizarVenda}
-                      >
-                          {loading ? <div className="spinner-mini"></div> : 'EMITIR CUPOM (Enter)'}
+                  <div className="payment-logs-soft">
+                      {pagamentos.map(p => (
+                          <div key={p.id} className={`pls-row ${ultimoPagamentoId === p.id ? 'flash-payment' : ''}`}>
+                              <span className="pls-type">{p.tipo}</span>
+                              <strong className="pls-val">R$ {p.valor.toFixed(2)}</strong>
+                              <button onClick={() => setPagamentos(pagamentos.filter(x => x.id !== p.id))}><Trash2 size={18}/></button>
+                          </div>
+                      ))}
+                  </div>
+
+                  <div className="payment-footer-soft">
+                      <div className="pfs-row"><span>Falta Receber:</span> <strong className="val-red">R$ {saldoDevedor.toFixed(2)}</strong></div>
+                      <div className="pfs-row"><span>Troco do Cliente:</span> <strong className="val-green">R$ {troco.toFixed(2)}</strong></div>
+                      <button className="btn-checkout-finish" disabled={saldoDevedor > 0.01 || loading} onClick={() => finalizarVendaReal(pagamentos)}>
+                          <div className="bcf-content">
+                              <span className="bcf-label">{loading ? 'EMITINDO...' : 'FINALIZAR VENDA'}</span>
+                              <span className="bcf-shortcut">ENTER</span>
+                          </div>
                       </button>
-                  </footer>
+                  </div>
+              </div>
+          )}
+
+          {/* --- TELA 3: CLIENTE --- */}
+          {painelAtivo === 'CLIENTE' && (
+              <div className="action-panel panel-centered animate-slide-left">
+                  <header className="panel-header absolute-top"><button className="btn-voltar" onClick={() => setPainelAtivo('VENDA')}><ArrowLeft size={20}/> VOLTAR (ESC)</button></header>
+                  <div className="centered-content">
+                      <div className="icon-circle mb-4"><Building size={48}/></div>
+                      <h2 className="title-main">Identificar Cliente</h2>
+                      <p className="subtitle-sec mb-6">Digite o CPF ou CNPJ (obrigatório acima de R$ 5.000)</p>
+                      <input ref={inputClienteRef} className="input-giant-soft" placeholder="Apenas números..." value={buscaCliente} onChange={(e) => setBuscaCliente(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleIdentificarCliente(); }} />
+                      <button className="btn-primary-soft mt-4" onClick={handleIdentificarCliente}>VINCULAR E VOLTAR (ENTER)</button>
+                  </div>
+              </div>
+          )}
+
+          {/* --- TELA 4: DESCONTO --- */}
+          {painelAtivo === 'DESCONTO' && (
+              <div className="action-panel panel-centered animate-slide-left">
+                  <header className="panel-header absolute-top"><button className="btn-voltar" onClick={() => setPainelAtivo('VENDA')}><ArrowLeft size={20}/> VOLTAR (ESC)</button></header>
+                  <div className="centered-content">
+                      <div className="icon-circle mb-4"><Tag size={48}/></div>
+                      <h2 className="title-main">Aplicar Desconto</h2>
+                      <div className="toggle-soft mt-4 mb-4">
+                          <button className={tipoDesconto === 'R$' ? 'active' : ''} onClick={() => { setTipoDesconto('R$'); inputDescontoRef.current?.focus(); }}>R$ Fixo</button>
+                          <button className={tipoDesconto === '%' ? 'active' : ''} onClick={() => { setTipoDesconto('%'); inputDescontoRef.current?.focus(); }}>% Porc.</button>
+                      </div>
+                      <div className="input-giant-wrapper">
+                          <span>{tipoDesconto}</span>
+                          <input ref={inputDescontoRef} value={getValorFormatado(descontoInputRaw)} onChange={e => setDescontoInputRaw(formatCurrencyInput(e.target.value))} onKeyDown={e => e.key === 'Enter' && aplicarDescontoGlobal()} placeholder="0,00" />
+                      </div>
+                      <button className="btn-primary-soft mt-6" onClick={aplicarDescontoGlobal}>APLICAR DESCONTO (ENTER)</button>
+                  </div>
+              </div>
+          )}
+
+      </section>
+
+      {/* MODAIS DE SEGURANÇA */}
+      {showCnpjModal && (
+          <div className="modal-glass">
+              <div className="modal-glass-card">
+                  <Building size={40} className="mg-icon mx-auto mb-3"/>
+                  <h3 className="text-center text-main font-bold">Dados da Empresa</h3>
+                  <div className="mg-form mt-4">
+                      <label>CNPJ</label><input className="mg-input disabled mb-3" value={clienteAvulso.documento} disabled />
+                      <label>RAZÃO SOCIAL</label><input className="mg-input" value={clienteAvulso.nome} onChange={(e) => setClienteAvulso({...clienteAvulso, nome: e.target.value})} autoFocus/>
+                  </div>
+                  <div className="mg-actions mt-6">
+                      <button className="mg-btn cancel" onClick={() => { setShowCnpjModal(false); setClienteAvulso({documento:'', nome:''}); }}>Cancelar</button>
+                      <button className="mg-btn confirm" onClick={() => { setShowCnpjModal(false); setPainelAtivo('VENDA'); }}>Confirmar</button>
+                  </div>
               </div>
           </div>
       )}
 
-      {showExitModal && <div className="modal-backdrop"><div className="modal-card"><h3>Sair do PDV?</h3><div className="modal-actions"><button onClick={() => setShowExitModal(false)}>Cancelar</button><button className="primary" onClick={confirmExit}>Confirmar</button></div></div></div>}
+      {showPasswordModal && (
+          <div className="modal-glass">
+              <div className="modal-glass-card text-center sm">
+                  <ShieldCheck size={56} className="mg-icon danger mx-auto mb-3" />
+                  <h3 className="text-danger font-bold">Autorização Gerencial</h3>
+                  <p className="text-lg text-sec mb-4">Senha para cancelar venda.</p>
+                  <input type="password" className="mg-input text-center tracking-widest text-xxl py-3" placeholder="••••" value={senhaAdmin} onChange={e => setSenhaAdmin(e.target.value)} onKeyDown={e => e.key === 'Enter' && confirmarLimpezaComSenha()} autoFocus />
+                  <div className="mg-actions mt-6 justify-center">
+                      <button className="mg-btn cancel" onClick={() => { setShowPasswordModal(false); setSenhaAdmin(''); }}>Voltar</button>
+                      <button className="mg-btn danger" disabled={!senhaAdmin} onClick={confirmarLimpezaComSenha}>Autorizar</button>
+                  </div>
+              </div>
+          </div>
+      )}
 
-      {showCleanModal && <div className="modal-backdrop"><div className="modal-card"><h3>Cancelar Venda Atual?</h3><p>Todos os itens serão removidos.</p><div className="modal-actions"><button onClick={() => setShowCleanModal(false)}>Não, Voltar</button><button className="danger" onClick={confirmarLimpeza}>Sim, Cancelar</button></div></div></div>}
+      {showCleanModal && (
+          <div className="modal-glass">
+              <div className="modal-glass-card text-center sm">
+                  <AlertCircle size={56} className="mg-icon warning mx-auto mb-3" />
+                  <h3 className="text-main font-bold">Cancelar Venda?</h3>
+                  <p className="text-lg text-sec mb-4">O carrinho será esvaziado.</p>
+                  <div className="mg-actions mt-6 justify-center">
+                      <button className="mg-btn cancel" onClick={() => setShowCleanModal(false)}>Não</button>
+                      <button className="mg-btn danger" onClick={confirmarLimpezaLivre}>Sim, Cancelar</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {showExitModal && (
+          <div className="modal-glass">
+              <div className="modal-glass-card text-center sm">
+                  <h3 className="text-main font-bold">Sair do Terminal?</h3>
+                  <p className="text-lg text-sec mb-4">A venda atual será perdida.</p>
+                  <div className="mg-actions mt-6 justify-center">
+                      <button className="mg-btn cancel" onClick={() => setShowExitModal(false)}>Ficar</button>
+                      <button className="mg-btn confirm" onClick={() => navigate('/dashboard')}>Sair do Caixa</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
     </div>
   );
 };

@@ -104,34 +104,6 @@ const BulkActionBar = ({ count, onClear, onDelete, onPrint, mode }) => {
   );
 };
 
-// --- COMPONENTE: MENU DE AÇÕES INDIVIDUAIS ---
-const ActionMenu = ({ onHistory, onPrint, loadingPrint }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef(null);
-  useEffect(() => {
-    const clickOut = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setIsOpen(false);
-    };
-    document.addEventListener("mousedown", clickOut);
-    return () => document.removeEventListener("mousedown", clickOut);
-  }, []);
-  return (
-    <div className="action-menu-wrapper" ref={menuRef}>
-      <button className={`btn-icon-soft ${isOpen ? 'active' : ''}`} onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }} data-label="Mais opções">
-        <MoreHorizontal size={18} />
-      </button>
-      {isOpen && (
-        <div className="dropdown-popover">
-          <button onClick={(e) => { e.stopPropagation(); onHistory(); setIsOpen(false); }}><History size={14} /> Histórico</button>
-          <button onClick={(e) => { e.stopPropagation(); onPrint(); setIsOpen(false); }} disabled={loadingPrint}>
-            {loadingPrint ? <div className="spinner-micro"></div> : <Printer size={14} />} Imprimir Etiqueta
-          </button>
-        </div>
-      )}
-    </div>
-  );
-};
-
 // --- MODAL HISTÓRICO ---
 const HistoricoModal = ({ isOpen, onClose, historico, produtoNome }) => {
   if (!isOpen) return null;
@@ -215,23 +187,40 @@ const ProdutoList = () => {
       if (modoLixeira) {
         const listaBruta = await produtoService.buscarLixeira();
         const listaInativos = Array.isArray(listaBruta) ? listaBruta : [];
-        const filtrados = termo ? listaInativos.filter(p => p.descricao.toLowerCase().includes(termo.toLowerCase()) || p.codigoBarras.includes(termo)) : listaInativos;
+        const filtrados = termo ? listaInativos.filter(p =>
+            (p.descricao && p.descricao.toLowerCase().includes(termo.toLowerCase())) ||
+            (p.codigoBarras && p.codigoBarras.includes(termo))
+        ) : listaInativos;
         setProdutos(filtrados);
         setTotalPages(1);
         setTotalElements(filtrados.length);
       } else {
         const dados = await produtoService.listar(pagina, 10, termo, filtros);
-        if (dados && dados.itens) {
-            setProdutos(dados.itens);
-            setTotalPages(dados.totalPaginas);
-            setTotalElements(dados.totalElementos);
-        } else {
-            setProdutos([]);
-            setTotalPages(0);
-            setTotalElements(0);
+
+        // ------------------------------------------------------------------------
+        // CORREÇÃO CRÍTICA DO MAPEAMENTO DE DADOS AQUI:
+        // O Spring Data JPA com records ou classes DTO pode aninhar os dados.
+        // Vamos garantir que pegamos exatamente a array correta.
+        // ------------------------------------------------------------------------
+        let listaProdutos = [];
+
+        if (Array.isArray(dados)) {
+            listaProdutos = dados; // Fallback se a API retornar uma array direto
+        } else if (dados && dados.content && Array.isArray(dados.content)) {
+            listaProdutos = dados.content; // Padrão do Page<T> do Spring
+        } else if (dados && dados.itens && Array.isArray(dados.itens)) {
+            listaProdutos = dados.itens; // Padrão customizado do seu Backend
         }
+
+        setProdutos(listaProdutos);
+
+        setTotalPages(dados?.totalPages || dados?.totalPaginas || 1);
+        setTotalElements(dados?.totalElements || dados?.totalElementos || listaProdutos.length);
       }
-    } catch (error) { toast.error("Erro ao carregar lista."); }
+    } catch (error) {
+        console.error("Erro ao carregar produtos:", error);
+        toast.error("Erro ao carregar lista de produtos.");
+    }
     finally { setLoading(false); }
   }, [modoLixeira, filtros]);
 
@@ -249,20 +238,32 @@ const ProdutoList = () => {
 
   // Ações
   const handleImportar = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    e.target.value = null;
-    const formData = new FormData();
-    formData.append("arquivo", file);
-    const toastId = toast.loading("Enviando...");
-    try {
-      const response = await api.post('/produtos/importar', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-      if (response.data.sucesso) {
-         toast.update(toastId, { render: "Importação concluída!", type: "success", isLoading: false, autoClose: 3000 });
-         setPage(0); carregarProdutos(0, '');
-      } else { throw new Error(response.data.mensagem); }
-    } catch (error) { toast.update(toastId, { render: "Erro na importação.", type: "error", isLoading: false, autoClose: 5000 }); }
-  };
+      const file = e.target.files[0];
+      if (!file) return;
+      e.target.value = null;
+      const formData = new FormData();
+      formData.append("arquivo", file);
+
+      const toastId = toast.loading("Importando e analisando dados (pode demorar alguns segundos)...");
+
+      try {
+        // CORREÇÃO: Timeout aumentado para 120 segundos (120000ms) específico para o upload
+        const response = await api.post('/produtos/importar', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 120000
+        });
+
+        if (response.data.sucesso) {
+           toast.update(toastId, { render: "Importação concluída com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
+           setPage(0);
+           carregarProdutos(0, '');
+        } else {
+           throw new Error(response.data.mensagem);
+        }
+      } catch (error) {
+          toast.update(toastId, { render: "Erro na importação. Verifique se o arquivo é muito grande.", type: "error", isLoading: false, autoClose: 5000 });
+      }
+    };
 
   const handleCorrigirNcms = () => {
     setConfirmModal({
@@ -352,8 +353,13 @@ const ProdutoList = () => {
   };
 
   const StatusIndicator = ({ prod }) => {
-      if (!prod.ativo) return <span className="status-badge inactive">Inativo</span>;
-      if (prod.quantidadeEmEstoque <= (prod.estoqueMinimo || 5)) return <span className="status-badge warning">Baixo</span>;
+      // Usa o fallback de false se ativo for undefined e 0 se estoque for undefined
+      const isAtivo = prod.ativo !== undefined ? prod.ativo : true;
+      const estoque = prod.quantidadeEmEstoque || 0;
+      const minimo = prod.estoqueMinimo || 5;
+
+      if (!isAtivo) return <span className="status-badge inactive">Inativo</span>;
+      if (estoque <= minimo) return <span className="status-badge warning">Baixo</span>;
       return <span className="status-badge active">Ativo</span>;
   };
 
@@ -377,7 +383,6 @@ const ProdutoList = () => {
 
             {!modoLixeira && (
               <>
-                {/* TOOLBAR COM AÇÕES EXTENSAS NO MOBILE */}
                 <div className="header-actions-group">
                     <button className="btn-secondary btn-purple bordered" onClick={handleCorrigirNcms} data-label="IA Fiscal">
                         <Bot size={18} /> <span className="action-text">IA Fiscal</span>
@@ -481,12 +486,16 @@ const ProdutoList = () => {
                           <td>
                             <div className="product-item">
                               <ProductImage src={getImageUrl(prod.urlImagem)} alt={prod.descricao} />
-                              <div className="product-meta"><span className="product-name">{prod.descricao}</span><CopyableCode code={prod.codigoBarras} /></div>
+                              <div className="product-meta">
+                                {/* Garantia de exibição da descrição e código */}
+                                <span className="product-name">{prod.descricao || 'Sem Descrição'}</span>
+                                <CopyableCode code={prod.codigoBarras} />
+                              </div>
                             </div>
                           </td>
                           <td>{prod.marca || '-'}</td>
-                          <td className="font-numeric">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(prod.precoVenda)}</td>
-                          <td><div className="stock-pill"><span className={prod.quantidadeEmEstoque < (prod.estoqueMinimo || 5) ? 'text-red' : ''}>{prod.quantidadeEmEstoque}</span><small>un</small></div></td>
+                          <td className="font-numeric">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(prod.precoVenda || 0)}</td>
+                          <td><div className="stock-pill"><span className={(prod.quantidadeEmEstoque || 0) < (prod.estoqueMinimo || 5) ? 'text-red' : ''}>{prod.quantidadeEmEstoque || 0}</span><small>un</small></div></td>
                           <td><StatusIndicator prod={prod} /></td>
                           <td className="td-actions" onClick={(e) => e.stopPropagation()}>
                             <div className="actions-flex">
