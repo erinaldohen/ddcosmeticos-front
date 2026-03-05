@@ -467,3 +467,25 @@
   transform: translateY(-2px);
   box-shadow: 0 15px 20px -3px rgba(242, 41, 152, 0.4);
 }
+
+.input-money-wrapper {
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid var(--primary); /* Ou a cor que preferir */
+  margin-top: 5px;
+  padding-bottom: 5px;
+}
+.input-money-wrapper span {
+  font-size: 1.5rem;
+  color: #64748b;
+  margin-right: 10px;
+}
+.input-money-wrapper input {
+  border: none;
+  font-size: 2rem;
+  font-weight: bold;
+  width: 100%;
+  outline: none;
+  color: #0f172a;
+  background: transparent;
+}

@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingCart, Package, Users,
   Settings, LogOut, ChevronLeft, X,
   FileText, ShieldCheck, Truck, History, Clock,
-  Wallet, TrendingDown, Store, ClipboardList
+  Wallet, TrendingDown, Store, ClipboardList, ShoppingBag
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -25,7 +25,8 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
       const userStr = localStorage.getItem('user');
       if (userStr) {
         const user = JSON.parse(userStr);
-        const role = user.perfil || user.role || 'ROLE_USUARIO';
+        // Captura o papel do usuário para liberar os menus
+        const role = user.perfilDoUsuario || user.perfil || user.role || 'ROLE_USUARIO';
         setUserRole(role);
       }
     } catch (e) {
@@ -44,8 +45,9 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
       {
         title: 'Frente de Loja',
         items: [
-          // C -> P
+          // C -> H -> P (Ordem Alfabética mantida)
           { path: '/caixa', icon: <Store size={20} />, label: 'Controle de Caixa', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA', 'ROLE_USUARIO'] },
+          { path: '/vendas/historico', icon: <ShoppingBag size={20} />, label: 'Histórico de Vendas', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] }, // <-- NOVA PÁGINA AQUI
           { path: '/pdv', icon: <ShoppingCart size={20} />, label: 'PDV (Vendas)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA', 'ROLE_USUARIO'] },
         ]
       },
@@ -120,9 +122,13 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
         <nav className="sidebar-nav">
           {menuGroups.map((group, index) => {
             // Filtra os itens baseados na permissão do usuário
-            const visibleItems = group.items.filter(item =>
-              !item.roles || item.roles.includes(userRole)
-            );
+            const visibleItems = group.items.filter(item => {
+              if (!item.roles) return true;
+
+              // Garante que o menu apareça mesmo se o backend mandar a role sem o prefixo "ROLE_"
+              const userRoleClean = userRole.replace('ROLE_', '');
+              return item.roles.some(r => r.includes(userRoleClean));
+            });
 
             // Se o grupo não tiver nenhum item visível para este usuário, não renderiza o título
             if (visibleItems.length === 0) return null;

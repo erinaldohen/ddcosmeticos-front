@@ -19,6 +19,8 @@ import FornecedorList from './pages/Fornecedores/FornecedorList';
 import FornecedorForm from './pages/Fornecedores/FornecedorForm';
 import GerenciamentoCaixa from './pages/Caixa/GerenciamentoCaixa';
 import HistoricoCaixa from './pages/Caixa/HistoricoCaixa';
+// NOVA PÁGINA: Histórico de Vendas
+import HistoricoVendas from './pages/Vendas/Historico/HistoricoVendas';
 import RelatorioImpostos from './pages/Fiscal/RelatorioImpostos';
 import Auditoria from './pages/Auditoria/Auditoria';
 import ContasReceber from './pages/Financeiro/ContasReceber';
@@ -43,12 +45,9 @@ const AdminRoute = ({ children }) => {
   const user = getUser();
   if (!user) return <Navigate to="/login" replace />;
 
-  // CORREÇÃO CRÍTICA: Busca perfilDoUsuario (padrão do novo Backend)
-  // e remove 'ROLE_' se existir para garantir o match perfeito.
   const rawRole = String(user.perfilDoUsuario || user.perfil || user.role || 'USUARIO').toUpperCase();
   const roleClean = rawRole.replace('ROLE_', '');
 
-  // Permissões limpas
   const allowed = ['ADMIN', 'GERENTE', 'ESTOQUISTA', 'FINANCEIRO'];
 
   if (!allowed.includes(roleClean)) {
@@ -75,6 +74,9 @@ export default function App() {
             <Route path="/dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
             <Route path="/caixa" element={<PrivateRoute><GerenciamentoCaixa /></PrivateRoute>} />
             <Route path="/historico-caixa" element={<AdminRoute><HistoricoCaixa /></AdminRoute>} />
+
+            {/* ROTA NOVA PLUGADA AQUI */}
+            <Route path="/vendas/historico" element={<AdminRoute><HistoricoVendas /></AdminRoute>} />
 
             <Route path="/produtos" element={<AdminRoute><ProdutoList /></AdminRoute>} />
             <Route path="/produtos/novo" element={<AdminRoute><ProdutoForm /></AdminRoute>} />

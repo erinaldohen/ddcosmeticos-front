@@ -31,7 +31,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // 1. Erro de Conexão (Backend desligado ou sem internet)
+    // 1. Erro de Conexão (Backend desligado ou timeout)
     if (error.code === 'ECONNABORTED' || !error.response) {
       toast.error("Servidor indisponível ou sem conexão.", { toastId: 'network-error' });
       return Promise.reject(error);
@@ -41,7 +41,18 @@ api.interceptors.response.use(
     const originalRequest = error.config;
     const isLoginRequest = originalRequest.url && originalRequest.url.includes('/auth/login');
 
-    // 2. Erro 401: Token Expirado ou Inválido
+    // 2. Erro 400: Regras de Negócio e Validações (NOVO)
+    if (status === 400 && !isLoginRequest) {
+      // Captura a mensagem de erro formatada pelo Spring Boot (ResponseStatusException ou @ExceptionHandler)
+      const backendMessage = error.response.data?.message || error.response.data || "Operação inválida. Verifique os dados.";
+
+      // Exibe como warning pois geralmente é um erro de operação do usuário (ex: saldo insuficiente)
+      toast.warning(typeof backendMessage === 'string' ? backendMessage : "Erro de validação.", {
+        toastId: `bad-request-${Date.now()}` // Garante que a mensagem apareça se for diferente
+      });
+    }
+
+    // 3. Erro 401: Token Expirado ou Inválido
     if (status === 401 && !isLoginRequest) {
       if (!isRedirecting) {
         isRedirecting = true;
@@ -59,20 +70,19 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // 3. Erro 403: Sem Permissão
+    // 4. Erro 403: Sem Permissão
     if (status === 403 && !isLoginRequest) {
       toast.error("Acesso negado: Perfil sem permissão para esta ação.", { toastId: 'forbidden-error' });
       console.warn("Bloqueio 403 na rota:", originalRequest.url);
     }
 
-    // 4. Erro 404: Endpoint não encontrado
+    // 5. Erro 404: Endpoint não encontrado
     if (status === 404 && !isLoginRequest) {
       console.error(`Rota não encontrada no backend: ${originalRequest.url}`);
     }
 
-    // 5. Erro 500: Erro Crítico no Java
+    // 6. Erro 500: Erro Crítico no Java
     if (status === 500) {
-      // O toastId garante que esta mensagem só apareça 1x, mesmo se 10 chamadas derem erro 500 juntas
       toast.error("Erro interno no servidor. Contate o suporte.", { toastId: 'server-error-500' });
       console.error("Erro 500 Detalhes:", error.response.data);
     }

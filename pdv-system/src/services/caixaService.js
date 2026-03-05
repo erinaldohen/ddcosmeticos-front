@@ -14,31 +14,26 @@ const caixaService = {
 
   // --- CONSULTAS ---
 
-  // Verifica se existe caixa aberto
   getStatus: async () => {
     const response = await api.get('/caixas/status');
     return response.data;
   },
 
-  // Busca lista de motivos únicos já salvos no banco (Histórico de Observações)
   getMotivosFrequentes: async () => {
     const response = await api.get('/caixas/motivos');
     return response.data;
   },
 
-  // Busca dados completos de um fechamento específico
   buscarDetalhes: async (idCaixa) => {
     const response = await api.get(`/caixas/${idCaixa}`);
     return response.data;
   },
 
-  // Busca movimentações do dia
   getHistoricoDiario: async (data) => {
     const response = await api.get('/caixas/diario', { params: { data } });
     return response.data;
   },
 
-  // Busca lista paginada de caixas (Histórico)
   buscarHistorico: async (inicio, fim) => {
       const params = {};
       const hoje = new Date().toISOString().split('T')[0];
@@ -63,7 +58,11 @@ const caixaService = {
 
   fechar: async (dados) => {
     const valor = typeof dados === 'object' ? dados.saldoFinalInformado : dados;
-    const response = await api.post('/caixas/fechar', { saldoFinalInformado: tratarValor(valor) });
+
+    // CORREÇÃO: Nome do campo ajustado para o DTO do Java e removido ID da URL
+    const response = await api.post('/caixas/fechar', {
+        saldoFinalDinheiroEmEspecie: tratarValor(valor)
+    });
     return response.data;
   },
 
@@ -87,7 +86,6 @@ const caixaService = {
     return response.data;
   },
 
-  // Método genérico caso precise movimentar passando string
   movimentar: async (tipo, valor, descricao) => {
     const endpoint = tipo.toUpperCase().includes('SANGRIA') ? '/caixas/sangria' : '/caixas/suprimento';
     const response = await api.post(endpoint, {

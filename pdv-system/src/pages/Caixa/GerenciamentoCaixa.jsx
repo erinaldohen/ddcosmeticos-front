@@ -40,35 +40,50 @@ const GerenciamentoCaixa = () => {
 
   useEffect(() => { carregarDados(); }, []);
 
+  // --- FUNÇÕES DE MÁSCARA MONETÁRIA ---
+  const handleValorChange = (e) => {
+    // Remove tudo que não for número
+    const onlyNums = e.target.value.replace(/\D/g, "");
+    setValorInput(onlyNums);
+  };
+
+  const getValorFormatado = (valorRaw) => {
+    if (!valorRaw) return "";
+    // Divide por 100 para criar os centavos e formata no padrão BR
+    return (parseInt(valorRaw, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  };
+
   // --- HANDLERS (Ações) ---
   const limparInputs = () => { setValorInput(''); setObservacaoInput(''); };
 
   const executarAcao = async (tipo) => {
-    if(!valorInput) return toast.warning("Informe um valor.");
-    const valor = parseFloat(valorInput.replace(',', '.') || '0');
+    if(!valorInput || parseInt(valorInput, 10) === 0) return toast.warning("Informe um valor maior que zero.");
+
+    // Converte a string limpa ("15000") para decimal (150.00) pro backend
+    const valorDecimal = parseInt(valorInput, 10) / 100;
 
     try {
       if (tipo === 'ABRIR') {
-        await caixaService.abrir(valor);
+        await caixaService.abrir(valorDecimal);
         setModalAbertura(false);
         toast.success("Caixa aberto! Boas vendas. 🚀");
       } else if (tipo === 'FECHAR') {
-        await caixaService.fechar(valor);
+        await caixaService.fechar(valorDecimal);
         setModalFechamento(false);
         toast.success("Caixa fechado e relatório gerado. ✅");
       } else if (tipo === 'SANGRIA') {
-        await caixaService.sangria({ valor, observacao: observacaoInput });
+        await caixaService.sangria({ valor: valorDecimal, observacao: observacaoInput });
         setModalSangria(false);
         toast.info("Sangria realizada.");
       } else if (tipo === 'SUPRIMENTO') {
-        await caixaService.suprimento({ valor, observacao: observacaoInput });
+        await caixaService.suprimento({ valor: valorDecimal, observacao: observacaoInput });
         setModalSuprimento(false);
         toast.success("Suprimento adicionado.");
       }
       limparInputs();
       carregarDados();
     } catch (error) {
-      toast.error("Erro ao processar operação.");
+      toast.error(error.response?.data?.message || "Erro ao processar operação.");
     }
   };
 
@@ -142,7 +157,7 @@ const GerenciamentoCaixa = () => {
             </div>
           </section>
 
-          {/* COLUNA 2: VENDAS DIGITAIS (Detalhamento Solicitado) */}
+          {/* COLUNA 2: VENDAS DIGITAIS */}
           <section className="digital-sales-panel">
             <h3><TrendingUp size={20}/> Faturamento Digital</h3>
 
@@ -192,7 +207,7 @@ const GerenciamentoCaixa = () => {
         </div>
       )}
 
-      {/* --- MODAL GENÉRICO DE INPUT --- */}
+      {/* --- MODAL GENÉRICO DE INPUT (AGORA COM MÁSCARA MONETÁRIA) --- */}
       {(modalAbertura || modalFechamento || modalSangria || modalSuprimento) && (
         <div className="modal-overlay-modern">
           <div className="modal-card-modern fade-in-up">
@@ -209,10 +224,16 @@ const GerenciamentoCaixa = () => {
                 <span>R$</span>
                 <input
                   autoFocus
-                  type="number"
-                  value={valorInput}
-                  onChange={e => setValorInput(e.target.value)}
-                  placeholder="0.00"
+                  type="text" // <-- Mudou de "number" para "text"
+                  value={getValorFormatado(valorInput)} // <-- Passa pelo formatador para exibição
+                  onChange={handleValorChange} // <-- Pega só os números da digitação
+                  onKeyDown={e => e.key === 'Enter' && (
+                    modalAbertura ? executarAcao('ABRIR') :
+                    modalFechamento ? executarAcao('FECHAR') :
+                    modalSangria ? executarAcao('SANGRIA') :
+                    executarAcao('SUPRIMENTO')
+                  )}
+                  placeholder="0,00"
                 />
               </div>
 
@@ -223,6 +244,7 @@ const GerenciamentoCaixa = () => {
                     className="input-text-modern"
                     value={observacaoInput}
                     onChange={e => setObservacaoInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && (modalSangria ? executarAcao('SANGRIA') : executarAcao('SUPRIMENTO'))}
                     placeholder="Ex: Pagamento de fornecedor..."
                   />
                 </>
