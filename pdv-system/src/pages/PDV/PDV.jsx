@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Search, Trash2, Plus, Minus, ArrowLeft, X,
-  UserCheck, RotateCcw, UserPlus, ArrowRight,
-  Clock, Banknote, Smartphone, CreditCard, ShieldCheck, Tag, AlertCircle, Building, ShoppingBag, CheckCircle2, ChevronRight
+  UserCheck, ArrowRight, Clock, Banknote, Smartphone,
+  CreditCard, ShieldCheck, Tag, AlertCircle, Building,
+  ShoppingBag, CheckCircle2, ChevronRight, LogOut
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
@@ -24,7 +25,7 @@ const PDV = () => {
   const inputValorRef = useRef(null);
   const inputClienteRef = useRef(null);
   const inputDescontoRef = useRef(null);
-  const dropdownRef = useRef(null); // NOVO: Controla a rolagem da busca
+  const dropdownRef = useRef(null);
 
   // Estados de Fluxo
   const [painelAtivo, setPainelAtivo] = useState('VENDA');
@@ -32,7 +33,6 @@ const PDV = () => {
   const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [horaAtual, setHoraAtual] = useState(new Date());
-  const [regraCancelamentoVenda, setRegraCancelamentoVenda] = useState('SENHA');
 
   // Estados de Dados
   const [carrinho, setCarrinho] = useState(() => { try { return JSON.parse(localStorage.getItem('@dd:carrinho')) || []; } catch { return []; } });
@@ -52,9 +52,9 @@ const PDV = () => {
   // Modais
   const [senhaAdmin, setSenhaAdmin] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showCleanModal, setShowCleanModal] = useState(false);
   const [showExitModal, setShowExitModal] = useState(false);
   const [showCnpjModal, setShowCnpjModal] = useState(false);
+  const [showFechamentoModal, setShowFechamentoModal] = useState(false);
 
   // Pagamento & Desconto
   const [metodoAtual, setMetodoAtual] = useState('PIX');
@@ -70,7 +70,7 @@ const PDV = () => {
   const saldoDevedor = Math.max(0, parseFloat((totalPagar - totalPago).toFixed(2)));
   const troco = Math.max(0, parseFloat((totalPago - totalPagar).toFixed(2)));
 
-  // Inicialização
+  // Inicialização (Correção do Erro 403)
   useEffect(() => {
     const init = async () => {
       try {
@@ -79,7 +79,8 @@ const PDV = () => {
           toast.warning("O Caixa está Fechado.", { toastId: 'cx-fechado' });
           navigate('/caixa'); return;
         }
-        try { const { data } = await api.get('/configuracoes'); if (data?.sistema?.cancelamentoVenda) setRegraCancelamentoVenda(data.sistema.cancelamentoVenda); } catch (e) {}
+        // Removida a chamada '/configuracoes' para não dar erro 403 no Operador de Caixa.
+        // A regra de cancelamento será sempre pedir senha, garantindo a segurança.
         setValidandoCaixa(false);
       } catch (error) {
         if (!navigator.onLine) { toast.warning("Modo Offline ativo."); setValidandoCaixa(false); }
@@ -97,27 +98,24 @@ const PDV = () => {
 
   // Foco Automático
   useEffect(() => {
-      if (showPasswordModal || showCleanModal || showExitModal || showCnpjModal) return;
+      if (showPasswordModal || showExitModal || showCnpjModal || showFechamentoModal) return;
       if (painelAtivo === 'VENDA') setTimeout(() => inputBuscaRef.current?.focus(), 50);
       else if (painelAtivo === 'PAGAMENTO') setTimeout(() => inputValorRef.current?.focus(), 50);
       else if (painelAtivo === 'CLIENTE') setTimeout(() => inputClienteRef.current?.focus(), 50);
       else if (painelAtivo === 'DESCONTO') setTimeout(() => inputDescontoRef.current?.focus(), 50);
-  }, [painelAtivo, showPasswordModal, showCleanModal, showExitModal, showCnpjModal]);
+  }, [painelAtivo, showPasswordModal, showExitModal, showCnpjModal, showFechamentoModal]);
 
-  // NOVO: Scroll Automático na Busca via Teclado
   useEffect(() => {
       if (selectedIndex >= 0 && dropdownRef.current) {
           const selectedElement = dropdownRef.current.children[selectedIndex];
-          if (selectedElement) {
-              selectedElement.scrollIntoView({ block: 'nearest' });
-          }
+          if (selectedElement) selectedElement.scrollIntoView({ block: 'nearest' });
       }
   }, [selectedIndex]);
 
   // Atalhos de Teclado
   useEffect(() => {
     const handleKeyDown = (e) => {
-        const isModalOpen = showExitModal || showCleanModal || showPasswordModal || showCnpjModal;
+        const isModalOpen = showExitModal || showPasswordModal || showCnpjModal || showFechamentoModal;
         if (isModalOpen) return;
 
         if (e.key === 'Escape') {
@@ -126,12 +124,7 @@ const PDV = () => {
             setPainelAtivo('VENDA'); return;
         }
 
-        // CORREÇÃO: F2 força o foco mesmo se já estiver na tela de VENDA
-        if (e.key === 'F2') {
-            e.preventDefault();
-            setPainelAtivo('VENDA');
-            setTimeout(() => inputBuscaRef.current?.focus(), 50);
-        }
+        if (e.key === 'F2') { e.preventDefault(); setPainelAtivo('VENDA'); setTimeout(() => inputBuscaRef.current?.focus(), 50); }
         if (e.key === 'F3') { e.preventDefault(); setPainelAtivo('CLIENTE'); }
         if (e.key === 'F4') { e.preventDefault(); if (carrinho.length > 0) setPainelAtivo('DESCONTO'); else toast.warn("Carrinho vazio"); }
         if (e.key === 'F8') { e.preventDefault(); if (carrinho.length > 0) iniciarPagamento(); else toast.warn("Carrinho vazio"); }
@@ -152,18 +145,6 @@ const PDV = () => {
   const formatCurrencyInput = (v) => v.replace(/\D/g, "");
   const getValorFormatado = (r) => r ? (parseInt(r, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : "";
 
-  // Busca Inteligente
-  useEffect(() => {
-      if (busca.trim().length < 3) { setSugestoesProdutos([]); setSelectedIndex(-1); return; }
-      const delay = setTimeout(async () => {
-          try {
-              const { data } = await api.get(`/produtos?termo=${busca}&size=10`);
-              setSugestoesProdutos(data.content ? data.content : data); setSelectedIndex(-1);
-          } catch (error) {}
-      }, 300);
-      return () => clearTimeout(delay);
-  }, [busca]);
-
   const adicionarProdutoPorObjeto = useCallback((prod) => {
       setCarrinho(prev => {
           const index = prev.findIndex(i => i.id === prod.id);
@@ -175,6 +156,18 @@ const PDV = () => {
       setTimeout(() => setUltimoItemAdicionadoId(null), 800);
       setTimeout(() => inputBuscaRef.current?.focus(), 100);
   }, []);
+
+  // Busca Inteligente
+  useEffect(() => {
+      if (busca.trim().length < 3) { setSugestoesProdutos([]); setSelectedIndex(-1); return; }
+      const delay = setTimeout(async () => {
+          try {
+              const { data } = await api.get(`/produtos?termo=${busca}&size=10`);
+              setSugestoesProdutos(data.content ? data.content : data); setSelectedIndex(-1);
+          } catch (error) {}
+      }, 300);
+      return () => clearTimeout(delay);
+  }, [busca]);
 
   const processarBuscaManual = async () => {
       try {
@@ -205,7 +198,7 @@ const PDV = () => {
 
   const handleLimparVenda = () => {
       if(carrinho.length === 0) return;
-      if (regraCancelamentoVenda === 'SENHA') setShowPasswordModal(true); else setShowCleanModal(true);
+      setShowPasswordModal(true); // O operador sempre precisa da senha para cancelar
   };
 
   const confirmarLimpezaComSenha = async () => {
@@ -215,7 +208,37 @@ const PDV = () => {
           limparEstadoVenda(); setShowPasswordModal(false); setSenhaAdmin(''); toast.success("Venda cancelada.");
       } catch (e) { toast.error("Senha incorreta!"); }
   };
-  const confirmarLimpezaLivre = () => { limparEstadoVenda(); setShowCleanModal(false); };
+
+  // ==========================================================
+  // CORREÇÃO: LÓGICA DE FECHAMENTO DE CAIXA
+  // ==========================================================
+  const handleSolicitarFechamento = () => {
+      if (carrinho.length > 0) {
+          toast.warning("Cancele a venda atual antes de fechar o caixa.");
+          return;
+      }
+      setShowFechamentoModal(true);
+  };
+
+  const confirmarFechamentoCaixa = async () => {
+        setLoading(true);
+        try {
+            // CORREÇÃO: Rota no plural ('/caixas/fechar') e envio do Objeto JSON esperado pelo Java
+            await api.post('/caixas/fechar', {
+                saldoFinalDinheiroEmEspecie: 0
+            });
+
+            toast.success("Caixa fechado com sucesso. Sessão encerrada.");
+            setShowFechamentoModal(false);
+            limparEstadoVenda();
+            navigate('/caixa');
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Erro ao conectar com o servidor para fechar o caixa.");
+        } finally {
+            setLoading(false);
+        }
+    };
+  // ==========================================================
 
   const handleIdentificarCliente = async () => {
       const docLimpo = cleanNumeric(buscaCliente);
@@ -237,20 +260,32 @@ const PDV = () => {
       } else { toast.error("Digite um CPF (11) ou CNPJ (14) válido."); }
   };
 
+  // ==========================================================
+  // CORREÇÃO: LÓGICA DE DESCONTO
+  // ==========================================================
   const aplicarDescontoGlobal = () => {
       const valorBase = parseInt(descontoInputRaw || '0', 10) / 100;
-      if (valorBase <= 0) return setPainelAtivo('VENDA');
+
+      // Se o usuário digitar 0, ele limpa o desconto atual.
+      if (valorBase <= 0) {
+          setDescontoTotalRaw(0);
+          setPainelAtivo('VENDA');
+          setDescontoInputRaw('');
+          toast.info("Desconto removido.");
+          return;
+      }
+
       let valorReal = (tipoDesconto === '%') ? subtotalItens * (valorBase / 100) : valorBase;
       if (tipoDesconto === '%' && valorBase > 100) return toast.error("Máximo é 100%");
       if (tipoDesconto === 'R$' && valorBase > subtotalItens) return toast.error("Maior que o subtotal");
-      setDescontoTotalRaw(valorReal); setPainelAtivo('VENDA'); setDescontoInputRaw(''); toast.success("Desconto aplicado!");
+
+      setDescontoTotalRaw(valorReal);
+      setPainelAtivo('VENDA');
+      setDescontoInputRaw('');
+      toast.success("Desconto aplicado!");
   };
 
   const iniciarPagamento = () => {
-      if (totalPagar >= 5000 && !cliente && !clienteAvulso.documento) {
-          toast.error("SEFAZ: Vendas acima de R$ 5.000 exigem identificação.", { autoClose: 5000 });
-          setPainelAtivo('CLIENTE'); return;
-      }
       setPainelAtivo('PAGAMENTO');
       setValorInputRaw(Math.round(saldoDevedor * 100).toString());
   };
@@ -277,9 +312,28 @@ const PDV = () => {
       }
   };
 
+  const handleRemoverPagamento = (id) => {
+      const novosPagamentos = pagamentos.filter(x => x.id !== id);
+      setPagamentos(novosPagamentos);
+
+      const novoTotalPago = novosPagamentos.reduce((acc, p) => acc + p.valor, 0);
+      const novoSaldo = Math.max(0, parseFloat((totalPagar - novoTotalPago).toFixed(2)));
+
+      if (novoSaldo > 0) {
+          setValorInputRaw((Math.round(novoSaldo * 100)).toString());
+      }
+  };
+
   const finalizarVendaReal = async (pagamentosFinais = pagamentos) => {
       const saldoFinal = totalPagar - pagamentosFinais.reduce((acc, p) => acc + p.valor, 0);
       if (saldoFinal > 0.01) return toast.error(`Falta R$ ${saldoFinal.toFixed(2)}`);
+
+      if (totalPagar >= 5000 && !cliente && !clienteAvulso.documento) {
+          toast.error("SEFAZ: Vendas acima de R$ 5.000 exigem identificação do cliente.");
+          setPainelAtivo('CLIENTE');
+          return;
+      }
+
       setLoading(true);
 
       try {
@@ -306,22 +360,23 @@ const PDV = () => {
   return (
     <div className="pos-container">
 
-      {/* =========================================================
-          LADO ESQUERDO: O CARRINHO
-          ========================================================= */}
       <section className="pos-cart-section">
-
           <header className="pos-header">
               <div className="pos-brand">
                   <div className="brand-badge">DD</div>
                   <div className="brand-text">
                       <h1>DD Cosméticos</h1>
-                      <span>{isOnline ? 'Terminal Online' : 'Terminal Offline'} • Operador: {getUserRole()}</span>
+                      <span>{isOnline ? 'Terminal Online' : 'Terminal Offline'} • {getUserRole()}</span>
                   </div>
               </div>
-              <button className="btn-exit" onClick={() => carrinho.length ? setShowExitModal(true) : navigate('/dashboard')}>
-                  <ArrowLeft size={20}/> Sair
-              </button>
+              <div className="pos-header-actions" style={{display: 'flex', gap: '8px'}}>
+                  <button className="btn-exit" style={{borderColor: '#ef4444', color: '#ef4444'}} onClick={handleSolicitarFechamento} title="Encerrar o Turno e Fechar o Caixa">
+                      <LogOut size={18}/> Fechar Caixa
+                  </button>
+                  <button className="btn-exit" onClick={() => carrinho.length ? setShowExitModal(true) : navigate('/dashboard')} title="Minimizar PDV e Voltar ao Sistema">
+                      <ArrowLeft size={18}/> Sair
+                  </button>
+              </div>
           </header>
 
           <div className="pos-cart-body">
@@ -361,7 +416,20 @@ const PDV = () => {
           <footer className="pos-cart-footer">
               <div className="footer-calc">
                   <div className="calc-row text-muted"><span>Subtotal dos itens</span> <span>R$ {subtotalItens.toFixed(2)}</span></div>
-                  <div className="calc-row text-pink"><span>Descontos Aplicados</span> <span>- R$ {descontoTotalRaw.toFixed(2)}</span></div>
+
+                  {/* UX: Adicionado botão de lixeira diretamente ao lado do desconto para remover com 1 clique */}
+                  {descontoTotalRaw > 0 && (
+                      <div className="calc-row text-pink">
+                          <span style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                              Descontos
+                              <button onClick={() => setDescontoTotalRaw(0)} title="Remover Desconto" style={{background:'transparent', border:'none', cursor:'pointer', color:'#ec4899', padding:0}}>
+                                  <Trash2 size={16}/>
+                              </button>
+                          </span>
+                          <span>- R$ {descontoTotalRaw.toFixed(2)}</span>
+                      </div>
+                  )}
+
                   <div className="calc-row grand-total">
                       <span>TOTAL A PAGAR</span>
                       <span className="total-value">R$ {totalPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
@@ -370,93 +438,55 @@ const PDV = () => {
           </footer>
       </section>
 
-      {/* =========================================================
-          LADO DIREITO: ACTION CENTER
-          ========================================================= */}
       <section className="pos-action-section">
-
-          {/* --- TELA 1: VENDA (PADRÃO) --- */}
           {painelAtivo === 'VENDA' && (
               <div className="action-panel panel-venda animate-fade">
-
                   <div className="search-premium-box">
                       <Search className="sp-icon" size={26}/>
-                      <input
-                          ref={inputBuscaRef} type="text" className="sp-input"
-                          placeholder="Buscar produto (F2)..."
-                          value={busca} onChange={(e) => setBusca(e.target.value)} onKeyDown={handleSearchKeyDown} autoComplete="off"
-                      />
+                      <input ref={inputBuscaRef} type="text" className="sp-input" placeholder="Buscar produto (F2)..." value={busca} onChange={(e) => setBusca(e.target.value)} onKeyDown={handleSearchKeyDown} autoComplete="off" />
                       {busca && <button className="sp-clear" onClick={() => {setBusca(''); inputBuscaRef.current?.focus();}}><X size={22}/></button>}
-
-                      {/* O Dropdown agora possui a REF e rola automaticamente */}
                       {sugestoesProdutos.length > 0 && (
                           <div className="sp-dropdown" ref={dropdownRef}>
                               {sugestoesProdutos.map((prod, idx) => (
                                   <div key={prod.id} className={`spd-row ${idx === selectedIndex ? 'selected' : ''}`} onClick={() => adicionarProdutoPorObjeto(prod)}>
-                                      <div className="spd-info">
-                                          <strong>{prod.descricao}</strong>
-                                          <span>{prod.codigoBarras}</span>
-                                      </div>
+                                      <div className="spd-info"><strong>{prod.descricao}</strong><span>{prod.codigoBarras}</span></div>
                                       <div className="spd-price">R$ {prod.precoVenda.toFixed(2)}</div>
                                   </div>
                               ))}
                           </div>
                       )}
                   </div>
-
                   <div className="customer-soft-card" onClick={() => setPainelAtivo('CLIENTE')}>
                       <div className="csc-icon"><UserCheck size={26}/></div>
-                      <div className="csc-info">
-                          <label>Identificação na Nota</label>
-                          <strong>{nomeExibicaoCliente}</strong>
-                      </div>
+                      <div className="csc-info"><label>Identificação na Nota</label><strong>{nomeExibicaoCliente}</strong></div>
                       <ChevronRight className="csc-arrow" size={24}/>
                   </div>
-
                   <div className="quick-actions-grid">
-                      <button className="qa-btn" onClick={() => setPainelAtivo('CLIENTE')}>
-                          <kbd>F3</kbd> <span>Cliente</span>
-                      </button>
-                      <button className="qa-btn" onClick={() => { if(carrinho.length) setPainelAtivo('DESCONTO'); else toast.warn("Carrinho vazio"); }}>
-                          <kbd>F4</kbd> <span>Desconto</span>
-                      </button>
-                      <button className="qa-btn btn-cancel-venda" onClick={handleLimparVenda} disabled={!carrinho.length}>
-                          <kbd className="kbd-danger">DEL</kbd> <span>Cancelar</span>
-                      </button>
+                      <button className="qa-btn" onClick={() => setPainelAtivo('CLIENTE')}><kbd>F3</kbd> <span>Cliente</span></button>
+                      <button className="qa-btn" onClick={() => { if(carrinho.length) setPainelAtivo('DESCONTO'); else toast.warn("Carrinho vazio"); }}><kbd>F4</kbd> <span>Desconto</span></button>
+                      <button className="qa-btn btn-cancel-venda" onClick={handleLimparVenda} disabled={!carrinho.length}><kbd className="kbd-danger">DEL</kbd> <span>Cancelar</span></button>
                   </div>
-
                   <button className="btn-checkout-soft" disabled={!carrinho.length} onClick={iniciarPagamento}>
-                      <div className="bcs-content">
-                          <span className="bcs-label">IR PARA PAGAMENTO</span>
-                          <span className="bcs-shortcut">Aperte F8</span>
-                      </div>
+                      <div className="bcs-content"><span className="bcs-label">IR PARA PAGAMENTO</span><span className="bcs-shortcut">Aperte F8</span></div>
                       <div className="bcs-icon"><ArrowRight size={36}/></div>
                   </button>
               </div>
           )}
 
-          {/* --- TELA 2: PAGAMENTO (REORGANIZADA HIERARQUICAMENTE) --- */}
           {painelAtivo === 'PAGAMENTO' && (
               <div className="action-panel panel-pagamento animate-slide-left">
                   <header className="panel-header">
                       <button className="btn-voltar" onClick={() => setPainelAtivo('VENDA')}><ArrowLeft size={20}/> VOLTAR (ESC)</button>
                       <h2>Concluir Venda</h2>
                   </header>
-
                   <div className="payment-methods-grid">
-                      {[
-                        {id: 'PIX', key: '1', icon: <Smartphone size={20}/>, label: 'Pix'},
-                        {id: 'DINHEIRO', key: '2', icon: <Banknote size={20}/>, label: 'Dinheiro'},
-                        {id: 'CREDITO', key: '3', icon: <CreditCard size={20}/>, label: 'Crédito'},
-                        {id: 'DEBITO', key: '4', icon: <CreditCard size={20}/>, label: 'Débito'}
-                      ].map(m => (
+                      {[{id: 'PIX', key: '1', icon: <Smartphone size={20}/>, label: 'Pix'}, {id: 'DINHEIRO', key: '2', icon: <Banknote size={20}/>, label: 'Dinheiro'}, {id: 'CREDITO', key: '3', icon: <CreditCard size={20}/>, label: 'Crédito'}, {id: 'DEBITO', key: '4', icon: <CreditCard size={20}/>, label: 'Débito'}].map(m => (
                           <button key={m.id} className={`pm-soft-card ${metodoAtual === m.id ? 'active' : ''}`} onClick={() => { setMetodoAtual(m.id); inputValorRef.current?.focus(); }}>
                               <div className="pms-top"><kbd>{m.key}</kbd> {m.icon}</div>
                               <span className="pms-label">{m.label}</span>
                           </button>
                       ))}
                   </div>
-
                   <div className="payment-input-area">
                       <label>VALOR A INSERIR ({metodoAtual})</label>
                       <div className="pia-wrapper">
@@ -465,51 +495,44 @@ const PDV = () => {
                           <button className="pia-btn" onClick={handleAdicionarPagamento}><CheckCircle2 size={32}/></button>
                       </div>
                   </div>
-
                   <div className="payment-logs-soft">
                       {pagamentos.map(p => (
                           <div key={p.id} className={`pls-row ${ultimoPagamentoId === p.id ? 'flash-payment' : ''}`}>
-                              <span className="pls-type">{p.tipo}</span>
-                              <strong className="pls-val">R$ {p.valor.toFixed(2)}</strong>
-                              <button onClick={() => setPagamentos(pagamentos.filter(x => x.id !== p.id))}><Trash2 size={18}/></button>
+                              <span className="pls-type">{p.tipo}</span><strong className="pls-val">R$ {p.valor.toFixed(2)}</strong>
+                              <button onClick={() => handleRemoverPagamento(p.id)}><Trash2 size={18}/></button>
                           </div>
                       ))}
                   </div>
-
                   <div className="payment-footer-soft">
                       <div className="pfs-row"><span>Falta Receber:</span> <strong className="val-red">R$ {saldoDevedor.toFixed(2)}</strong></div>
                       <div className="pfs-row"><span>Troco do Cliente:</span> <strong className="val-green">R$ {troco.toFixed(2)}</strong></div>
                       <button className="btn-checkout-finish" disabled={saldoDevedor > 0.01 || loading} onClick={() => finalizarVendaReal(pagamentos)}>
-                          <div className="bcf-content">
-                              <span className="bcf-label">{loading ? 'EMITINDO...' : 'FINALIZAR VENDA'}</span>
-                              <span className="bcf-shortcut">ENTER</span>
-                          </div>
+                          <div className="bcf-content"><span className="bcf-label">{loading ? 'EMITINDO...' : 'FINALIZAR VENDA'}</span><span className="bcf-shortcut">ENTER</span></div>
                       </button>
                   </div>
               </div>
           )}
 
-          {/* --- TELA 3: CLIENTE --- */}
           {painelAtivo === 'CLIENTE' && (
               <div className="action-panel panel-centered animate-slide-left">
                   <header className="panel-header absolute-top"><button className="btn-voltar" onClick={() => setPainelAtivo('VENDA')}><ArrowLeft size={20}/> VOLTAR (ESC)</button></header>
                   <div className="centered-content">
                       <div className="icon-circle mb-4"><Building size={48}/></div>
                       <h2 className="title-main">Identificar Cliente</h2>
-                      <p className="subtitle-sec mb-6">Digite o CPF ou CNPJ (obrigatório acima de R$ 5.000)</p>
+                      <p className="subtitle-sec mb-6">Digite o CPF ou CNPJ</p>
                       <input ref={inputClienteRef} className="input-giant-soft" placeholder="Apenas números..." value={buscaCliente} onChange={(e) => setBuscaCliente(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleIdentificarCliente(); }} />
                       <button className="btn-primary-soft mt-4" onClick={handleIdentificarCliente}>VINCULAR E VOLTAR (ENTER)</button>
                   </div>
               </div>
           )}
 
-          {/* --- TELA 4: DESCONTO --- */}
           {painelAtivo === 'DESCONTO' && (
               <div className="action-panel panel-centered animate-slide-left">
                   <header className="panel-header absolute-top"><button className="btn-voltar" onClick={() => setPainelAtivo('VENDA')}><ArrowLeft size={20}/> VOLTAR (ESC)</button></header>
                   <div className="centered-content">
                       <div className="icon-circle mb-4"><Tag size={48}/></div>
                       <h2 className="title-main">Aplicar Desconto</h2>
+                      <p className="subtitle-sec mb-4">Para remover, digite 0.</p>
                       <div className="toggle-soft mt-4 mb-4">
                           <button className={tipoDesconto === 'R$' ? 'active' : ''} onClick={() => { setTipoDesconto('R$'); inputDescontoRef.current?.focus(); }}>R$ Fixo</button>
                           <button className={tipoDesconto === '%' ? 'active' : ''} onClick={() => { setTipoDesconto('%'); inputDescontoRef.current?.focus(); }}>% Porc.</button>
@@ -522,10 +545,25 @@ const PDV = () => {
                   </div>
               </div>
           )}
-
       </section>
 
-      {/* MODAIS DE SEGURANÇA */}
+      {/* MODAIS */}
+      {showFechamentoModal && (
+          <div className="modal-glass">
+              <div className="modal-glass-card text-center sm">
+                  <LogOut size={56} className="mg-icon danger mx-auto mb-3" />
+                  <h3 className="text-danger font-bold">Encerrar o Turno?</h3>
+                  <p className="text-lg text-sec mb-4" style={{fontSize: '0.9rem', lineHeight: '1.4'}}>
+                      O terminal será desconectado e o caixa consolidado. Tem certeza que deseja <strong>Fechar o Caixa</strong> agora?
+                  </p>
+                  <div className="mg-actions mt-6 justify-center">
+                      <button className="mg-btn cancel" onClick={() => setShowFechamentoModal(false)} disabled={loading}>Voltar</button>
+                      <button className="mg-btn danger" onClick={confirmarFechamentoCaixa} disabled={loading}>{loading ? 'Processando...' : 'Sim, Fechar Caixa'}</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {showCnpjModal && (
           <div className="modal-glass">
               <div className="modal-glass-card">
@@ -558,33 +596,18 @@ const PDV = () => {
           </div>
       )}
 
-      {showCleanModal && (
-          <div className="modal-glass">
-              <div className="modal-glass-card text-center sm">
-                  <AlertCircle size={56} className="mg-icon warning mx-auto mb-3" />
-                  <h3 className="text-main font-bold">Cancelar Venda?</h3>
-                  <p className="text-lg text-sec mb-4">O carrinho será esvaziado.</p>
-                  <div className="mg-actions mt-6 justify-center">
-                      <button className="mg-btn cancel" onClick={() => setShowCleanModal(false)}>Não</button>
-                      <button className="mg-btn danger" onClick={confirmarLimpezaLivre}>Sim, Cancelar</button>
-                  </div>
-              </div>
-          </div>
-      )}
-
       {showExitModal && (
           <div className="modal-glass">
               <div className="modal-glass-card text-center sm">
                   <h3 className="text-main font-bold">Sair do Terminal?</h3>
-                  <p className="text-lg text-sec mb-4">A venda atual será perdida.</p>
+                  <p className="text-lg text-sec mb-4" style={{fontSize: '0.9rem'}}>O seu caixa continuará <strong>Aberto</strong>, mas a venda atual será perdida.</p>
                   <div className="mg-actions mt-6 justify-center">
                       <button className="mg-btn cancel" onClick={() => setShowExitModal(false)}>Ficar</button>
-                      <button className="mg-btn confirm" onClick={() => navigate('/dashboard')}>Sair do Caixa</button>
+                      <button className="mg-btn confirm" onClick={() => navigate('/dashboard')}>Sair do Terminal</button>
                   </div>
               </div>
           </div>
       )}
-
     </div>
   );
 };

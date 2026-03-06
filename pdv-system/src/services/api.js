@@ -3,10 +3,10 @@ import { toast } from 'react-toastify';
 
 let isRedirecting = false;
 
-// Cria a instância do Axios
+// Cria a instância do Axios com a URL base do seu Spring Boot
 const api = axios.create({
   baseURL: 'http://localhost:8080/api/v1',
-  timeout: 10000,
+  timeout: 15000, // Aumentado para 15s (BI costuma demorar mais que o PDV)
   withCredentials: true
 });
 
@@ -16,8 +16,8 @@ api.interceptors.request.use(
     const token = localStorage.getItem('token');
 
     if (token && token !== 'null' && token !== 'undefined') {
+      // Remove aspas extras que o localStorage às vezes coloca
       const cleanToken = token.replace(/['"]+/g, '').trim();
-
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${cleanToken}`;
     }
@@ -31,36 +31,41 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // 1. Erro de Conexão (Backend desligado ou timeout)
+    // 1. Erro de Conexão ou Servidor Offline
     if (error.code === 'ECONNABORTED' || !error.response) {
-      toast.error("Servidor indisponível ou sem conexão.", { toastId: 'network-error' });
+      toast.error("Servidor DD Cosméticos indisponível.", { toastId: 'network-error' });
       return Promise.reject(error);
     }
 
     const status = error.response.status;
     const originalRequest = error.config;
-    const isLoginRequest = originalRequest.url && originalRequest.url.includes('/auth/login');
+    const url = originalRequest.url || '';
 
-    // 2. Erro 400: Regras de Negócio e Validações (NOVO)
+    // Identificadores de rota para evitar alertas desnecessários
+    const isLoginRequest = url.includes('/auth/login');
+    const isReportRequest = url.includes('/relatorios');
+
+    // 2. Erro 400: Regras de Negócio e Validações
     if (status === 400 && !isLoginRequest) {
-      // Captura a mensagem de erro formatada pelo Spring Boot (ResponseStatusException ou @ExceptionHandler)
-      const backendMessage = error.response.data?.message || error.response.data || "Operação inválida. Verifique os dados.";
+      // SILENCIAR: Se for erro em Relatórios, não mostra Toast (o componente trata com Mocks)
+      if (isReportRequest) {
+        console.warn("[BI] Erro 400 na rota de relatórios. Verifique o mapeamento do LocalDate no Java.");
+        return Promise.reject(error);
+      }
 
-      // Exibe como warning pois geralmente é um erro de operação do usuário (ex: saldo insuficiente)
-      toast.warning(typeof backendMessage === 'string' ? backendMessage : "Erro de validação.", {
-        toastId: `bad-request-${Date.now()}` // Garante que a mensagem apareça se for diferente
-      });
+      const backendMessage = error.response.data?.message || error.response.data || "Operação inválida.";
+
+      // Usa um toastId fixo por mensagem para evitar duplicidade na tela
+      toast.warning(backendMessage, { toastId: `bad-request-${backendMessage}` });
     }
 
-    // 3. Erro 401: Token Expirado ou Inválido
+    // 3. Erro 401: Sessão Expirada (Token Inválido)
     if (status === 401 && !isLoginRequest) {
       if (!isRedirecting) {
         isRedirecting = true;
+        localStorage.clear(); // Limpa tudo para garantir segurança
 
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-
-        toast.error("Sessão expirada. Faça login novamente.", { toastId: 'session-expired' });
+        toast.error("Sessão expirada. Identifique-se novamente.", { toastId: 'session-expired' });
 
         setTimeout(() => {
           window.location.href = '/login';
@@ -70,21 +75,19 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // 4. Erro 403: Sem Permissão
+    // 4. Erro 403: Proibido (Permissão de Perfil)
     if (status === 403 && !isLoginRequest) {
-      toast.error("Acesso negado: Perfil sem permissão para esta ação.", { toastId: 'forbidden-error' });
-      console.warn("Bloqueio 403 na rota:", originalRequest.url);
+      toast.error("Seu perfil não tem permissão para acessar este recurso.", { toastId: 'forbidden-error' });
+      console.warn("Acesso negado em:", url);
     }
 
-    // 5. Erro 404: Endpoint não encontrado
-    if (status === 404 && !isLoginRequest) {
-      console.error(`Rota não encontrada no backend: ${originalRequest.url}`);
-    }
-
-    // 6. Erro 500: Erro Crítico no Java
+    // 5. Erro 500: Erro Crítico no Backend Java
     if (status === 500) {
-      toast.error("Erro interno no servidor. Contate o suporte.", { toastId: 'server-error-500' });
-      console.error("Erro 500 Detalhes:", error.response.data);
+      // Novamente, se for relatório, deixa o front lidar silenciosamente
+      if (!isReportRequest) {
+        toast.error("Ocorreu um erro interno no servidor.", { toastId: 'server-error-500' });
+      }
+      console.error("Erro 500 no Java:", error.response.data);
     }
 
     return Promise.reject(error);

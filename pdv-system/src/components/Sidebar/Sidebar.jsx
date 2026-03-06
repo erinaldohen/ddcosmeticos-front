@@ -4,7 +4,8 @@ import {
   LayoutDashboard, ShoppingCart, Package, Users,
   Settings, LogOut, ChevronLeft, X,
   FileText, ShieldCheck, Truck, History, Clock,
-  Wallet, TrendingDown, Store, ClipboardList, ShoppingBag
+  Wallet, TrendingDown, Store, ClipboardList, ShoppingBag,
+  BarChart3 // <-- Ícone novo importado para o BI
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -37,17 +38,19 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
   // Menu Reestruturado e em Ordem Alfabética
   const menuGroups = [
       {
-        title: 'Visão Geral',
+        title: 'Visão Estratégica',
         items: [
-          { path: '/dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+          // Painel Operacional vs Painel Analítico
+          { path: '/dashboard', icon: <LayoutDashboard size={20} />, label: 'Painel Diário', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+          { path: '/relatorios', icon: <BarChart3 size={20} />, label: 'Inteligência (BI)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
         ]
       },
       {
         title: 'Frente de Loja',
         items: [
-          // C -> H -> P (Ordem Alfabética mantida)
+          // C -> H -> P
           { path: '/caixa', icon: <Store size={20} />, label: 'Controle de Caixa', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA', 'ROLE_USUARIO'] },
-          { path: '/vendas/historico', icon: <ShoppingBag size={20} />, label: 'Histórico de Vendas', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] }, // <-- NOVA PÁGINA AQUI
+          { path: '/vendas/historico', icon: <ShoppingBag size={20} />, label: 'Histórico de Vendas', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
           { path: '/pdv', icon: <ShoppingCart size={20} />, label: 'PDV (Vendas)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA', 'ROLE_USUARIO'] },
         ]
       },

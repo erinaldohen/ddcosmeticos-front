@@ -10,6 +10,8 @@ import MainLayout from './components/Layout/MainLayout';
 import Login from './pages/Login/Login';
 import PDV from './pages/PDV/PDV';
 import Dashboard from './pages/Dashboard/Dashboard';
+// NOVA PÁGINA: Central de Inteligência (BI)
+import Relatorios from './pages/Relatorios/Relatorios';
 import Configuracoes from './pages/Configuracoes/Configuracoes';
 import ProdutoList from './pages/Produtos/ProdutoList';
 import ProdutoForm from './pages/Produtos/ProdutoForm';
@@ -19,7 +21,6 @@ import FornecedorList from './pages/Fornecedores/FornecedorList';
 import FornecedorForm from './pages/Fornecedores/FornecedorForm';
 import GerenciamentoCaixa from './pages/Caixa/GerenciamentoCaixa';
 import HistoricoCaixa from './pages/Caixa/HistoricoCaixa';
-// NOVA PÁGINA: Histórico de Vendas
 import HistoricoVendas from './pages/Vendas/Historico/HistoricoVendas';
 import RelatorioImpostos from './pages/Fiscal/RelatorioImpostos';
 import Auditoria from './pages/Auditoria/Auditoria';
@@ -72,10 +73,11 @@ export default function App() {
         {/* ROTAS ADMINISTRATIVAS */}
         <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
+            {/* ROTA DA CENTRAL DE BI PLUGADA AQUI */}
+            <Route path="/relatorios" element={<AdminRoute><Relatorios /></AdminRoute>} />
+
             <Route path="/caixa" element={<PrivateRoute><GerenciamentoCaixa /></PrivateRoute>} />
             <Route path="/historico-caixa" element={<AdminRoute><HistoricoCaixa /></AdminRoute>} />
-
-            {/* ROTA NOVA PLUGADA AQUI */}
             <Route path="/vendas/historico" element={<AdminRoute><HistoricoVendas /></AdminRoute>} />
 
             <Route path="/produtos" element={<AdminRoute><ProdutoList /></AdminRoute>} />
