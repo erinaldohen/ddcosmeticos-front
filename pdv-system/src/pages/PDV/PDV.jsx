@@ -33,6 +33,7 @@ const PDV = () => {
   const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [horaAtual, setHoraAtual] = useState(new Date());
+  const [valorFechamentoRaw, setValorFechamentoRaw] = useState('');
 
   // Estados de Dados
   const [carrinho, setCarrinho] = useState(() => { try { return JSON.parse(localStorage.getItem('@dd:carrinho')) || []; } catch { return []; } });
@@ -70,7 +71,7 @@ const PDV = () => {
   const saldoDevedor = Math.max(0, parseFloat((totalPagar - totalPago).toFixed(2)));
   const troco = Math.max(0, parseFloat((totalPago - totalPagar).toFixed(2)));
 
-  // Inicialização (Correção do Erro 403)
+  // Inicialização
   useEffect(() => {
     const init = async () => {
       try {
@@ -79,8 +80,6 @@ const PDV = () => {
           toast.warning("O Caixa está Fechado.", { toastId: 'cx-fechado' });
           navigate('/caixa'); return;
         }
-        // Removida a chamada '/configuracoes' para não dar erro 403 no Operador de Caixa.
-        // A regra de cancelamento será sempre pedir senha, garantindo a segurança.
         setValidandoCaixa(false);
       } catch (error) {
         if (!navigator.onLine) { toast.warning("Modo Offline ativo."); setValidandoCaixa(false); }
@@ -198,7 +197,7 @@ const PDV = () => {
 
   const handleLimparVenda = () => {
       if(carrinho.length === 0) return;
-      setShowPasswordModal(true); // O operador sempre precisa da senha para cancelar
+      setShowPasswordModal(true);
   };
 
   const confirmarLimpezaComSenha = async () => {
@@ -210,7 +209,7 @@ const PDV = () => {
   };
 
   // ==========================================================
-  // CORREÇÃO: LÓGICA DE FECHAMENTO DE CAIXA
+  // LÓGICA DE FECHAMENTO DE CAIXA
   // ==========================================================
   const handleSolicitarFechamento = () => {
       if (carrinho.length > 0) {
@@ -221,24 +220,25 @@ const PDV = () => {
   };
 
   const confirmarFechamentoCaixa = async () => {
-        setLoading(true);
-        try {
-            // CORREÇÃO: Rota no plural ('/caixas/fechar') e envio do Objeto JSON esperado pelo Java
-            await api.post('/caixas/fechar', {
-                saldoFinalDinheiroEmEspecie: 0
-            });
+      setLoading(true);
+      try {
+          const valorInformado = parseInt(valorFechamentoRaw.replace(/\D/g, '') || '0', 10) / 100;
 
-            toast.success("Caixa fechado com sucesso. Sessão encerrada.");
-            setShowFechamentoModal(false);
-            limparEstadoVenda();
-            navigate('/caixa');
-        } catch (error) {
-            toast.error(error.response?.data?.message || "Erro ao conectar com o servidor para fechar o caixa.");
-        } finally {
-            setLoading(false);
-        }
-    };
-  // ==========================================================
+          await api.post('/caixas/fechar', {
+              valorFisicoInformado: valorInformado
+          });
+
+          toast.success("Caixa fechado com sucesso. Sessão encerrada.");
+          setShowFechamentoModal(false);
+          setValorFechamentoRaw('');
+          limparEstadoVenda();
+          navigate('/caixa');
+      } catch (error) {
+          toast.error(error.response?.data?.message || "Erro ao conectar com o servidor para fechar o caixa.");
+      } finally {
+          setLoading(false);
+      }
+  };
 
   const handleIdentificarCliente = async () => {
       const docLimpo = cleanNumeric(buscaCliente);
@@ -260,13 +260,9 @@ const PDV = () => {
       } else { toast.error("Digite um CPF (11) ou CNPJ (14) válido."); }
   };
 
-  // ==========================================================
-  // CORREÇÃO: LÓGICA DE DESCONTO
-  // ==========================================================
   const aplicarDescontoGlobal = () => {
       const valorBase = parseInt(descontoInputRaw || '0', 10) / 100;
 
-      // Se o usuário digitar 0, ele limpa o desconto atual.
       if (valorBase <= 0) {
           setDescontoTotalRaw(0);
           setPainelAtivo('VENDA');
@@ -359,7 +355,6 @@ const PDV = () => {
 
   return (
     <div className="pos-container">
-
       <section className="pos-cart-section">
           <header className="pos-header">
               <div className="pos-brand">
@@ -417,7 +412,6 @@ const PDV = () => {
               <div className="footer-calc">
                   <div className="calc-row text-muted"><span>Subtotal dos itens</span> <span>R$ {subtotalItens.toFixed(2)}</span></div>
 
-                  {/* UX: Adicionado botão de lixeira diretamente ao lado do desconto para remover com 1 clique */}
                   {descontoTotalRaw > 0 && (
                       <div className="calc-row text-pink">
                           <span style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
@@ -547,18 +541,35 @@ const PDV = () => {
           )}
       </section>
 
+      {/* ========================================================== */}
       {/* MODAIS */}
+      {/* ========================================================== */}
+
       {showFechamentoModal && (
           <div className="modal-glass">
-              <div className="modal-glass-card text-center sm">
-                  <LogOut size={56} className="mg-icon danger mx-auto mb-3" />
-                  <h3 className="text-danger font-bold">Encerrar o Turno?</h3>
-                  <p className="text-lg text-sec mb-4" style={{fontSize: '0.9rem', lineHeight: '1.4'}}>
-                      O terminal será desconectado e o caixa consolidado. Tem certeza que deseja <strong>Fechar o Caixa</strong> agora?
+              <div className="modal-glass-card text-center mg-closing-card">
+                  <LogOut size={60} className="mg-icon danger mx-auto mb-4" />
+                  <h3 className="text-danger font-bold text-xxl mb-3">Encerrar Turno e Fechar Caixa?</h3>
+                  <p className="text-lg text-sec mb-6" style={{ lineHeight: '1.5' }}>
+                      Conte o dinheiro físico na gaveta e digite o valor exato abaixo para realizar o <strong>Fechamento Cego</strong>.
                   </p>
-                  <div className="mg-actions mt-6 justify-center">
-                      <button className="mg-btn cancel" onClick={() => setShowFechamentoModal(false)} disabled={loading}>Voltar</button>
-                      <button className="mg-btn danger" onClick={confirmarFechamentoCaixa} disabled={loading}>{loading ? 'Processando...' : 'Sim, Fechar Caixa'}</button>
+
+                  <div className="mg-closing-input-wrapper">
+                      <span className="mg-closing-currency">R$</span>
+                      <input
+                          type="text"
+                          className="mg-closing-input"
+                          value={getValorFormatado(valorFechamentoRaw)}
+                          onChange={e => setValorFechamentoRaw(formatCurrencyInput(e.target.value))}
+                          onKeyDown={e => e.key === 'Enter' && confirmarFechamentoCaixa()}
+                          placeholder="0,00"
+                          autoFocus
+                      />
+                  </div>
+
+                  <div className="mg-actions mt-2 justify-center gap-3">
+                      <button className="mg-btn cancel" onClick={() => { setShowFechamentoModal(false); setValorFechamentoRaw(''); }} disabled={loading}>Voltar</button>
+                      <button className="mg-btn danger font-bold" onClick={confirmarFechamentoCaixa} disabled={loading}>{loading ? 'Processando...' : 'Sim, Fechar Caixa'}</button>
                   </div>
               </div>
           </div>

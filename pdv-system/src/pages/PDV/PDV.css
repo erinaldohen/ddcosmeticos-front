@@ -132,7 +132,6 @@
 .btn-voltar:hover { background: var(--bg-left); color: var(--text-main);}
 .panel-header h2 { margin: 0; font-size: 1.4rem; font-weight: 800; color: var(--text-main);}
 
-/* Os botões de PIX/Dinheiro ficaram mais compactos para liberar espaço */
 .payment-methods-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1rem; flex-shrink: 0;}
 .pm-soft-card { background: white; border: 1px solid var(--border-light); padding: 10px; border-radius: 12px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; transition: 0.2s; color: var(--text-sec); box-shadow: 0 2px 5px rgba(0,0,0,0.01);}
 .pm-soft-card:hover { border-color: var(--primary-light); background: var(--primary-super-light); color: var(--primary);}
@@ -143,7 +142,6 @@
 .pm-soft-card.active .pms-label { color: var(--primary-dark); }
 .pm-soft-card.active kbd { background: white; color: var(--primary-dark); border-color: transparent;}
 
-/* Área de digitação de valor reduzida para equilibrar o visual */
 .payment-input-area { background: var(--bg-left); padding: 15px; border-radius: 16px; border: 1px solid var(--border-light); flex-shrink: 0;}
 .payment-input-area label { display: block; color: var(--text-sec); font-size: 0.75rem; font-weight: 800; letter-spacing: 1px; margin-bottom: 8px;}
 .pia-wrapper { display: flex; align-items: center; background: white; border: 2px solid var(--primary); border-radius: 10px; padding: 8px 15px; box-shadow: 0 4px 15px rgba(236,72,153,0.1);}
@@ -152,7 +150,6 @@
 .pia-btn { background: none; border: none; color: var(--primary); cursor: pointer; transition: 0.2s;}
 .pia-btn:hover { color: var(--primary-dark); transform: scale(1.1);}
 
-/* O SEGREDO DO SCROLL DA LISTA DE PAGAMENTOS: min-height: 0 E flex: 1 */
 .payment-logs-soft { flex: 1; min-height: 0; margin-top: 1rem; display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding-right: 5px;}
 .payment-logs-soft::-webkit-scrollbar { width: 6px; }
 .payment-logs-soft::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
@@ -163,7 +160,6 @@
 .pls-row button { background: #fee2e2; border: none; color: var(--danger); padding: 8px; border-radius: 8px; cursor: pointer; transition: 0.2s;}
 .pls-row button:hover { background: var(--danger); color: white;}
 
-/* O Rodapé nunca some */
 .payment-footer-soft { margin-top: auto; padding-top: 1rem; border-top: 1px dashed var(--border-light); flex-shrink: 0;}
 .pfs-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 1rem; color: var(--text-sec); font-weight: 700;}
 .pfs-row strong { font-family: var(--font-mono); font-size: 1.3rem;}
@@ -177,7 +173,6 @@
 .btn-checkout-finish:disabled .bcf-label { color: var(--text-sec); }
 .bcf-shortcut { color: rgba(255,255,255,0.8); font-weight: 700; font-size: 0.75rem; letter-spacing: 1px;}
 .btn-checkout-finish:disabled .bcf-shortcut { display: none; }
-
 
 /* --- TELAS CENTRALIZADAS --- */
 .panel-centered { align-items: center; justify-content: center; text-align: center; }
@@ -226,6 +221,14 @@
 .mg-btn.danger:hover { background: #dc2626; transform: translateY(-2px);}
 .mg-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none;}
 
+/* =========================================================
+   FECHAMENTO CEGO (ALTO CONTRASTE)
+   ========================================================= */
+.mg-closing-card { padding: 30px; border-radius: 16px; background-color: var(--bg-right); max-width: 450px !important; }
+.mg-closing-input-wrapper { display: flex; align-items: center; justify-content: center; margin-bottom: 2rem; }
+.mg-closing-currency { font-size: 2rem; margin-right: 15px; color: var(--primary); font-weight: 800; }
+.mg-closing-input { font-size: 3rem; width: 75%; background-color: #ffffff; color: #1f2937; text-align: center; padding: 15px; border-radius: 12px; border: 4px solid var(--primary); box-shadow: 0 4px 10px rgba(236, 72, 153, 0.2); font-weight: 800; outline: none; transition: 0.2s; font-family: var(--font-mono); }
+.mg-closing-input:focus { transform: scale(1.02); box-shadow: 0 6px 15px rgba(236, 72, 153, 0.3); }
 
 /* =========================================================
    ANIMAÇÕES E UTILITÁRIOS
