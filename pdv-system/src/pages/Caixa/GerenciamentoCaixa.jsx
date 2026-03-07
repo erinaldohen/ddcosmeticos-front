@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   DollarSign, Lock, Unlock, TrendingUp, TrendingDown,
   CreditCard, Smartphone, Banknote, Wallet, AlertCircle,
-  PlusCircle, MinusCircle, CheckCircle2
+  PlusCircle, MinusCircle, CheckCircle2, FileText, AlertTriangle
 } from 'lucide-react';
 import caixaService from '../../services/caixaService';
 import { toast } from 'react-toastify';
@@ -17,9 +17,11 @@ const GerenciamentoCaixa = () => {
   const [modalFechamento, setModalFechamento] = useState(false);
   const [modalSangria, setModalSangria] = useState(false);
   const [modalSuprimento, setModalSuprimento] = useState(false);
+  const [modalResumo, setModalResumo] = useState(false); // NOVO: Modal de Resumo
 
   const [valorInput, setValorInput] = useState('');
   const [observacaoInput, setObservacaoInput] = useState('');
+  const [dadosFechamento, setDadosFechamento] = useState(null); // Guarda o resultado do fechamento
 
   const carregarDados = async () => {
     try {
@@ -42,7 +44,7 @@ const GerenciamentoCaixa = () => {
 
   // --- FUNÇÕES DE MÁSCARA MONETÁRIA ---
   const handleValorChange = (e) => {
-    // Remove tudo que não for número
+    // Remove tudo que não for número. Se vazio, vira string vazia.
     const onlyNums = e.target.value.replace(/\D/g, "");
     setValorInput(onlyNums);
   };
@@ -50,41 +52,57 @@ const GerenciamentoCaixa = () => {
   const getValorFormatado = (valorRaw) => {
     if (!valorRaw) return "";
     // Divide por 100 para criar os centavos e formata no padrão BR
-    return (parseInt(valorRaw, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    const parsed = parseInt(valorRaw, 10);
+    if (isNaN(parsed)) return "";
+    return (parsed / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
   };
 
   // --- HANDLERS (Ações) ---
   const limparInputs = () => { setValorInput(''); setObservacaoInput(''); };
 
   const executarAcao = async (tipo) => {
-    if(!valorInput || parseInt(valorInput, 10) === 0) return toast.warning("Informe um valor maior que zero.");
+    if(!valorInput) return toast.warning("Informe um valor.");
+    const parsedValor = parseInt(valorInput, 10);
+    if (isNaN(parsedValor) || (tipo !== 'FECHAR' && parsedValor === 0)) {
+         return toast.warning("Informe um valor válido.");
+    }
 
     // Converte a string limpa ("15000") para decimal (150.00) pro backend
-    const valorDecimal = parseInt(valorInput, 10) / 100;
+    const valorDecimal = parsedValor / 100;
 
     try {
       if (tipo === 'ABRIR') {
         await caixaService.abrir(valorDecimal);
         setModalAbertura(false);
         toast.success("Caixa aberto! Boas vendas. 🚀");
+        carregarDados();
       } else if (tipo === 'FECHAR') {
-        await caixaService.fechar(valorDecimal);
+        const response = await caixaService.fechar(valorDecimal);
         setModalFechamento(false);
-        toast.success("Caixa fechado e relatório gerado. ✅");
+        setDadosFechamento(response); // Guarda a resposta (diferença, saldo esperado)
+        setModalResumo(true);         // Abre o modal de resumo final
+        toast.success("Caixa fechado com sucesso.");
       } else if (tipo === 'SANGRIA') {
         await caixaService.sangria({ valor: valorDecimal, observacao: observacaoInput });
         setModalSangria(false);
         toast.info("Sangria realizada.");
+        carregarDados();
       } else if (tipo === 'SUPRIMENTO') {
         await caixaService.suprimento({ valor: valorDecimal, observacao: observacaoInput });
         setModalSuprimento(false);
         toast.success("Suprimento adicionado.");
+        carregarDados();
       }
       limparInputs();
-      carregarDados();
     } catch (error) {
       toast.error(error.response?.data?.message || "Erro ao processar operação.");
     }
+  };
+
+  const fecharResumo = () => {
+    setModalResumo(false);
+    setDadosFechamento(null);
+    carregarDados(); // Força recarregar para mostrar a tela de "Caixa Fechado"
   };
 
   if (loading) return <div className="loading-screen"><div className="loader"></div>Carregando Dashboard...</div>;
@@ -92,8 +110,8 @@ const GerenciamentoCaixa = () => {
   return (
     <div className={`caixa-container fade-in ${!caixa ? 'layout-fechado' : ''}`}>
 
-      {/* HEADER: SÓ APARECE SE O CAIXA ESTIVER ABERTO */}
-      {caixa && (
+      {/* HEADER: SÓ APARECE SE O CAIXA ESTIVER ABERTO E SEM MODAL DE RESUMO */}
+      {caixa && !modalResumo && (
         <header className="caixa-header-modern">
           <div>
             <h1>Controle de Caixa</h1>
@@ -106,7 +124,41 @@ const GerenciamentoCaixa = () => {
         </header>
       )}
 
-      {!caixa ? (
+      {/* --- ESTADO DE RESUMO PÓS-FECHAMENTO --- */}
+      {modalResumo && dadosFechamento && (
+         <div className="empty-state-modern resume-state">
+            <div className={`icon-wrapper-large ${dadosFechamento.diferenca === 0 ? 'success' : 'warning'}`}>
+               {dadosFechamento.diferenca === 0 ? <CheckCircle2 size={56} /> : <AlertTriangle size={56} />}
+            </div>
+            <h2>Relatório de Fechamento</h2>
+
+            <div className="resume-details">
+                <div className="resume-row">
+                    <span>Valor Físico Informado:</span>
+                    <strong>R$ {(dadosFechamento.valorInformado ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
+                </div>
+                <div className="resume-row">
+                    <span>Valor Esperado (Sistema):</span>
+                    <strong>R$ {(dadosFechamento.saldoEsperado ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
+                </div>
+                <div className={`resume-row highlight ${dadosFechamento.diferenca < 0 ? 'text-red' : dadosFechamento.diferenca > 0 ? 'text-green' : ''}`}>
+                    <span>Status do Caixa:</span>
+                    <strong>
+                        {dadosFechamento.diferenca === 0 ? 'Caixa Bateu' :
+                         dadosFechamento.diferenca < 0 ? `Quebra de R$ ${Math.abs(dadosFechamento.diferenca).toLocaleString('pt-BR', {minimumFractionDigits: 2})}` :
+                         `Sobra de R$ ${dadosFechamento.diferenca.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`}
+                    </strong>
+                </div>
+            </div>
+
+            <button className="btn-hero" onClick={fecharResumo}>
+              <Lock size={20} /> Concluir e Sair
+            </button>
+         </div>
+      )}
+
+
+      {!caixa && !modalResumo ? (
         // --- ESTADO FECHADO (MENSAGEM SUSPENSA) ---
         <div className="empty-state-modern">
           <div className="icon-wrapper-large">
@@ -118,7 +170,7 @@ const GerenciamentoCaixa = () => {
             <Unlock size={20} /> Abrir Caixa Agora
           </button>
         </div>
-      ) : (
+      ) : caixa && !modalResumo ? (
         // --- ESTADO ABERTO (DASHBOARD) ---
         <div className="dashboard-grid">
 
@@ -205,9 +257,9 @@ const GerenciamentoCaixa = () => {
           </div>
 
         </div>
-      )}
+      ) : null}
 
-      {/* --- MODAL GENÉRICO DE INPUT (AGORA COM MÁSCARA MONETÁRIA) --- */}
+      {/* --- MODAL GENÉRICO DE INPUT --- */}
       {(modalAbertura || modalFechamento || modalSangria || modalSuprimento) && (
         <div className="modal-overlay-modern">
           <div className="modal-card-modern fade-in-up">
@@ -219,14 +271,14 @@ const GerenciamentoCaixa = () => {
             </div>
 
             <div className="modal-body">
-              <label>Valor (R$)</label>
+              <label>{modalFechamento ? 'Valor Contado em Gaveta (R$)' : 'Valor (R$)'}</label>
               <div className="input-money-wrapper">
                 <span>R$</span>
                 <input
                   autoFocus
-                  type="text" // <-- Mudou de "number" para "text"
-                  value={getValorFormatado(valorInput)} // <-- Passa pelo formatador para exibição
-                  onChange={handleValorChange} // <-- Pega só os números da digitação
+                  type="text"
+                  value={getValorFormatado(valorInput)}
+                  onChange={handleValorChange}
                   onKeyDown={e => e.key === 'Enter' && (
                     modalAbertura ? executarAcao('ABRIR') :
                     modalFechamento ? executarAcao('FECHAR') :

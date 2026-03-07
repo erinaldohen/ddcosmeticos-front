@@ -21,7 +21,7 @@
   color: var(--cx-text-main);
 }
 
-/* NOVO: Centraliza tudo na tela quando o caixa está fechado */
+/* Centraliza tudo na tela quando o caixa está fechado */
 .layout-fechado {
   display: flex;
   flex-direction: column;
@@ -328,29 +328,30 @@
 .input-money-wrapper {
   display: flex;
   align-items: center;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 12px;
+  border-bottom: 2px solid var(--cx-primary);
+  margin-top: 5px;
+  padding-bottom: 5px;
   transition: border-color 0.2s;
 }
 
 .input-money-wrapper:focus-within {
-  border-color: var(--cx-primary);
+  border-color: #be185d;
 }
 
 .input-money-wrapper span {
-  font-weight: 700;
-  color: #94a3b8;
-  margin-right: 8px;
+  font-size: 1.5rem;
+  color: #64748b;
+  margin-right: 10px;
 }
 
 .input-money-wrapper input {
   border: none;
+  font-size: 2rem;
+  font-weight: bold;
   width: 100%;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--cx-text-main);
   outline: none;
+  color: var(--cx-text-main);
+  background: transparent;
 }
 
 .input-text-modern {
@@ -403,13 +404,6 @@
 .btn-confirm:hover { transform: translateY(-1px); }
 .btn-confirm.primary { background: var(--cx-primary); }
 .btn-confirm.danger { background: var(--cx-danger); }
-
-/* RESPONSIVO */
-@media (max-width: 768px) {
-  .dashboard-grid { grid-template-columns: 1fr; }
-  .balance-value { font-size: 2.5rem; }
-  .caixa-header-modern { flex-direction: column; gap: 1rem; }
-}
 
 /* --- ESTADO FECHADO (MENSAGEM SUSPENSA) --- */
 .empty-state-modern {
@@ -468,24 +462,49 @@
   box-shadow: 0 15px 20px -3px rgba(242, 41, 152, 0.4);
 }
 
-.input-money-wrapper {
-  display: flex;
-  align-items: center;
-  border-bottom: 2px solid var(--primary); /* Ou a cor que preferir */
-  margin-top: 5px;
-  padding-bottom: 5px;
+/* --- ESTILOS DO NOVO MODAL DE RESUMO PÓS-FECHAMENTO --- */
+.resume-state {
+  max-width: 500px;
+  margin: 40px auto;
+  padding: 40px;
+  background: white;
+  border-radius: 24px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.05);
 }
-.input-money-wrapper span {
-  font-size: 1.5rem;
-  color: #64748b;
-  margin-right: 10px;
-}
-.input-money-wrapper input {
-  border: none;
-  font-size: 2rem;
-  font-weight: bold;
+
+.icon-wrapper-large.success { background-color: #ecfdf5; color: #10b981; }
+.icon-wrapper-large.warning { background-color: #fffbeb; color: #f59e0b; }
+
+.resume-details {
   width: 100%;
-  outline: none;
-  color: #0f172a;
-  background: transparent;
+  margin: 24px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.resume-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  color: #475569;
+}
+
+.resume-row.highlight {
+  background-color: #f1f5f9;
+  font-size: 1.05rem;
+  border-top: 2px dashed #cbd5e1;
+}
+
+.text-red { color: #ef4444; }
+.text-green { color: #10b981; }
+
+/* RESPONSIVO */
+@media (max-width: 768px) {
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .balance-value { font-size: 2.5rem; }
+  .caixa-header-modern { flex-direction: column; gap: 1rem; }
 }

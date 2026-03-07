@@ -1,10 +1,10 @@
 import api from './api';
 
-// Helper para garantir que o valor seja um número válido (BigDecimal no Java)
+// Helper para garantir que o valor seja um número válido e processável
 const tratarValor = (valor) => {
-  if (valor === undefined || valor === null) return 0;
+  if (valor === undefined || valor === null || valor === '') return 0;
   if (typeof valor === 'number') return valor;
-  // Remove pontos de milhar e troca vírgula por ponto (ex: "1.250,50" -> 1250.50)
+  // Remove R$, pontos de milhar e troca vírgula por ponto (ex: "1.250,50" -> 1250.50)
   const formatado = String(valor).replace("R$", "").replace(/\./g, '').replace(',', '.').trim();
   const numero = parseFloat(formatado);
   return isNaN(numero) ? 0 : numero;
@@ -12,7 +12,9 @@ const tratarValor = (valor) => {
 
 const caixaService = {
 
-  // --- CONSULTAS ---
+  // ==========================================================
+  // --- CONSULTAS E HISTÓRICO ---
+  // ==========================================================
 
   getStatus: async () => {
     const response = await api.get('/caixas/status');
@@ -38,41 +40,47 @@ const caixaService = {
       const params = {};
       const hoje = new Date().toISOString().split('T')[0];
 
-      const dataInicio = inicio || hoje;
-      const dataFim = fim || dataInicio;
-
-      params.inicio = dataInicio;
-      params.fim = dataFim;
+      params.inicio = inicio || hoje;
+      params.fim = fim || params.inicio;
 
       const response = await api.get('/caixas', { params });
       return response.data;
   },
 
-  // --- OPERAÇÕES (ABERTURA / FECHAMENTO) ---
+  // ==========================================================
+  // --- OPERAÇÕES CORE (ABERTURA E FECHAMENTO) ---
+  // ==========================================================
 
-  abrir: async (dados) => {
-    const valor = typeof dados === 'object' ? dados.saldoInicial : dados;
-    const response = await api.post('/caixas/abrir', { saldoInicial: tratarValor(valor) });
-    return response.data;
-  },
+  abrir: async (valor) => {
+    // Flexível: aceita um objeto ou o valor direto enviado pela tela
+    const saldo = typeof valor === 'object' ? valor.saldoInicial : valor;
 
-  fechar: async (dados) => {
-    const valor = typeof dados === 'object' ? dados.saldoFinalInformado : dados;
-
-    // CORREÇÃO: Nome do campo ajustado para o DTO do Java e removido ID da URL
-    const response = await api.post('/caixas/fechar', {
-        saldoFinalDinheiroEmEspecie: tratarValor(valor)
+    const response = await api.post('/caixas/abrir', {
+      saldoInicial: tratarValor(saldo)
     });
     return response.data;
   },
 
-  // --- MOVIMENTAÇÕES (SANGRIA / SUPRIMENTO) ---
+  fechar: async (valorFisicoInformado, justificativa = '') => {
+    // ATUALIZAÇÃO CRÍTICA: Payload agora mapeia perfeitamente com o FechamentoCaixaRequestDTO do Java
+    const payload = {
+        valorFisicoInformado: tratarValor(valorFisicoInformado),
+        justificativaDiferenca: justificativa
+    };
+
+    const response = await api.post('/caixas/fechar', payload);
+    return response.data; // Retorna o ConfirmacaoFechamentoDTO para a tela montar o resumo
+  },
+
+  // ==========================================================
+  // --- MOVIMENTAÇÕES MANUAIS ---
+  // ==========================================================
 
   sangria: async (dados) => {
     const response = await api.post('/caixas/sangria', {
       tipo: 'SANGRIA',
       valor: tratarValor(dados.valor),
-      motivo: dados.observacao || 'Sangria'
+      motivo: dados.observacao || 'Sangria de rotina'
     });
     return response.data;
   },
@@ -81,19 +89,11 @@ const caixaService = {
     const response = await api.post('/caixas/suprimento', {
       tipo: 'SUPRIMENTO',
       valor: tratarValor(dados.valor),
-      motivo: dados.observacao || 'Suprimento'
-    });
-    return response.data;
-  },
-
-  movimentar: async (tipo, valor, descricao) => {
-    const endpoint = tipo.toUpperCase().includes('SANGRIA') ? '/caixas/sangria' : '/caixas/suprimento';
-    const response = await api.post(endpoint, {
-      valor: tratarValor(valor),
-      motivo: descricao
+      motivo: dados.observacao || 'Fundo de troco adicional'
     });
     return response.data;
   }
+
 };
 
 export default caixaService;
