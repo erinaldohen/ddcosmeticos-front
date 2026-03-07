@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Archive, Calendar, Search, RefreshCw,
     Eye, ArrowDownCircle, User, X, Download,
-    TrendingUp, TrendingDown, FileText
+    FileText
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import jsPDF from 'jspdf';
@@ -68,7 +68,8 @@ const HistoricoCaixa = () => {
 
     const calcularResumo = (lista) => {
         const fechados = lista.filter(c => c.status === 'FECHADO');
-        const total = fechados.reduce((acc, c) => acc + (c.valorFechamento || 0), 0);
+        // ATUALIZADO: Usando a nova nomenclatura do DTO (valorFisicoInformado)
+        const total = fechados.reduce((acc, c) => acc + (c.valorFisicoInformado || 0), 0);
         setResumo({ total, qtd: fechados.length });
     };
 
@@ -105,28 +106,23 @@ const HistoricoCaixa = () => {
         doc.setTextColor(50);
         doc.setFontSize(10);
 
-        // Define labels e valores
         const lblPeriodo = "Período:";
         const valPeriodo = `${formatData(dataInicio)} a ${formatData(dataFim)}`;
         const lblGerado = "Gerado em:";
         const valGerado = `${new Date().toLocaleString()}`;
 
-        // Calcula a largura de um espaço em branco na fonte atual (size 10)
         const spaceWidth = doc.getTextWidth(" ");
 
-        // Linha 1: Período
         doc.setFont(undefined, 'bold');
         doc.text(lblPeriodo, 14, 30);
-        const w1 = doc.getTextWidth(lblPeriodo); // Largura do label
+        const w1 = doc.getTextWidth(lblPeriodo);
 
         doc.setFont(undefined, 'normal');
-        // Posição X = 14 + largura do texto + largura de 1 espaço
         doc.text(valPeriodo, 14 + w1 + spaceWidth, 30);
 
-        // Linha 2: Gerado em
         doc.setFont(undefined, 'bold');
         doc.text(lblGerado, 14, 35);
-        const w2 = doc.getTextWidth(lblGerado); // Largura do label
+        const w2 = doc.getTextWidth(lblGerado);
 
         doc.setFont(undefined, 'normal');
         doc.text(valGerado, 14 + w2 + spaceWidth, 35);
@@ -138,7 +134,7 @@ const HistoricoCaixa = () => {
 
         doc.setFontSize(10);
         doc.setTextColor(100);
-        doc.text("Total Movimentado (Período)", 20, 48);
+        doc.text("Total Físico Informado (Período)", 20, 48);
         doc.text("Qtd. Fechamentos", 120, 48);
 
         doc.setFontSize(14);
@@ -149,15 +145,16 @@ const HistoricoCaixa = () => {
         doc.setFont(undefined, 'normal');
 
         // 4. Tabela de Dados
-        const tableColumn = ["ID", "Operador", "Abertura", "Fechamento", "Saldo Final", "Diferença", "Status"];
+        const tableColumn = ["ID", "Operador", "Abertura", "Fechamento", "Físico Informado", "Diferença", "Status"];
         const tableRows = caixas.map(c => {
-            const diff = (c.valorFechamento || 0) - (c.valorCalculadoSistema || 0);
+            // ATUALIZADO: Usando nomes do DTO
+            const diff = c.diferencaCaixa || 0;
             return [
                 c.id,
-                c.usuarioAbertura?.nome || 'Admin',
+                c.operadorNome || 'Admin',
                 formatData(c.dataAbertura),
                 c.status === 'ABERTO' ? '--' : formatData(c.dataFechamento),
-                formatMoeda(c.valorFechamento || 0),
+                formatMoeda(c.valorFisicoInformado || 0),
                 c.status === 'ABERTO' ? '--' : formatMoeda(diff),
                 c.status
             ];
@@ -169,7 +166,7 @@ const HistoricoCaixa = () => {
             body: tableRows,
             theme: 'grid',
             headStyles: {
-                fillColor: [30, 41, 59], // Slate 800
+                fillColor: [30, 41, 59],
                 textColor: 255,
                 fontSize: 9,
                 fontStyle: 'bold'
@@ -179,16 +176,16 @@ const HistoricoCaixa = () => {
                 cellPadding: 3,
                 textColor: [51, 65, 85]
             },
-            alternateRowStyles: { fillColor: [241, 245, 249] }, // Slate 100
+            alternateRowStyles: { fillColor: [241, 245, 249] },
             columnStyles: {
-                4: { halign: 'right', fontStyle: 'bold' }, // Saldo Final
-                5: { halign: 'right' } // Diferença
+                4: { halign: 'right', fontStyle: 'bold' },
+                5: { halign: 'right' }
             },
             didParseCell: function(data) {
                 if (data.section === 'body' && data.column.index === 5) {
                     const texto = data.cell.raw;
-                    if (texto.includes('-')) data.cell.styles.textColor = [220, 38, 38]; // Vermelho
-                    else if (texto !== 'R$ 0,00' && texto !== '--') data.cell.styles.textColor = [22, 163, 74]; // Verde
+                    if (texto.includes('-')) data.cell.styles.textColor = [220, 38, 38];
+                    else if (texto !== 'R$ 0,00' && texto !== '--') data.cell.styles.textColor = [22, 163, 74];
                 }
             }
         });
@@ -222,7 +219,7 @@ const HistoricoCaixa = () => {
             <div className="page-header">
                 <div className="header-title">
                     <h1><Archive size={32} className="text-primary" /> Histórico de Caixa</h1>
-                    <p><b>{resumo.qtd}</b> registros | Total: <b className="text-success">{formatMoeda(resumo.total)}</b></p>
+                    <p><b>{resumo.qtd}</b> registros | Total Físico: <b className="text-success">{formatMoeda(resumo.total)}</b></p>
                 </div>
                 <button
                     className="btn-primary"
@@ -266,8 +263,8 @@ const HistoricoCaixa = () => {
                             <th>Caixa / Operador</th>
                             <th>Abertura</th>
                             <th>Fechamento</th>
-                            <th className="text-right">Saldo Final</th>
-                            <th className="text-right">Diferença</th>
+                            <th className="text-right">Físico (Gaveta)</th>
+                            <th className="text-right">Diferença (Quebra)</th>
                             <th>Status</th>
                             <th></th>
                         </tr>
@@ -277,9 +274,9 @@ const HistoricoCaixa = () => {
                             <tr><td colSpan="7" className="empty-state">Nenhum registro encontrado.</td></tr>
                         ) : (
                             caixas.map((caixa) => {
-                                const esperado = caixa.valorCalculadoSistema || 0;
-                                const informado = caixa.valorFechamento || 0;
-                                const diff = informado - esperado;
+                                // ATUALIZADO: Usando as variáveis do DTO
+                                const informado = caixa.valorFisicoInformado || 0;
+                                const diff = caixa.diferencaCaixa || 0;
                                 const isAberto = caixa.status === 'ABERTO';
 
                                 return (
@@ -288,7 +285,7 @@ const HistoricoCaixa = () => {
                                             <div className="user-cell">
                                                 <div className="avatar-mini"><User size={14}/></div>
                                                 <div>
-                                                    <strong>#{caixa.id} - {caixa.usuarioAbertura?.nome || 'Admin'}</strong>
+                                                    <strong>#{caixa.id} - {caixa.operadorNome || 'Admin'}</strong>
                                                     <span>PDV 01</span>
                                                 </div>
                                             </div>
@@ -306,7 +303,7 @@ const HistoricoCaixa = () => {
                                                     <span className={diff > 0 ? 'badge-success' : 'badge-danger'}>
                                                         {diff > 0 ? '+' : ''}{formatMoeda(diff)}
                                                     </span>
-                                                ) : <span className="badge-neutral">OK</span>
+                                                ) : <span className="badge-neutral">Bateu (R$ 0,00)</span>
                                             ) : '--'}
                                         </td>
 
@@ -350,7 +347,8 @@ const HistoricoCaixa = () => {
                         <div className="modal-body-grid">
                             <div className="info-section">
                                 <label>Operador</label>
-                                <p>{caixaSelecionado.usuarioAbertura?.nome || 'Admin'}</p>
+                                {/* O modal faz uma chamada ao endpoint por ID, que retorna a Entidade. Mantemos compatibilidade com o retorno bruto do /caixas/{id} */}
+                                <p>{caixaSelecionado.usuarioAbertura?.nome || caixaSelecionado.operadorNome || 'Admin'}</p>
                             </div>
                             <div className="info-section">
                                 <label>Abertura</label>
@@ -372,18 +370,18 @@ const HistoricoCaixa = () => {
                                 <strong>{formatMoeda(caixaSelecionado.totalEntradas)}</strong>
                             </div>
                             <div className="finance-card danger">
-                                <span>(-) Saídas</span>
+                                <span>(-) Saídas (Sangrias)</span>
                                 <strong>{formatMoeda(caixaSelecionado.totalSaidas)}</strong>
                             </div>
 
                             <div className="finance-card highlight">
-                                <span>(=) Esperado</span>
-                                <strong>{formatMoeda(caixaSelecionado.valorCalculadoSistema)}</strong>
+                                <span>(=) Esperado no Sistema</span>
+                                <strong>{formatMoeda(caixaSelecionado.saldoEsperadoSistema)}</strong>
                             </div>
 
                             <div className="finance-card dark">
                                 <span>Contado na Gaveta</span>
-                                <strong>{formatMoeda(caixaSelecionado.valorFechamento)}</strong>
+                                <strong>{formatMoeda(caixaSelecionado.valorFisicoInformado)}</strong>
                             </div>
                         </div>
                     </div>
