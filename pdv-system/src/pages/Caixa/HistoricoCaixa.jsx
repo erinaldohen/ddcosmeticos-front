@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
     Archive, Calendar, Search, RefreshCw,
     Eye, ArrowDownCircle, User, X, Download,
-    FileText
+    FileText, BrainCircuit, AlertTriangle
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import jsPDF from 'jspdf';
@@ -68,7 +68,6 @@ const HistoricoCaixa = () => {
 
     const calcularResumo = (lista) => {
         const fechados = lista.filter(c => c.status === 'FECHADO');
-        // ATUALIZADO: Usando a nova nomenclatura do DTO (valorFisicoInformado)
         const total = fechados.reduce((acc, c) => acc + (c.valorFisicoInformado || 0), 0);
         setResumo({ total, qtd: fechados.length });
     };
@@ -87,43 +86,37 @@ const HistoricoCaixa = () => {
         }
     };
 
-    // --- GERADOR DE PDF SOFISTICADO (AJUSTE FINO) ---
+    // --- GERADOR DE PDF SOFISTICADO ---
     const gerarPDFSofisticado = () => {
         const doc = new jsPDF();
 
         // 1. Cabeçalho Executivo
         doc.setFillColor(242, 41, 152); // Magenta
         doc.rect(0, 0, 210, 20, 'F');
-
         doc.setFontSize(22);
         doc.setTextColor(255, 255, 255);
         doc.text("DD Cosméticos", 14, 13);
-
         doc.setFontSize(10);
         doc.text("Relatório de Fechamento de Caixa", 150, 13);
 
-        // 2. Metadados (Cálculo preciso de espaço)
+        // 2. Metadados
         doc.setTextColor(50);
         doc.setFontSize(10);
-
         const lblPeriodo = "Período:";
         const valPeriodo = `${formatData(dataInicio)} a ${formatData(dataFim)}`;
         const lblGerado = "Gerado em:";
         const valGerado = `${new Date().toLocaleString()}`;
-
         const spaceWidth = doc.getTextWidth(" ");
 
         doc.setFont(undefined, 'bold');
         doc.text(lblPeriodo, 14, 30);
         const w1 = doc.getTextWidth(lblPeriodo);
-
         doc.setFont(undefined, 'normal');
         doc.text(valPeriodo, 14 + w1 + spaceWidth, 30);
 
         doc.setFont(undefined, 'bold');
         doc.text(lblGerado, 14, 35);
         const w2 = doc.getTextWidth(lblGerado);
-
         doc.setFont(undefined, 'normal');
         doc.text(valGerado, 14 + w2 + spaceWidth, 35);
 
@@ -131,7 +124,6 @@ const HistoricoCaixa = () => {
         doc.setDrawColor(200);
         doc.setFillColor(248, 250, 252);
         doc.roundedRect(14, 40, 180, 20, 3, 3, 'FD');
-
         doc.setFontSize(10);
         doc.setTextColor(100);
         doc.text("Total Físico Informado (Período)", 20, 48);
@@ -147,15 +139,21 @@ const HistoricoCaixa = () => {
         // 4. Tabela de Dados
         const tableColumn = ["ID", "Operador", "Abertura", "Fechamento", "Físico Informado", "Diferença", "Status"];
         const tableRows = caixas.map(c => {
-            // ATUALIZADO: Usando nomes do DTO
             const diff = c.diferencaCaixa || 0;
+            let diffLabel = "--";
+            if (c.status !== 'ABERTO') {
+                if (diff < -0.05) diffLabel = `Falta ${formatMoeda(diff)}`;
+                else if (diff > 0.05) diffLabel = `Sobra +${formatMoeda(diff)}`;
+                else diffLabel = "R$ 0,00";
+            }
+
             return [
                 c.id,
                 c.operadorNome || 'Admin',
                 formatData(c.dataAbertura),
                 c.status === 'ABERTO' ? '--' : formatData(c.dataFechamento),
                 formatMoeda(c.valorFisicoInformado || 0),
-                c.status === 'ABERTO' ? '--' : formatMoeda(diff),
+                diffLabel,
                 c.status
             ];
         });
@@ -165,17 +163,8 @@ const HistoricoCaixa = () => {
             head: [tableColumn],
             body: tableRows,
             theme: 'grid',
-            headStyles: {
-                fillColor: [30, 41, 59],
-                textColor: 255,
-                fontSize: 9,
-                fontStyle: 'bold'
-            },
-            styles: {
-                fontSize: 8,
-                cellPadding: 3,
-                textColor: [51, 65, 85]
-            },
+            headStyles: { fillColor: [30, 41, 59], textColor: 255, fontSize: 9, fontStyle: 'bold' },
+            styles: { fontSize: 8, cellPadding: 3, textColor: [51, 65, 85] },
             alternateRowStyles: { fillColor: [241, 245, 249] },
             columnStyles: {
                 4: { halign: 'right', fontStyle: 'bold' },
@@ -184,8 +173,8 @@ const HistoricoCaixa = () => {
             didParseCell: function(data) {
                 if (data.section === 'body' && data.column.index === 5) {
                     const texto = data.cell.raw;
-                    if (texto.includes('-')) data.cell.styles.textColor = [220, 38, 38];
-                    else if (texto !== 'R$ 0,00' && texto !== '--') data.cell.styles.textColor = [22, 163, 74];
+                    if (texto.includes('Falta')) data.cell.styles.textColor = [220, 38, 38]; // Vermelho
+                    else if (texto.includes('Sobra')) data.cell.styles.textColor = [22, 163, 74]; // Verde
                 }
             }
         });
@@ -221,11 +210,7 @@ const HistoricoCaixa = () => {
                     <h1><Archive size={32} className="text-primary" /> Histórico de Caixa</h1>
                     <p><b>{resumo.qtd}</b> registros | Total Físico: <b className="text-success">{formatMoeda(resumo.total)}</b></p>
                 </div>
-                <button
-                    className="btn-primary"
-                    onClick={() => { setPage(0); carregarCaixas(0, true); }}
-                    data-tooltip="Atualizar lista agora"
-                >
+                <button className="btn-primary" onClick={() => { setPage(0); carregarCaixas(0, true); }} data-tooltip="Atualizar lista agora">
                     <RefreshCw size={18} className={loading ? 'spin' : ''} /> Atualizar
                 </button>
             </div>
@@ -237,20 +222,11 @@ const HistoricoCaixa = () => {
                     <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
                     <span>até</span>
                     <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} />
-                    <button
-                        className="btn-search-icon"
-                        onClick={() => carregarCaixas(0, true)}
-                        data-tooltip="Aplicar Filtro"
-                    >
+                    <button className="btn-search-icon" onClick={() => carregarCaixas(0, true)} data-tooltip="Aplicar Filtro">
                         <Search size={18} />
                     </button>
                 </div>
-
-                <button
-                    className="btn-export"
-                    onClick={gerarPDFSofisticado}
-                    data-tooltip="Baixar Relatório Executivo"
-                >
+                <button className="btn-export" onClick={gerarPDFSofisticado} data-tooltip="Baixar Relatório Executivo">
                     <Download size={18} /> PDF
                 </button>
             </div>
@@ -274,7 +250,6 @@ const HistoricoCaixa = () => {
                             <tr><td colSpan="7" className="empty-state">Nenhum registro encontrado.</td></tr>
                         ) : (
                             caixas.map((caixa) => {
-                                // ATUALIZADO: Usando as variáveis do DTO
                                 const informado = caixa.valorFisicoInformado || 0;
                                 const diff = caixa.diferencaCaixa || 0;
                                 const isAberto = caixa.status === 'ABERTO';
@@ -297,13 +272,20 @@ const HistoricoCaixa = () => {
                                             {isAberto ? '--' : formatMoeda(informado)}
                                         </td>
 
+                                        {/* COLUNA DE DIFERENÇA COLORIDA E DESTACADA */}
                                         <td className="text-right">
                                             {!isAberto ? (
-                                                Math.abs(diff) > 0.05 ? (
-                                                    <span className={diff > 0 ? 'badge-success' : 'badge-danger'}>
-                                                        {diff > 0 ? '+' : ''}{formatMoeda(diff)}
+                                                diff < -0.05 ? (
+                                                    <span style={{ color: '#b91c1c', background: '#fee2e2', padding: '6px 10px', borderRadius: '8px', fontWeight: '800', display: 'inline-block' }}>
+                                                        Falta {formatMoeda(diff)}
                                                     </span>
-                                                ) : <span className="badge-neutral">Bateu (R$ 0,00)</span>
+                                                ) : diff > 0.05 ? (
+                                                    <span style={{ color: '#15803d', background: '#dcfce7', padding: '6px 10px', borderRadius: '8px', fontWeight: '800', display: 'inline-block' }}>
+                                                        Sobra +{formatMoeda(diff)}
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ color: '#64748b', fontWeight: '600' }}>Exato (R$ 0,00)</span>
+                                                )
                                             ) : '--'}
                                         </td>
 
@@ -314,11 +296,7 @@ const HistoricoCaixa = () => {
                                         </td>
 
                                         <td>
-                                            <button
-                                                className="btn-icon-view"
-                                                onClick={() => handleVerDetalhes(caixa.id)}
-                                                data-tooltip="Ver Conferência"
-                                            >
+                                            <button className="btn-icon-view" onClick={() => handleVerDetalhes(caixa.id)} data-tooltip="Ver Conferência">
                                                 <Eye size={18}/>
                                             </button>
                                         </td>
@@ -336,10 +314,10 @@ const HistoricoCaixa = () => {
                 )}
             </div>
 
-            {/* MODAL DETALHES */}
+            {/* MODAL DETALHES COM AUDITORIA IA */}
             {modalOpen && caixaSelecionado && (
                 <div className="modal-overlay fade-in" onClick={() => setModalOpen(false)}>
-                    <div className="modal-content-lg" onClick={e => e.stopPropagation()}>
+                    <div className="modal-content-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px' }}>
                         <div className="modal-header">
                             <h3><FileText size={20}/> Detalhes do Caixa #{caixaSelecionado.id}</h3>
                             <button onClick={() => setModalOpen(false)} className="btn-close-modal"><X size={20}/></button>
@@ -347,7 +325,6 @@ const HistoricoCaixa = () => {
                         <div className="modal-body-grid">
                             <div className="info-section">
                                 <label>Operador</label>
-                                {/* O modal faz uma chamada ao endpoint por ID, que retorna a Entidade. Mantemos compatibilidade com o retorno bruto do /caixas/{id} */}
                                 <p>{caixaSelecionado.usuarioAbertura?.nome || caixaSelecionado.operadorNome || 'Admin'}</p>
                             </div>
                             <div className="info-section">
@@ -383,6 +360,33 @@ const HistoricoCaixa = () => {
                                 <span>Contado na Gaveta</span>
                                 <strong>{formatMoeda(caixaSelecionado.valorFisicoInformado)}</strong>
                             </div>
+
+                            {/* NOVO BLOCO: AUDITORIA IA E JUSTIFICATIVA */}
+                            {caixaSelecionado.status === 'FECHADO' && Math.abs(caixaSelecionado.diferencaCaixa || 0) > 0.05 && (
+                                <div style={{ gridColumn: 'span 3', background: '#fff0f6', border: '1px solid #fbcfe8', borderRadius: '12px', padding: '20px', marginTop: '10px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
+                                        <BrainCircuit size={24} color="#ec4899" />
+                                        <h4 style={{ margin: 0, color: '#be185d', fontSize: '1.1rem', fontWeight: '800' }}>Auditoria de Quebra - Assistente IA</h4>
+                                    </div>
+
+                                    <div style={{ marginBottom: '15px' }}>
+                                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#9d174d', textTransform: 'uppercase' }}>Justificativa do Operador:</span>
+                                        <p style={{ margin: '5px 0 0 0', color: '#831843', fontStyle: 'italic', background: 'white', padding: '10px', borderRadius: '8px', borderLeft: '4px solid #f9a8d4' }}>
+                                            "{caixaSelecionado.justificativaDiferenca || 'Nenhuma justificativa fornecida.'}"
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#9d174d', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                            <AlertTriangle size={14}/> Veredito da IA:
+                                        </span>
+                                        <p style={{ margin: '5px 0 0 0', color: '#1e293b', fontWeight: '600', lineHeight: '1.5' }}>
+                                            {caixaSelecionado.analiseAuditoriaIa || 'Análise da IA pendente ou não executada para este registro.'}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
                         </div>
                     </div>
                 </div>
