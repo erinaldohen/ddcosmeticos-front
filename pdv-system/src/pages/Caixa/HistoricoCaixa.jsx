@@ -142,8 +142,9 @@ const HistoricoCaixa = () => {
             const diff = c.diferencaCaixa || 0;
             let diffLabel = "--";
             if (c.status !== 'ABERTO') {
-                if (diff < -0.05) diffLabel = `Falta ${formatMoeda(diff)}`;
-                else if (diff > 0.05) diffLabel = `Sobra +${formatMoeda(diff)}`;
+                // CORREÇÃO: Utilizando Math.abs para remover o sinal de menos da string impressa
+                if (diff < -0.05) diffLabel = `Falta ${formatMoeda(Math.abs(diff))}`;
+                else if (diff > 0.05) diffLabel = `Sobra +${formatMoeda(Math.abs(diff))}`;
                 else diffLabel = "R$ 0,00";
             }
 
@@ -277,11 +278,12 @@ const HistoricoCaixa = () => {
                                             {!isAberto ? (
                                                 diff < -0.05 ? (
                                                     <span style={{ color: '#b91c1c', background: '#fee2e2', padding: '6px 10px', borderRadius: '8px', fontWeight: '800', display: 'inline-block' }}>
-                                                        Falta {formatMoeda(diff)}
+                                                        {/* CORREÇÃO AQUI: Math.abs(diff) no render visual */}
+                                                        Falta {formatMoeda(Math.abs(diff))}
                                                     </span>
                                                 ) : diff > 0.05 ? (
                                                     <span style={{ color: '#15803d', background: '#dcfce7', padding: '6px 10px', borderRadius: '8px', fontWeight: '800', display: 'inline-block' }}>
-                                                        Sobra +{formatMoeda(diff)}
+                                                        Sobra +{formatMoeda(Math.abs(diff))}
                                                     </span>
                                                 ) : (
                                                     <span style={{ color: '#64748b', fontWeight: '600' }}>Exato (R$ 0,00)</span>

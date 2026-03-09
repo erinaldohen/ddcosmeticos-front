@@ -508,3 +508,7 @@
   .balance-value { font-size: 2.5rem; }
   .caixa-header-modern { flex-direction: column; gap: 1rem; }
 }
+.modal-header.warning { background: var(--warning); }
+.modal-header.warning h3 { color: white; }
+.btn-confirm.warning { background: var(--warning); color: white; }
+.btn-confirm.warning:hover { background: #d97706; transform: translateY(-2px); }

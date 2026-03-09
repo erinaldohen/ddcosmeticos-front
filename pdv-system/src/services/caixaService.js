@@ -92,6 +92,14 @@ const caixaService = {
       motivo: dados.observacao || 'Fundo de troco adicional'
     });
     return response.data;
+  }, // <--- A VÍRGULA QUE ESTAVA FALTANDO ESTÁ AQUI
+
+  // ==========================================================
+  // --- ALERTAS E AUDITORIA IA ---
+  // ==========================================================
+  getAlertas: async () => {
+    const response = await api.get('/caixas/alertas');
+    return response.data;
   }
 
 };

@@ -49,13 +49,13 @@ const Login = () => {
           toast.success(`Login realizado! Bem-vindo, ${primeiroNome}.`);
 
           setTimeout(() => {
-            // 4. Correção: usando perfilDoUsuario (conforme vem do Back-end)
+            // 4. Lógica de Redirecionamento Inteligente por Perfil
             const perfil = usuarioRecebido.perfilDoUsuario;
 
             if (['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'].includes(perfil)) {
               navigate('/dashboard');
             } else {
-              navigate('/pdv');
+              navigate('/caixa'); // Operadores de PDV vão para a gestão de caixa
             }
           }, 500);
         } else {
@@ -63,7 +63,7 @@ const Login = () => {
           throw new Error("FORMATO_INVALIDO");
         }
 
-      } catch (error) {
+      } catch (error) { // Corrigido o erro de sintaxe aqui
         console.error("Erro detalhado no Login:", error);
 
         const toastOptions = {

@@ -45,18 +45,23 @@ api.interceptors.response.use(
     const isLoginRequest = url.includes('/auth/login');
     const isReportRequest = url.includes('/relatorios');
 
+    // CORREÇÃO: Agora ele sabe ler o campo "mensagem" do ErrorResponse do Java
+    const backendMessage = error.response.data?.mensagem || error.response.data?.message || "Operação inválida.";
+
+    // --- REGRA DE OURO PARA A IA DO CAIXA ---
+    // 6. Erro 428 (Precondition Required): Apenas repassa o erro silenciosamente para que o PDV.jsx abra o modal Laranja
+    if (status === 428) {
+      return Promise.reject(error);
+    }
+
     // 2. Erro 400: Regras de Negócio e Validações
     if (status === 400 && !isLoginRequest) {
       // SILENCIAR: Se for erro em Relatórios, não mostra Toast (o componente trata com Mocks)
       if (isReportRequest) {
-        console.warn("[BI] Erro 400 na rota de relatórios. Verifique o mapeamento do LocalDate no Java.");
+        console.warn("[BI] Erro 400 na rota de relatórios.");
         return Promise.reject(error);
       }
-
-      const backendMessage = error.response.data?.message || error.response.data || "Operação inválida.";
-
-      // Usa um toastId fixo por mensagem para evitar duplicidade na tela
-      toast.warning(backendMessage, { toastId: `bad-request-${backendMessage}` });
+      toast.warning(backendMessage, { toastId: `bad-request-${status}` });
     }
 
     // 3. Erro 401: Sessão Expirada (Token Inválido)
@@ -83,7 +88,6 @@ api.interceptors.response.use(
 
     // 5. Erro 500: Erro Crítico no Backend Java
     if (status === 500) {
-      // Novamente, se for relatório, deixa o front lidar silenciosamente
       if (!isReportRequest) {
         toast.error("Ocorreu um erro interno no servidor.", { toastId: 'server-error-500' });
       }

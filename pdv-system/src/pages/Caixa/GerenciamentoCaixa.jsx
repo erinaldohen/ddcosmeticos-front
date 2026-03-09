@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   DollarSign, Lock, Unlock, TrendingUp, TrendingDown,
   CreditCard, Smartphone, Banknote, Wallet, AlertCircle,
-  PlusCircle, MinusCircle, CheckCircle2, FileText, AlertTriangle
+  PlusCircle, MinusCircle, CheckCircle2
 } from 'lucide-react';
 import caixaService from '../../services/caixaService';
 import { toast } from 'react-toastify';
@@ -17,11 +17,13 @@ const GerenciamentoCaixa = () => {
   const [modalFechamento, setModalFechamento] = useState(false);
   const [modalSangria, setModalSangria] = useState(false);
   const [modalSuprimento, setModalSuprimento] = useState(false);
-  const [modalResumo, setModalResumo] = useState(false); // NOVO: Modal de Resumo
 
   const [valorInput, setValorInput] = useState('');
   const [observacaoInput, setObservacaoInput] = useState('');
-  const [dadosFechamento, setDadosFechamento] = useState(null); // Guarda o resultado do fechamento
+
+  // --- ESTADOS PARA A IA (Justificativa) ---
+  const [justificativaFechamento, setJustificativaFechamento] = useState('');
+  const [requerJustificativa, setRequerJustificativa] = useState(false);
 
   const carregarDados = async () => {
     try {
@@ -42,32 +44,39 @@ const GerenciamentoCaixa = () => {
 
   useEffect(() => { carregarDados(); }, []);
 
-  // --- FUNÇÕES DE MÁSCARA MONETÁRIA ---
   const handleValorChange = (e) => {
-    // Remove tudo que não for número. Se vazio, vira string vazia.
     const onlyNums = e.target.value.replace(/\D/g, "");
     setValorInput(onlyNums);
+    // Se ele mudar o valor numérico, esconde a justificativa para tentar fechar normalmente
+    if (requerJustificativa) setRequerJustificativa(false);
   };
 
   const getValorFormatado = (valorRaw) => {
     if (!valorRaw) return "";
-    // Divide por 100 para criar os centavos e formata no padrão BR
     const parsed = parseInt(valorRaw, 10);
     if (isNaN(parsed)) return "";
     return (parsed / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
   };
 
-  // --- HANDLERS (Ações) ---
-  const limparInputs = () => { setValorInput(''); setObservacaoInput(''); };
+  const limparInputs = () => {
+    setValorInput('');
+    setObservacaoInput('');
+    setJustificativaFechamento('');
+    setRequerJustificativa(false);
+  };
 
   const executarAcao = async (tipo) => {
-    if(!valorInput) return toast.warning("Informe um valor.");
+    if (!valorInput) return toast.warning("Informe um valor.");
     const parsedValor = parseInt(valorInput, 10);
     if (isNaN(parsedValor) || (tipo !== 'FECHAR' && parsedValor === 0)) {
          return toast.warning("Informe um valor válido.");
     }
 
-    // Converte a string limpa ("15000") para decimal (150.00) pro backend
+    // Validação da Justificativa antes de enviar pro Java
+    if (tipo === 'FECHAR' && requerJustificativa && justificativaFechamento.trim().length < 10) {
+      return toast.warning("Por favor, digite uma justificativa detalhada (mín. 10 caracteres).");
+    }
+
     const valorDecimal = parsedValor / 100;
 
     try {
@@ -77,11 +86,14 @@ const GerenciamentoCaixa = () => {
         toast.success("Caixa aberto! Boas vendas. 🚀");
         carregarDados();
       } else if (tipo === 'FECHAR') {
-        const response = await caixaService.fechar(valorDecimal);
+        // Envia o fechamento com a justificativa
+        await caixaService.fechar(valorDecimal, justificativaFechamento.trim() !== '' ? justificativaFechamento : null);
         setModalFechamento(false);
-        setDadosFechamento(response); // Guarda a resposta (diferença, saldo esperado)
-        setModalResumo(true);         // Abre o modal de resumo final
         toast.success("Caixa fechado com sucesso.");
+
+        // A MÁGICA: Força a interface voltar para o "Cadeado Fechado" instantaneamente!
+        setCaixa(null);
+        carregarDados(); // Sincroniza em background
       } else if (tipo === 'SANGRIA') {
         await caixaService.sangria({ valor: valorDecimal, observacao: observacaoInput });
         setModalSangria(false);
@@ -95,14 +107,14 @@ const GerenciamentoCaixa = () => {
       }
       limparInputs();
     } catch (error) {
-      toast.error(error.response?.data?.message || "Erro ao processar operação.");
+      // --- CAPTURA DA TRAVA DE SEGURANÇA 428 (IA) ---
+      if (tipo === 'FECHAR' && (error.response?.status === 428 || error.response?.data?.mensagem?.includes("justificativa"))) {
+         setRequerJustificativa(true);
+         toast.warning("Houve divergência no caixa. É necessário justificar o motivo.");
+      } else {
+         toast.error(error.response?.data?.mensagem || error.response?.data?.message || "Erro ao processar operação.");
+      }
     }
-  };
-
-  const fecharResumo = () => {
-    setModalResumo(false);
-    setDadosFechamento(null);
-    carregarDados(); // Força recarregar para mostrar a tela de "Caixa Fechado"
   };
 
   if (loading) return <div className="loading-screen"><div className="loader"></div>Carregando Dashboard...</div>;
@@ -110,8 +122,8 @@ const GerenciamentoCaixa = () => {
   return (
     <div className={`caixa-container fade-in ${!caixa ? 'layout-fechado' : ''}`}>
 
-      {/* HEADER: SÓ APARECE SE O CAIXA ESTIVER ABERTO E SEM MODAL DE RESUMO */}
-      {caixa && !modalResumo && (
+      {/* HEADER: SÓ APARECE SE O CAIXA ESTIVER ABERTO */}
+      {caixa && (
         <header className="caixa-header-modern">
           <div>
             <h1>Controle de Caixa</h1>
@@ -124,41 +136,7 @@ const GerenciamentoCaixa = () => {
         </header>
       )}
 
-      {/* --- ESTADO DE RESUMO PÓS-FECHAMENTO --- */}
-      {modalResumo && dadosFechamento && (
-         <div className="empty-state-modern resume-state">
-            <div className={`icon-wrapper-large ${dadosFechamento.diferenca === 0 ? 'success' : 'warning'}`}>
-               {dadosFechamento.diferenca === 0 ? <CheckCircle2 size={56} /> : <AlertTriangle size={56} />}
-            </div>
-            <h2>Relatório de Fechamento</h2>
-
-            <div className="resume-details">
-                <div className="resume-row">
-                    <span>Valor Físico Informado:</span>
-                    <strong>R$ {(dadosFechamento.valorInformado ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
-                </div>
-                <div className="resume-row">
-                    <span>Valor Esperado (Sistema):</span>
-                    <strong>R$ {(dadosFechamento.saldoEsperado ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
-                </div>
-                <div className={`resume-row highlight ${dadosFechamento.diferenca < 0 ? 'text-red' : dadosFechamento.diferenca > 0 ? 'text-green' : ''}`}>
-                    <span>Status do Caixa:</span>
-                    <strong>
-                        {dadosFechamento.diferenca === 0 ? 'Caixa Bateu' :
-                         dadosFechamento.diferenca < 0 ? `Quebra de R$ ${Math.abs(dadosFechamento.diferenca).toLocaleString('pt-BR', {minimumFractionDigits: 2})}` :
-                         `Sobra de R$ ${dadosFechamento.diferenca.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`}
-                    </strong>
-                </div>
-            </div>
-
-            <button className="btn-hero" onClick={fecharResumo}>
-              <Lock size={20} /> Concluir e Sair
-            </button>
-         </div>
-      )}
-
-
-      {!caixa && !modalResumo ? (
+      {!caixa ? (
         // --- ESTADO FECHADO (MENSAGEM SUSPENSA) ---
         <div className="empty-state-modern">
           <div className="icon-wrapper-large">
@@ -170,11 +148,11 @@ const GerenciamentoCaixa = () => {
             <Unlock size={20} /> Abrir Caixa Agora
           </button>
         </div>
-      ) : caixa && !modalResumo ? (
+      ) : (
         // --- ESTADO ABERTO (DASHBOARD) ---
         <div className="dashboard-grid">
 
-          {/* COLUNA 1: RESUMO GERAL (Dinheiro na Gaveta) */}
+          {/* COLUNA 1: RESUMO GERAL */}
           <section className="main-balance-card">
             <div className="balance-header">
               <span><Wallet size={18}/> Dinheiro em Gaveta</span>
@@ -257,29 +235,31 @@ const GerenciamentoCaixa = () => {
           </div>
 
         </div>
-      ) : null}
+      )}
 
-      {/* --- MODAL GENÉRICO DE INPUT --- */}
+      {/* --- MODAL GENÉRICO DE INPUT (INCLUINDO IA) --- */}
       {(modalAbertura || modalFechamento || modalSangria || modalSuprimento) && (
-        <div className="modal-overlay-modern">
-          <div className="modal-card-modern fade-in-up">
-            <div className={`modal-header ${modalFechamento || modalSangria ? 'warning' : 'primary'}`}>
+        <div className="modal-overlay-modern fade-in">
+          <div className="modal-card-modern fade-in-up" style={{ transition: 'all 0.3s', borderColor: requerJustificativa ? '#f59e0b' : 'transparent' }}>
+
+            <div className={`modal-header ${requerJustificativa ? 'warning' : modalFechamento || modalSangria ? 'danger' : 'primary'}`}>
                {modalAbertura && <h3>Abrir Caixa</h3>}
-               {modalFechamento && <h3>Fechar Caixa</h3>}
+               {modalFechamento && <h3>{requerJustificativa ? 'Divergência Encontrada' : 'Fechar Caixa'}</h3>}
                {modalSangria && <h3>Realizar Sangria</h3>}
                {modalSuprimento && <h3>Realizar Suprimento</h3>}
             </div>
 
             <div className="modal-body">
               <label>{modalFechamento ? 'Valor Contado em Gaveta (R$)' : 'Valor (R$)'}</label>
-              <div className="input-money-wrapper">
+              <div className="input-money-wrapper" style={{ borderColor: requerJustificativa ? '#f59e0b' : '' }}>
                 <span>R$</span>
                 <input
-                  autoFocus
+                  autoFocus={!requerJustificativa}
                   type="text"
                   value={getValorFormatado(valorInput)}
                   onChange={handleValorChange}
-                  onKeyDown={e => e.key === 'Enter' && (
+                  disabled={requerJustificativa}
+                  onKeyDown={e => !requerJustificativa && e.key === 'Enter' && (
                     modalAbertura ? executarAcao('ABRIR') :
                     modalFechamento ? executarAcao('FECHAR') :
                     modalSangria ? executarAcao('SANGRIA') :
@@ -288,6 +268,22 @@ const GerenciamentoCaixa = () => {
                   placeholder="0,00"
                 />
               </div>
+
+              {/* BLOCO IA: JUSTIFICATIVA DE FECHAMENTO */}
+              {requerJustificativa && (
+                 <div className="fade-in" style={{ marginTop: '15px' }}>
+                    <label style={{ color: '#d97706', fontWeight: 'bold' }}>Justificativa Obrigatória</label>
+                    <textarea
+                       autoFocus
+                       className="input-text-modern"
+                       rows="3"
+                       style={{ resize: 'none', borderColor: '#fcd34d', backgroundColor: '#fffbeb' }}
+                       placeholder="Explique o motivo da diferença no caixa..."
+                       value={justificativaFechamento}
+                       onChange={e => setJustificativaFechamento(e.target.value)}
+                    />
+                 </div>
+              )}
 
               {(modalSangria || modalSuprimento) && (
                 <>
@@ -302,7 +298,7 @@ const GerenciamentoCaixa = () => {
                 </>
               )}
 
-              {modalFechamento && (
+              {modalFechamento && !requerJustificativa && (
                 <p className="modal-hint">
                   <AlertCircle size={14}/> Conte as notas físicas na gaveta e informe o valor total.
                 </p>
@@ -310,17 +306,19 @@ const GerenciamentoCaixa = () => {
             </div>
 
             <div className="modal-footer">
-              <button className="btn-text" onClick={() => {
-                setModalAbertura(false); setModalFechamento(false); setModalSangria(false); setModalSuprimento(false);
+              <button className="btn-text" disabled={loading} onClick={() => {
+                setModalAbertura(false); setModalFechamento(false); setModalSangria(false); setModalSuprimento(false); limparInputs();
               }}>Cancelar</button>
 
-              <button className={`btn-confirm ${modalFechamento || modalSangria ? 'danger' : 'primary'}`} onClick={() => {
-                 if(modalAbertura) executarAcao('ABRIR');
-                 if(modalFechamento) executarAcao('FECHAR');
-                 if(modalSangria) executarAcao('SANGRIA');
-                 if(modalSuprimento) executarAcao('SUPRIMENTO');
-              }}>
-                Confirmar
+              <button className={`btn-confirm ${requerJustificativa ? 'warning' : modalFechamento || modalSangria ? 'danger' : 'primary'}`}
+                      disabled={loading}
+                      onClick={() => {
+                         if(modalAbertura) executarAcao('ABRIR');
+                         if(modalFechamento) executarAcao('FECHAR');
+                         if(modalSangria) executarAcao('SANGRIA');
+                         if(modalSuprimento) executarAcao('SUPRIMENTO');
+                      }}>
+                {loading ? 'Aguarde...' : requerJustificativa ? 'Confirmar e Enviar' : 'Confirmar'}
               </button>
             </div>
           </div>
