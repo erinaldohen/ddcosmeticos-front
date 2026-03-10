@@ -10,8 +10,8 @@ import MainLayout from './components/Layout/MainLayout';
 import Login from './pages/Login/Login';
 import PDV from './pages/PDV/PDV';
 import Dashboard from './pages/Dashboard/Dashboard';
-// NOVA PÁGINA: Central de Inteligência (BI)
 import Relatorios from './pages/Relatorios/Relatorios';
+import CRM from './pages/CRM/CRM'; // <-- IMPORTAÇÃO DO NOVO MÓDULO CRM
 import Configuracoes from './pages/Configuracoes/Configuracoes';
 import ProdutoList from './pages/Produtos/ProdutoList';
 import ProdutoForm from './pages/Produtos/ProdutoForm';
@@ -73,8 +73,10 @@ export default function App() {
         {/* ROTAS ADMINISTRATIVAS */}
         <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
-            {/* ROTA DA CENTRAL DE BI PLUGADA AQUI */}
             <Route path="/relatorios" element={<AdminRoute><Relatorios /></AdminRoute>} />
+
+            {/* NOVA ROTA DO CRM PLUGADA AQUI */}
+            <Route path="/crm" element={<AdminRoute><CRM /></AdminRoute>} />
 
             <Route path="/caixa" element={<PrivateRoute><GerenciamentoCaixa /></PrivateRoute>} />
             <Route path="/historico-caixa" element={<AdminRoute><HistoricoCaixa /></AdminRoute>} />

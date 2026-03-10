@@ -1,0 +1,100 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+.crm-wrapper { padding: 24px; background-color: #f8fafc; min-height: 100vh; font-family: 'Inter', sans-serif; color: #0f172a; }
+.animate-fade-in { animation: fadeIn 0.4s ease-out; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* Cabeçalho */
+.crm-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 32px; }
+.crm-title { font-size: 1.8rem; font-weight: 800; margin: 0 0 4px 0; color: #1e293b; letter-spacing: -0.5px;}
+.crm-subtitle { font-size: 1rem; color: #64748b; margin: 0; font-weight: 500;}
+.crm-btn-refresh { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; font-weight: 700; color: #3b82f6; cursor: pointer; transition: 0.2s;}
+.crm-btn-refresh:hover { background: #f1f5f9; color: #2563eb; }
+
+/* KPIs de Topo */
+.crm-kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 32px; }
+.crm-kpi-card { background: white; padding: 24px; border-radius: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.02); border-left: 4px solid transparent; }
+.crm-kpi-card.blue { border-left-color: #3b82f6; } .crm-kpi-card.red { border-left-color: #ef4444; }
+.crm-kpi-card.green { border-left-color: #10b981; } .crm-kpi-card.purple { border-left-color: #8b5cf6; }
+
+.ck-top { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; color: #64748b; }
+.ck-label { font-weight: 700; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;}
+.ck-value { margin: 0; font-size: 2rem; font-weight: 900; color: #0f172a; }
+
+/* Abas */
+.crm-tabs { display: flex; gap: 16px; border-bottom: 2px solid #e2e8f0; margin-bottom: 32px; }
+.crm-tabs button { background: transparent; border: none; font-size: 1.1rem; font-weight: 700; color: #64748b; padding: 12px 24px; cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.2s; }
+.crm-tabs button:hover { color: #0f172a; background: rgba(241, 245, 249, 0.5); border-radius: 8px 8px 0 0; }
+.crm-tabs button.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+
+/* Tarefas (Funil) */
+.crm-tasks-header { margin-bottom: 24px; }
+.crm-tasks-header h2 { margin: 0 0 4px 0; font-size: 1.4rem; color: #0f172a; font-weight: 800;}
+.crm-tasks-header p { margin: 0; color: #64748b; }
+
+.crm-tasks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 24px; }
+.crm-task-card { background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); border-top: 4px solid transparent; display: flex; flex-direction: column; transition: transform 0.2s;}
+.crm-task-card:hover { transform: translateY(-4px); }
+.border-reposicao { border-top-color: #f59e0b; } .border-churn { border-top-color: #ef4444; } .border-upsell { border-top-color: #8b5cf6; }
+
+.ctc-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.ctc-badge { padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase;}
+.badge-reposicao { background: #fffbeb; color: #d97706; } .badge-churn { background: #fef2f2; color: #dc2626; } .badge-upsell { background: #f3e8ff; color: #7e22ce; }
+.ctc-time { font-size: 0.85rem; color: #94a3b8; font-weight: 600; display: flex; align-items: center; gap: 4px;}
+
+.ctc-body h3 { margin: 0 0 4px 0; font-size: 1.3rem; color: #1e293b; font-weight: 800;}
+.ctc-phone { margin: 0 0 16px 0; color: #64748b; display: flex; align-items: center; gap: 6px; font-weight: 500;}
+.ctc-product { background: #f8fafc; padding: 12px; border-radius: 8px; font-size: 0.95rem; color: #0f172a; margin-bottom: 16px; border: 1px dashed #cbd5e1;}
+
+.ctc-msg-box { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 16px; border-radius: 12px; margin-bottom: 20px; flex: 1;}
+.ctc-msg-header { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 800; color: #166534; margin-bottom: 8px; text-transform: uppercase;}
+.ctc-msg-box p { margin: 0; font-size: 0.95rem; color: #15803d; line-height: 1.5; font-style: italic;}
+
+.crm-btn-whatsapp { width: 100%; display: flex; justify-content: center; align-items: center; gap: 8px; background: #22c55e; color: white; border: none; padding: 14px; border-radius: 10px; font-size: 1.05rem; font-weight: 700; cursor: pointer; transition: 0.2s;}
+.crm-btn-whatsapp:hover { background: #16a34a; }
+.crm-btn-whatsapp.full { font-size: 1.15rem; padding: 16px; }
+
+/* Base de Clientes (Tabela) */
+.crm-search-bar { position: relative; margin-bottom: 24px; max-width: 500px;}
+.csb-icon { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+.crm-search-bar input { width: 100%; padding: 16px 20px 16px 48px; border: 2px solid #e2e8f0; border-radius: 12px; font-size: 1.1rem; font-weight: 500; outline: none; transition: 0.2s;}
+.crm-search-bar input:focus { border-color: #3b82f6; }
+
+.crm-table-wrapper { background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);}
+.crm-table { width: 100%; border-collapse: collapse; text-align: left; }
+.crm-table th { background: #f8fafc; padding: 16px 24px; font-size: 0.85rem; font-weight: 800; color: #475569; text-transform: uppercase; border-bottom: 2px solid #e2e8f0;}
+.crm-table td { padding: 20px 24px; border-bottom: 1px solid #f1f5f9; color: #1e293b; font-size: 1.05rem;}
+.crm-table tr:hover td { background: #f8fafc; }
+.text-right { text-align: right; } .text-center { text-align: center; }
+.font-bold { font-weight: 800; } .text-main { color: #0f172a; }
+
+.crm-status-tag { padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 800;}
+.st-ativo { background: #dcfce7; color: #166534; }
+.st-em_risco { background: #fee2e2; color: #b91c1c; }
+.st-inativo { background: #f1f5f9; color: #475569; }
+
+.crm-btn-view { background: transparent; border: 1px solid #cbd5e1; padding: 8px 16px; border-radius: 8px; color: #3b82f6; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: 0.2s;}
+.crm-btn-view:hover { background: #eff6ff; border-color: #3b82f6; }
+
+/* Modal 360 do Cliente */
+.crm-modal-glass { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 9999; }
+.crm-modal-card { background: white; padding: 40px; border-radius: 24px; width: 90%; max-width: 450px; position: relative; animation: fadeIn 0.2s ease-out; }
+.crm-modal-close { position: absolute; top: 20px; right: 20px; background: #f1f5f9; border: none; width: 36px; height: 36px; border-radius: 50%; display: flex; justify-content: center; align-items: center; color: #64748b; cursor: pointer; transition: 0.2s;}
+.crm-modal-close:hover { background: #fee2e2; color: #ef4444; }
+
+.cmc-header { display: flex; align-items: center; gap: 20px; margin-bottom: 24px; }
+.cmc-avatar { width: 80px; height: 80px; border-radius: 50%; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; display: flex; justify-content: center; align-items: center; font-size: 2.5rem; font-weight: 900;}
+.cmc-header h2 { margin: 0 0 4px 0; font-size: 1.6rem; color: #0f172a; font-weight: 800;}
+.cmc-header p { margin: 0; color: #64748b; font-size: 1.1rem; display: flex; align-items: center; gap: 6px;}
+
+.cmc-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #e2e8f0;}
+.cmc-tag { background: #fdf4ff; border: 1px solid #f0abfc; color: #a21caf; padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 700; display: flex; align-items: center; gap: 4px;}
+
+.cmc-stats { display: flex; gap: 16px; margin-bottom: 32px; }
+.cmc-stat-box { flex: 1; background: #f8fafc; padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0; display: flex; flex-direction: column; gap: 4px;}
+.cmc-stat-box span { font-size: 0.85rem; font-weight: 700; color: #64748b; text-transform: uppercase;}
+.cmc-stat-box strong { font-size: 1.4rem; color: #0f172a; font-weight: 900;}
+
+/* Loader */
+.crm-loader { height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #f8fafc; color: #0f172a;}
+.crm-spinner { border: 4px solid #e2e8f0; border-left-color: #3b82f6; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px;}

@@ -18,6 +18,79 @@ const getUserRole = () => {
     catch { return 'Operador'; }
 };
 
+// ==========================================================
+// FUNÇÕES DE VALIDAÇÃO E MÁSCARA
+// ==========================================================
+const mascaraTelefone = (value) => {
+    if (!value) return '';
+    let v = value.replace(/\D/g, '');
+    if (v.length <= 10) {
+        v = v.replace(/^(\d{2})(\d)/g, '($1) $2');
+        v = v.replace(/(\d{4})(\d)/, '$1-$2');
+    } else {
+        v = v.replace(/^(\d{2})(\d)/g, '($1) $2');
+        v = v.replace(/(\d{5})(\d)/, '$1-$2');
+    }
+    return v.substring(0, 15);
+};
+
+const mascaraDocumento = (value) => {
+    if (!value) return '';
+    let v = value.replace(/\D/g, '');
+    if (v.length <= 11) { // CPF
+        v = v.replace(/(\d{3})(\d)/, '$1.$2');
+        v = v.replace(/(\d{3})(\d)/, '$1.$2');
+        v = v.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    } else { // CNPJ
+        v = v.replace(/^(\d{2})(\d)/, '$1.$2');
+        v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+        v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
+        v = v.replace(/(\d{4})(\d)/, '$1-$2');
+    }
+    return v.substring(0, 18);
+};
+
+const validarCPF = (cpf) => {
+    cpf = cpf.replace(/\D/g, '');
+    if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+    let soma = 0; let resto;
+    for (let i = 1; i <= 9; i++) soma += parseInt(cpf.substring(i - 1, i)) * (11 - i);
+    resto = (soma * 10) % 11;
+    if ((resto === 10) || (resto === 11)) resto = 0;
+    if (resto !== parseInt(cpf.substring(9, 10))) return false;
+    soma = 0;
+    for (let i = 1; i <= 10; i++) soma += parseInt(cpf.substring(i - 1, i)) * (12 - i);
+    resto = (soma * 10) % 11;
+    if ((resto === 10) || (resto === 11)) resto = 0;
+    if (resto !== parseInt(cpf.substring(10, 11))) return false;
+    return true;
+};
+
+const validarCNPJ = (cnpj) => {
+    cnpj = cnpj.replace(/\D/g, '');
+    if (cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) return false;
+    let tamanho = cnpj.length - 2;
+    let numeros = cnpj.substring(0, tamanho);
+    let digitos = cnpj.substring(tamanho);
+    let soma = 0; let pos = tamanho - 7;
+    for (let i = tamanho; i >= 1; i--) {
+        soma += numeros.charAt(tamanho - i) * pos--;
+        if (pos < 2) pos = 9;
+    }
+    let resultado = soma % 11 < 2 ? 0 : 11 - soma % 11;
+    if (resultado != digitos.charAt(0)) return false;
+    tamanho = tamanho + 1;
+    numeros = cnpj.substring(0, tamanho);
+    soma = 0; pos = tamanho - 7;
+    for (let i = tamanho; i >= 1; i--) {
+        soma += numeros.charAt(tamanho - i) * pos--;
+        if (pos < 2) pos = 9;
+    }
+    resultado = soma % 11 < 2 ? 0 : 11 - soma % 11;
+    if (resultado != digitos.charAt(1)) return false;
+    return true;
+};
+
 const PDV = () => {
   const navigate = useNavigate();
 
@@ -47,6 +120,7 @@ const PDV = () => {
   // Estados de Cliente Unificados
   const [cliente, setCliente] = useState(null);
   const [clienteAvulso, setClienteAvulso] = useState({ nome: '', telefone: '', documento: '' });
+  const [docInvalido, setDocInvalido] = useState(false);
   const [descontoTotalRaw, setDescontoTotalRaw] = useState(0);
 
   // Estados de Busca
@@ -181,6 +255,9 @@ const PDV = () => {
 
   const dispensarSugestao = () => { setSugestoesIA([]); };
 
+  // ==========================================================
+  // FUNÇÃO CORRIGIDA DE ADICIONAR PRODUTO
+  // ==========================================================
   const adicionarProdutoPorObjeto = useCallback((prod, foiSugeridoPelaIA = false) => {
       let influencia = 'NENHUMA';
       if (sugestaoAtiva && (Date.now() - sugestaoAtiva.timestamp < 120000)) {
@@ -192,8 +269,12 @@ const PDV = () => {
           const index = prev.findIndex(i => i.id === prod.id);
           if (index >= 0) {
               const nc = [...prev];
-              nc[index].quantidade += 1;
-              if (influencia !== 'NENHUMA') nc[index].influenciaIA = influencia;
+              // CORREÇÃO AQUI: Criar um novo objeto ao invés de alterar o anterior (Pure Function)
+              nc[index] = {
+                  ...nc[index],
+                  quantidade: nc[index].quantidade + 1,
+                  influenciaIA: influencia !== 'NENHUMA' ? influencia : nc[index].influenciaIA
+              };
               return nc;
           }
           return [...prev, { ...prod, quantidade: 1, desconto: 0, influenciaIA: influencia }];
@@ -243,6 +324,7 @@ const PDV = () => {
   const limparEstadoVenda = () => {
       setCarrinho([]); setPagamentos([]); setCliente(null);
       setClienteAvulso({ nome: '', telefone: '', documento: '' });
+      setDocInvalido(false);
       setDescontoTotalRaw(0); setPainelAtivo('VENDA'); setBusca(''); setSugestoesProdutos([]);
       setSugestoesIA([]); setSugestaoAtiva(null);
   };
@@ -290,36 +372,49 @@ const PDV = () => {
   };
 
   // Lógica de Cliente e Fidelidade
+  const validarDocumentoDigitado = (docLimpo) => {
+      if (!docLimpo) { setDocInvalido(false); return true; }
+      if (docLimpo.length === 11) {
+          const valido = validarCPF(docLimpo);
+          setDocInvalido(!valido);
+          if (!valido) toast.error("CPF Inválido!");
+          return valido;
+      }
+      if (docLimpo.length === 14) {
+          const valido = validarCNPJ(docLimpo);
+          setDocInvalido(!valido);
+          if (!valido) toast.error("CNPJ Inválido!");
+          return valido;
+      }
+      setDocInvalido(true);
+      toast.error("Documento incompleto.");
+      return false;
+  };
+
   const handleBlurDocumento = async () => {
       const docLimpo = cleanNumeric(clienteAvulso.documento);
-      if (docLimpo.length === 14 && !clienteAvulso.nome) {
-          setLoading(true);
-          try {
-              const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${docLimpo}`);
-              const data = await res.json();
-              setClienteAvulso(prev => ({ ...prev, nome: data.razao_social || '' }));
-              toast.success("CNPJ Localizado!");
-          } catch (e) {
-              toast.warning("CNPJ não encontrado na base de dados.");
-          } finally { setLoading(false); }
+      if (!docLimpo) { setDocInvalido(false); return; }
+
+      if (validarDocumentoDigitado(docLimpo)) {
+          if (docLimpo.length === 14 && !clienteAvulso.nome) {
+              setLoading(true);
+              try {
+                  const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${docLimpo}`);
+                  const data = await res.json();
+                  setClienteAvulso(prev => ({ ...prev, nome: data.razao_social || '' }));
+                  toast.success("CNPJ Localizado!");
+              } catch (e) {
+                  toast.warning("CNPJ não encontrado na base de dados.");
+              } finally { setLoading(false); }
+          }
       }
   };
 
-  const handleSalvarCliente = async () => {
+  const handleSalvarCliente = () => {
       const docLimpo = cleanNumeric(clienteAvulso.documento);
       const telLimpo = cleanNumeric(clienteAvulso.telefone);
 
-      // Proteção: Se apertou Enter rápido sem dar blur no CNPJ
-      if (docLimpo.length === 14 && !clienteAvulso.nome) {
-          setLoading(true);
-          try {
-              const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${docLimpo}`);
-              const data = await res.json();
-              setClienteAvulso(prev => ({ ...prev, nome: data.razao_social || '' }));
-              toast.success("CNPJ Localizado!");
-          } catch (e) {
-              toast.warning("CNPJ não encontrado na Receita.");
-          } finally { setLoading(false); }
+      if (docLimpo && !validarDocumentoDigitado(docLimpo)) {
           return;
       }
 
@@ -337,6 +432,7 @@ const PDV = () => {
   const handleRemoverCliente = () => {
       setCliente(null);
       setClienteAvulso({ nome: '', telefone: '', documento: '' });
+      setDocInvalido(false);
       toast.info("Identificação removida.");
       setShowClienteModal(false);
       if (painelAtivo === 'VENDA') setTimeout(() => inputBuscaRef.current?.focus(), 50);
@@ -406,31 +502,54 @@ const PDV = () => {
   };
 
   const finalizarVendaReal = async (pagamentosFinais = pagamentos) => {
-      const saldoFinal = totalPagar - pagamentosFinais.reduce((acc, p) => acc + p.valor, 0);
-      if (saldoFinal > 0.01) return toast.error(`Falta R$ ${saldoFinal.toFixed(2)}`);
+        const saldoFinal = totalPagar - pagamentosFinais.reduce((acc, p) => acc + p.valor, 0);
+        if (saldoFinal > 0.01) return toast.error(`Falta R$ ${saldoFinal.toFixed(2)}`);
 
-      if (totalPagar >= 5000 && !cliente && !cleanNumeric(clienteAvulso.documento)) {
-          toast.error("SEFAZ: Vendas acima de R$ 5.000 exigem CPF/CNPJ.");
-          setShowClienteModal(true); return;
-      }
-      setLoading(true);
-      try {
-          const payloadVenda = {
-              subtotal: subtotalItens, descontoTotal: descontoItens + descontoTotalRaw,
-              totalPago: totalPagar, troco: Math.max(0, parseFloat((pagamentosFinais.reduce((acc, p) => acc + p.valor, 0) - totalPagar).toFixed(2))),
-              clienteId: cliente ? cliente.id : null,
-              clienteNome: cliente ? cliente.nome : (clienteAvulso.nome || 'Consumidor Final'),
-              clienteDocumento: cliente ? cliente.documento : (cleanNumeric(clienteAvulso.documento) || null),
-              clienteTelefone: cleanNumeric(clienteAvulso.telefone) || null,
-              itens: carrinho.map(item => ({ produtoId: item.id, quantidade: item.quantidade, precoUnitario: item.precoVenda, desconto: item.desconto || 0, influenciaIA: item.influenciaIA || 'NENHUMA' })),
-              pagamentos: pagamentosFinais.map(p => ({ formaPagamento: p.tipo, valor: p.valor, parcelas: 1 }))
-          };
-          await api.post('/vendas', payloadVenda);
-          toast.success("Venda Finalizada com Sucesso!");
-          limparEstadoVenda();
-      } catch (error) { toast.error(error.response?.data?.message || "Erro ao registrar a venda."); }
-      finally { setLoading(false); }
-  };
+        if (totalPagar >= 5000 && !cliente && !cleanNumeric(clienteAvulso.documento)) {
+            toast.error("SEFAZ: Vendas acima de R$ 5.000 exigem CPF/CNPJ.");
+            setShowClienteModal(true); return;
+        }
+
+        setLoading(true);
+        try {
+            let nomeParaSalvar = clienteAvulso.nome;
+            if (!nomeParaSalvar && (clienteAvulso.telefone || clienteAvulso.documento)) {
+                nomeParaSalvar = "Cliente VIP";
+            } else if (!nomeParaSalvar) {
+                nomeParaSalvar = "Consumidor Final";
+            }
+
+            const payloadVenda = {
+                subtotal: subtotalItens,
+                descontoTotal: descontoItens + descontoTotalRaw,
+                totalPago: totalPagar,
+                troco: Math.max(0, parseFloat((pagamentosFinais.reduce((acc, p) => acc + p.valor, 0) - totalPagar).toFixed(2))),
+                clienteId: cliente ? cliente.id : null,
+                clienteNome: cliente ? cliente.nome : nomeParaSalvar,
+                clienteDocumento: cliente ? cliente.documento : (cleanNumeric(clienteAvulso.documento) || null),
+                clienteTelefone: cleanNumeric(clienteAvulso.telefone) || null,
+                itens: carrinho.map(item => ({
+                    produtoId: item.id,
+                    quantidade: item.quantidade,
+                    precoUnitario: item.precoVenda,
+                    desconto: item.desconto || 0,
+                    influenciaIA: item.influenciaIA || 'NENHUMA'
+                })),
+                pagamentos: pagamentosFinais.map(p => ({
+                    formaPagamento: p.tipo,
+                    valor: p.valor,
+                    parcelas: 1
+                }))
+            };
+            await api.post('/vendas', payloadVenda);
+            toast.success("Venda Finalizada com Sucesso!");
+            limparEstadoVenda();
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Erro ao registrar a venda.");
+        } finally {
+            setLoading(false);
+        }
+    };
 
   let nomeExibicaoCliente = 'Consumidor Final';
   if (cliente) {
@@ -649,10 +768,28 @@ const PDV = () => {
                       <input ref={inputClienteNomeRef} className="mg-input mb-3" placeholder="Ex: Maria" value={clienteAvulso.nome} onChange={e => setClienteAvulso({...clienteAvulso, nome: e.target.value})} onKeyDown={e => e.key === 'Enter' && handleSalvarCliente()} />
 
                       <label className="form-label flex-center-gap"><Phone size={14}/> WHATSAPP (Recomendado)</label>
-                      <input className="mg-input mb-3" placeholder="(81) 9..." value={clienteAvulso.telefone} onChange={e => setClienteAvulso({...clienteAvulso, telefone: e.target.value})} onKeyDown={e => e.key === 'Enter' && handleSalvarCliente()} />
+                      <input
+                          className="mg-input mb-3"
+                          placeholder="(81) 99999-9999"
+                          value={clienteAvulso.telefone}
+                          onChange={e => setClienteAvulso({...clienteAvulso, telefone: mascaraTelefone(e.target.value)})}
+                          onKeyDown={e => e.key === 'Enter' && handleSalvarCliente()}
+                      />
 
                       <label className="form-label">CPF / CNPJ (P/ Nota Fiscal)</label>
-                      <input className="mg-input mb-4" placeholder="Apenas números..." value={clienteAvulso.documento} onChange={e => setClienteAvulso({...clienteAvulso, documento: e.target.value})} onBlur={handleBlurDocumento} onKeyDown={e => e.key === 'Enter' && handleSalvarCliente()} />
+                      <input
+                          className="mg-input mb-4"
+                          style={{ borderColor: docInvalido ? '#ef4444' : '' }}
+                          placeholder="Apenas números..."
+                          value={clienteAvulso.documento}
+                          onChange={e => {
+                              setClienteAvulso({...clienteAvulso, documento: mascaraDocumento(e.target.value)});
+                              if (docInvalido) setDocInvalido(false);
+                          }}
+                          onBlur={handleBlurDocumento}
+                          onKeyDown={e => e.key === 'Enter' && handleSalvarCliente()}
+                      />
+                      {docInvalido && <p style={{color: '#ef4444', fontSize: '0.85rem', marginTop: '-12px', marginBottom: '16px', fontWeight: 'bold'}}>Documento Inválido</p>}
                   </div>
 
                   <div className="mg-actions mt-2 justify-center pos-flex-gap w-full">
