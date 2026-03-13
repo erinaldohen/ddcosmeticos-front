@@ -36,7 +36,7 @@ const GerenciamentoCaixa = () => {
       }
     } catch (error) {
       console.error("Erro ao carregar caixa:", error);
-      toast.error("Não foi possível sincronizar o caixa.");
+      toast.error("Não foi possível sincronizar o caixa.", { toastId: "erro-sincronia-caixa" });
     } finally {
       setLoading(false);
     }

@@ -5,7 +5,7 @@ import {
   Settings, LogOut, ChevronLeft, X,
   FileText, ShieldCheck, Truck, History, Clock,
   Wallet, TrendingDown, Store, ClipboardList, ShoppingBag,
-  BarChart3, HeartHandshake // <-- Ícone do CRM importado
+  BarChart3, HeartHandshake, TrendingUp // <-- ÍCONE ADICIONADO AQUI
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -34,47 +34,48 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
     }
   }, []);
 
-  // Menu Reestruturado com o Novo Módulo CRM
+  // Menu Reestruturado com Foco em Usabilidade e Jornada
   const menuGroups = [
       {
-        title: 'Visão Estratégica',
+        title: 'Operação da Loja',
         items: [
-          { path: '/dashboard', icon: <LayoutDashboard size={20} />, label: 'Painel Diário', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
-          { path: '/relatorios', icon: <BarChart3 size={20} />, label: 'Inteligência (BI)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
-          { path: '/crm', icon: <HeartHandshake size={20} />, label: 'Gestão de Clientes', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] }, // <-- NOVO MENU AQUI
+          { path: '/pdv', icon: <ShoppingCart size={20} />, label: 'PDV (Vender)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA', 'ROLE_USUARIO'] },
+          { path: '/caixa', icon: <Store size={20} />, label: 'Meu Caixa', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA', 'ROLE_USUARIO'] },
+          { path: '/vendas/historico', icon: <ShoppingBag size={20} />, label: 'Consultar Vendas', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA'] },
+          { path: '/historico-caixa', icon: <History size={20} />, label: 'Auditoria de Caixas', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
         ]
       },
       {
-        title: 'Frente de Loja',
+        title: 'Compras e Estoque',
         items: [
-          { path: '/caixa', icon: <Store size={20} />, label: 'Controle de Caixa', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA', 'ROLE_USUARIO'] },
-          { path: '/vendas/historico', icon: <ShoppingBag size={20} />, label: 'Histórico de Vendas', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
-          { path: '/pdv', icon: <ShoppingCart size={20} />, label: 'PDV (Vendas)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA', 'ROLE_USUARIO'] },
-        ]
-      },
-      {
-        title: 'Gestão Financeira',
-        items: [
-          { path: '/financeiro/contas-pagar', icon: <TrendingDown size={20} />, label: 'Contas a Pagar', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'] },
-          { path: '/financeiro/contas-receber', icon: <Wallet size={20} />, label: 'Contas a Receber', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'] },
-          { path: '/historico-caixa', icon: <History size={20} />, label: 'Histórico de Caixa', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
-        ]
-      },
-      {
-        title: 'Estoque e Cadastros',
-        items: [
-          { path: '/estoque/entrada', icon: <Truck size={20} />, label: 'Entrada de Nota', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
+          { path: '/produtos', icon: <Package size={20} />, label: 'Catálogo de Produtos', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/fornecedores', icon: <Users size={20} />, label: 'Fornecedores', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
-          { path: '/inventario', icon: <ClipboardList size={20} />, label: 'Gestão de Inventário', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
-          { path: '/produtos', icon: <Package size={20} />, label: 'Produtos', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
+          { path: '/estoque/entrada', icon: <Truck size={20} />, label: 'Entrada de Notas', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
+          { path: '/inventario', icon: <ClipboardList size={20} />, label: 'Balanço / Inventário', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
         ]
       },
       {
-        title: 'Fiscal e Sistema',
+        title: 'Central Financeira',
         items: [
-          { path: '/auditoria', icon: <ShieldCheck size={20} />, label: 'Auditoria', roles: ['ROLE_ADMIN'] },
-          { path: '/configuracoes', icon: <Settings size={20} />, label: 'Configurações', roles: ['ROLE_ADMIN'] },
-          { path: '/fiscal', icon: <FileText size={20} />, label: 'Relatórios Fiscais', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+          { path: '/financeiro/contas-receber', icon: <Wallet size={20} />, label: 'A Receber (Crediário)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'] },
+          { path: '/financeiro/contas-pagar', icon: <TrendingDown size={20} />, label: 'A Pagar (Boletos)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'] },
+        ]
+      },
+      {
+        title: 'Gestão Estratégica',
+        items: [
+          { path: '/dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard Principal', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+          { path: '/relatorios', icon: <BarChart3 size={20} />, label: 'Relatórios Avançados', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+          { path: '/relatorios/comissoes', icon: <TrendingUp size={20} />, label: 'Gestão de Comissões', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] }, // <-- NOVO MENU AQUI
+          { path: '/crm', icon: <HeartHandshake size={20} />, label: 'CRM & Marketing', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+        ]
+      },
+      {
+        title: 'Configurações',
+        items: [
+          { path: '/fiscal', icon: <FileText size={20} />, label: 'Motor Fiscal', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+          { path: '/auditoria', icon: <ShieldCheck size={20} />, label: 'Logs de Segurança', roles: ['ROLE_ADMIN'] },
+          { path: '/configuracoes', icon: <Settings size={20} />, label: 'Ajustes da Loja', roles: ['ROLE_ADMIN'] },
         ]
       }
   ];

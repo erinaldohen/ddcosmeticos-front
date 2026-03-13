@@ -11,10 +11,12 @@ import Login from './pages/Login/Login';
 import PDV from './pages/PDV/PDV';
 import Dashboard from './pages/Dashboard/Dashboard';
 import Relatorios from './pages/Relatorios/Relatorios';
-import CRM from './pages/CRM/CRM'; // <-- IMPORTAÇÃO DO NOVO MÓDULO CRM
+import RelatorioComissoes from './pages/Relatorios/RelatorioComissoes'; // <-- IMPORTAÇÃO AQUI
+import CRM from './pages/CRM/CRM';
 import Configuracoes from './pages/Configuracoes/Configuracoes';
 import ProdutoList from './pages/Produtos/ProdutoList';
 import ProdutoForm from './pages/Produtos/ProdutoForm';
+import HistoricoProduto from './pages/Produtos/HistoricoProduto';
 import EntradaEstoque from './pages/Estoque/EntradaEstoque';
 import Inventario from './pages/Inventario/Inventario';
 import FornecedorList from './pages/Fornecedores/FornecedorList';
@@ -62,7 +64,8 @@ const AdminRoute = ({ children }) => {
 export default function App() {
   return (
     <BrowserRouter>
-      <ToastContainer position="top-right" autoClose={3000} theme="colored" />
+      {/* Previne múltiplas mensagens idênticas saltando na tela */}
+      <ToastContainer position="top-right" autoClose={3000} theme="colored" limit={1} />
 
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -73,9 +76,11 @@ export default function App() {
         {/* ROTAS ADMINISTRATIVAS */}
         <Route element={<MainLayout />}>
             <Route path="/dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
-            <Route path="/relatorios" element={<AdminRoute><Relatorios /></AdminRoute>} />
 
-            {/* NOVA ROTA DO CRM PLUGADA AQUI */}
+            {/* ROTAS DE RELATÓRIOS */}
+            <Route path="/relatorios" element={<AdminRoute><Relatorios /></AdminRoute>} />
+            <Route path="/relatorios/comissoes" element={<AdminRoute><RelatorioComissoes /></AdminRoute>} /> {/* <-- NOVA ROTA ADICIONADA AQUI */}
+
             <Route path="/crm" element={<AdminRoute><CRM /></AdminRoute>} />
 
             <Route path="/caixa" element={<PrivateRoute><GerenciamentoCaixa /></PrivateRoute>} />
@@ -85,6 +90,8 @@ export default function App() {
             <Route path="/produtos" element={<AdminRoute><ProdutoList /></AdminRoute>} />
             <Route path="/produtos/novo" element={<AdminRoute><ProdutoForm /></AdminRoute>} />
             <Route path="/produtos/editar/:id" element={<AdminRoute><ProdutoForm /></AdminRoute>} />
+
+            <Route path="/produtos/historico/:id" element={<AdminRoute><HistoricoProduto /></AdminRoute>} />
 
             <Route path="/estoque" element={<AdminRoute><ProdutoList /></AdminRoute>} />
             <Route path="/estoque/entrada" element={<AdminRoute><EntradaEstoque /></AdminRoute>} />

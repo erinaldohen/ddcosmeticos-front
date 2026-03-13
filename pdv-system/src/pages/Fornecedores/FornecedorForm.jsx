@@ -40,7 +40,7 @@ const FornecedorForm = ({ isModal = false, onSuccess }) => {
       setLoading(true);
       api.get(`/fornecedores/${id}`)
         .then(res => setFormData(res.data))
-        .catch(() => toast.error("Erro ao carregar dados."))
+        .catch(() => toast.error("Erro ao carregar dados.", { toastId: "erro-carregar-fornecedor" }))
         .finally(() => setLoading(false));
     }
   }, [id, isEdit]);

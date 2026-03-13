@@ -32,7 +32,7 @@ const FornecedorList = () => {
       setFornecedores(res.data.content || []);
       setTotalPaginas(res.data.totalPages || 0);
     } catch (e) {
-      toast.error("Erro ao sincronizar dados.");
+      toast.error("Erro ao sincronizar dados.", { toastId: "erro-sincronizar-fornecedores" });
     } finally {
       setLoading(false);
     }

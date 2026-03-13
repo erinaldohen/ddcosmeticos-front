@@ -69,7 +69,7 @@ const ContasReceber = () => {
       setModalOpen(false);
       carregarDados(); // Recarrega para atualizar a lista e os KPIs
     } catch (error) {
-      toast.error("Erro ao registrar pagamento.");
+      toast.error("Erro ao registrar pagamento.", { toastId: "erro-registrar-pagamento" });
     }
   };
 

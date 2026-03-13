@@ -1,19 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
-    Users, Phone, MessageCircle, Clock, AlertTriangle,
-    TrendingUp, ShoppingBag, Star, X, Search, ChevronRight,
-    Calendar, RefreshCcw, Send
+    Users, Phone, UserCheck, ArrowLeft, HeartHandshake,
+    MessageCircle, AlertCircle, ShoppingBag, Calendar,
+    CheckCircle2
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
 import './CRM.css';
 
 const CRM = () => {
-    const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [abaAtiva, setAbaAtiva] = useState('tarefas'); // 'tarefas' ou 'base'
-    const [busca, setBusca] = useState('');
-    const [clienteSelecionado, setClienteSelecionado] = useState(null);
+    const [resumo, setResumo] = useState({ clientesAtivos: 0, clientesEmRisco: 0, recuperadosMes: 0, ticketMedioCRM: 0 });
+    const [tarefas, setTarefas] = useState([]);
+    const [clientes, setClientes] = useState([]);
+
+    // Controle de UI
+    const [abaAtiva, setAbaAtiva] = useState('TAREFAS'); // TAREFAS ou BASE
 
     useEffect(() => {
         carregarDados();
@@ -22,207 +24,174 @@ const CRM = () => {
     const carregarDados = async () => {
         setLoading(true);
         try {
-            const res = await api.get('/crm/dashboard');
-            setData(res.data);
+            const { data } = await api.get('/crm/dashboard');
+            setResumo(data.resumo || { clientesAtivos: 0, clientesEmRisco: 0, recuperadosMes: 0, ticketMedioCRM: 0 });
+            setTarefas(data.tarefas || []);
+            setClientes(data.clientes || []);
         } catch (error) {
-            toast.error("Erro ao carregar inteligência de clientes.");
+            console.error("Erro ao carregar CRM", error);
+            // Fallback gentil se der erro, pois o CRM não deve quebrar a loja
+            toast.error("Não foi possível carregar os dados de clientes.");
         } finally {
             setLoading(false);
         }
     };
 
-    const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
+    // Ação Principal: Chama o WhatsApp e avisa o Backend
+    const handleContatoWhatsApp = async (tarefa) => {
+        // 1. Limpa o telefone para o padrão do WhatsApp
+        const telefoneNumerico = tarefa.telefone ? tarefa.telefone.replace(/\D/g, '') : '';
 
-    const abrirWhatsApp = (telefone, mensagem) => {
-        const telLimpo = telefone.replace(/\D/g, '');
-        const msgEncoded = encodeURIComponent(mensagem);
-        window.open(`https://wa.me/${telLimpo}?text=${msgEncoded}`, '_blank');
-        toast.success("Redirecionando para o WhatsApp...");
+        if (!telefoneNumerico || telefoneNumerico.length < 10) {
+            toast.error("Número de telefone inválido para o cliente " + tarefa.clienteNome);
+            return;
+        }
+
+        // 2. Avisa o Java que o contato foi feito
+        try {
+            await api.post('/crm/interacao', {
+                clienteId: tarefa.clienteId, // Importante: O DTO que criamos no Java pede o clienteId
+                tipoAbordagem: tarefa.tipo,
+                resultado: "ENVIADA",
+                observacao: `Mensagem sugerida via sistema para produto: ${tarefa.produtoFoco}`
+            });
+
+            // 3. Remove a tarefa da tela instantaneamente para fluidez
+            setTarefas(prev => prev.filter(t => t.id !== tarefa.id));
+            toast.success(`Contato com ${tarefa.clienteNome} registrado!`);
+
+            // 4. Abre a nova aba do WhatsApp Web com a mensagem pré-pronta
+            const mensagemEncoded = encodeURIComponent(tarefa.mensagemSugerida);
+            const urlZAP = `https://wa.me/55${telefoneNumerico}?text=${mensagemEncoded}`;
+            window.open(urlZAP, '_blank');
+
+        } catch (e) {
+            toast.error("Erro ao registrar a interação no sistema.");
+        }
     };
 
-    if (loading || !data) return (
-        <div className="crm-loader">
-            <div className="crm-spinner"></div>
-            <h2>Carregando Central de Clientes...</h2>
-        </div>
-    );
-
-    const { resumo, tarefas, clientes } = data;
-
-    const clientesFiltrados = clientes.filter(c =>
-        c.nome.toLowerCase().includes(busca.toLowerCase()) ||
-        c.telefone.includes(busca)
-    );
+    if (loading) {
+        return <div className="crm-loader"><div className="spinner"></div><h2>Carregando Máquina de Vendas...</h2></div>;
+    }
 
     return (
-        <div className="crm-wrapper">
-            <header className="crm-header">
-                <div>
-                    <h1 className="crm-title">Gestão de Clientes (CRM)</h1>
-                    <p className="crm-subtitle">Inteligência de Vendas e Relacionamento DD Cosméticos</p>
-                </div>
-                <button className="crm-btn-refresh" onClick={carregarDados}><RefreshCcw size={16}/> Sincronizar</button>
-            </header>
+        <div className="crm-container animate-fade">
 
-            {/* KPIs de Topo */}
-            <div className="crm-kpi-grid">
-                <div className="crm-kpi-card blue">
-                    <div className="ck-top"><Users size={20} className="ck-icon"/> <span className="ck-label">Clientes Ativos</span></div>
-                    <h2 className="ck-value">{resumo.clientesAtivos}</h2>
+            {/* CABEÇALHO KPI */}
+            <div className="crm-header-cards">
+                <div className="kpi-card crm-primary">
+                    <div className="kpi-icon"><Users size={24}/></div>
+                    <div className="kpi-data">
+                        <span>Clientes Ativos</span>
+                        <h3>{resumo.clientesAtivos}</h3>
+                    </div>
                 </div>
-                <div className="crm-kpi-card red">
-                    <div className="ck-top"><AlertTriangle size={20} className="ck-icon"/> <span className="ck-label">Risco de Perda (+90d)</span></div>
-                    <h2 className="ck-value">{resumo.clientesEmRisco}</h2>
+                <div className="kpi-card crm-danger">
+                    <div className="kpi-icon"><AlertCircle size={24}/></div>
+                    <div className="kpi-data">
+                        <span>Risco de Fuga</span>
+                        <h3>{resumo.clientesEmRisco}</h3>
+                    </div>
                 </div>
-                <div className="crm-kpi-card green">
-                    <div className="ck-top"><TrendingUp size={20} className="ck-icon"/> <span className="ck-label">Recuperados no Mês</span></div>
-                    <h2 className="ck-value">{resumo.recuperadosMes}</h2>
+                <div className="kpi-card crm-success">
+                    <div className="kpi-icon"><UserCheck size={24}/></div>
+                    <div className="kpi-data">
+                        <span>Recuperados Mês</span>
+                        <h3>{resumo.recuperadosMes}</h3>
+                    </div>
                 </div>
-                <div className="crm-kpi-card purple">
-                    <div className="ck-top"><ShoppingBag size={20} className="ck-icon"/> <span className="ck-label">Ticket Médio (Clube)</span></div>
-                    <h2 className="ck-value">{formatCurrency(resumo.ticketMedioCRM)}</h2>
+                <div className="kpi-card crm-warning">
+                    <div className="kpi-icon"><ShoppingBag size={24}/></div>
+                    <div className="kpi-data">
+                        <span>Ticket do Clube</span>
+                        <h3>R$ {resumo.ticketMedioCRM.toFixed(2)}</h3>
+                    </div>
                 </div>
             </div>
 
-            {/* Abas */}
+            {/* CONTROLES DE ABA */}
             <div className="crm-tabs">
-                <button className={abaAtiva === 'tarefas' ? 'active' : ''} onClick={() => setAbaAtiva('tarefas')}>🔥 Ações de Hoje (Funil)</button>
-                <button className={abaAtiva === 'base' ? 'active' : ''} onClick={() => setAbaAtiva('base')}>📇 Base de Clientes</button>
+                <button className={abaAtiva === 'TAREFAS' ? 'active' : ''} onClick={() => setAbaAtiva('TAREFAS')}>
+                    <MessageCircle size={18}/> Funil de Ações (Hoje)
+                    {tarefas.length > 0 && <span className="badge-count">{tarefas.length}</span>}
+                </button>
+                <button className={abaAtiva === 'BASE' ? 'active' : ''} onClick={() => setAbaAtiva('BASE')}>
+                    <HeartHandshake size={18}/> Base de Clientes VIP
+                </button>
             </div>
 
-            {/* ABA: TAREFAS DE HOJE */}
-            {abaAtiva === 'tarefas' && (
-                <div className="crm-tasks-container animate-fade-in">
-                    <div className="crm-tasks-header">
-                        <h2>Sua lista de contatos para faturar hoje</h2>
-                        <p>O sistema identificou estas oportunidades baseadas no comportamento de compra.</p>
-                    </div>
-
-                    <div className="crm-tasks-grid">
-                        {tarefas.map(tarefa => (
-                            <div key={tarefa.id} className={`crm-task-card border-${tarefa.tipo.toLowerCase()}`}>
-                                <div className="ctc-header">
-                                    <span className={`ctc-badge badge-${tarefa.tipo.toLowerCase()}`}>
-                                        {tarefa.tipo === 'REPOSICAO' && '♻️ Reposição Preditiva'}
-                                        {tarefa.tipo === 'CHURN' && '🚨 Recuperação'}
-                                        {tarefa.tipo === 'UPSELL' && '✨ Oportunidade VIP'}
-                                    </span>
-                                    <span className="ctc-time"><Clock size={14}/> {tarefa.diasUltimaCompra} dias atrás</span>
+            {/* CONTEÚDO: TAREFAS DE VENDAS */}
+            {abaAtiva === 'TAREFAS' && (
+                <div className="crm-tarefas-grid">
+                    {tarefas.length === 0 ? (
+                        <div className="crm-empty-state">
+                            <CheckCircle2 size={60} color="#10b981" />
+                            <h3>Tudo limpo por aqui!</h3>
+                            <p>Sua equipe já contactou todos os clientes do funil hoje.</p>
+                        </div>
+                    ) : (
+                        tarefas.map(tarefa => (
+                            <div key={tarefa.id} className="tarefa-card">
+                                <div className={`tarefa-badge ${tarefa.tipo.toLowerCase()}`}>
+                                    {tarefa.tipo === 'REPOSICAO' ? '♻️ Reposição' : tarefa.tipo === 'CHURN' ? '⚠️ Risco de Fuga' : '✨ Upsell / Novidade'}
                                 </div>
-
-                                <div className="ctc-body">
-                                    <h3>{tarefa.clienteNome}</h3>
-                                    <p className="ctc-phone"><Phone size={14}/> {tarefa.telefone}</p>
-                                    <div className="ctc-product">
-                                        <strong>Foco:</strong> {tarefa.produtoFoco}
-                                    </div>
+                                <h3 className="tarefa-cliente">{tarefa.clienteNome}</h3>
+                                <div className="tarefa-info">
+                                    <span><Calendar size={14}/> Última Compra: {tarefa.diasUltimaCompra} dias atrás</span>
+                                    <span><ShoppingBag size={14}/> Foco: {tarefa.produtoFoco}</span>
                                 </div>
-
-                                <div className="ctc-msg-box">
-                                    <div className="ctc-msg-header"><MessageCircle size={14}/> Sugestão de Abordagem</div>
-                                    <p>{tarefa.mensagemSugerida}</p>
+                                <div className="tarefa-mensagem">
+                                    <strong>Sugestão de Mensagem:</strong>
+                                    <p>"{tarefa.mensagemSugerida}"</p>
                                 </div>
-
-                                <div className="ctc-footer">
-                                    <button className="crm-btn-whatsapp" onClick={() => abrirWhatsApp(tarefa.telefone, tarefa.mensagemSugerida)}>
-                                        <Send size={16}/> Enviar WhatsApp
-                                    </button>
-                                </div>
+                                <button className="btn-whatsapp" onClick={() => handleContatoWhatsApp(tarefa)}>
+                                    <Phone size={18}/> Chamar no WhatsApp
+                                </button>
                             </div>
-                        ))}
-                    </div>
+                        ))
+                    )}
                 </div>
             )}
 
-            {/* ABA: BASE DE CLIENTES */}
-            {abaAtiva === 'base' && (
-                <div className="crm-base-container animate-fade-in">
-                    <div className="crm-search-bar">
-                        <Search className="csb-icon" size={20}/>
-                        <input
-                            type="text"
-                            placeholder="Buscar cliente por nome ou telefone..."
-                            value={busca}
-                            onChange={(e) => setBusca(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="crm-table-wrapper">
-                        <table className="crm-table">
-                            <thead>
-                                <tr>
-                                    <th>Nome do Cliente</th>
-                                    <th>Telefone</th>
-                                    <th>Status</th>
-                                    <th>Última Compra</th>
-                                    <th className="text-right">Total Gasto</th>
-                                    <th className="text-center">Ação</th>
+            {/* CONTEÚDO: BASE DE CLIENTES (Tabela) */}
+            {abaAtiva === 'BASE' && (
+                <div className="crm-table-container">
+                    <table className="crm-table">
+                        <thead>
+                            <tr>
+                                <th>Cliente</th>
+                                <th>Contato</th>
+                                <th>Status</th>
+                                <th>Última Visita</th>
+                                <th>Total Gasto</th>
+                                <th>Perfil (Tags)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {clientes.map(cliente => (
+                                <tr key={cliente.id}>
+                                    <td><strong>{cliente.nome}</strong></td>
+                                    <td>{cliente.telefone}</td>
+                                    <td>
+                                        <span className={`status-dot ${cliente.status.toLowerCase()}`}></span>
+                                        {cliente.status.replace('_', ' ')}
+                                    </td>
+                                    <td>{cliente.ultimaCompra}</td>
+                                    <td>R$ {cliente.totalGasto.toFixed(2)}</td>
+                                    <td>
+                                        <div className="tags-flex">
+                                            {cliente.tags.map((tag, i) => (
+                                                <span key={i} className="crm-tag">{tag}</span>
+                                            ))}
+                                        </div>
+                                    </td>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                {clientesFiltrados.map(c => (
-                                    <tr key={c.id}>
-                                        <td><strong>{c.nome}</strong></td>
-                                        <td>{c.telefone}</td>
-                                        <td>
-                                            <span className={`crm-status-tag st-${c.status.toLowerCase()}`}>
-                                                {c.status.replace('_', ' ')}
-                                            </span>
-                                        </td>
-                                        <td>{c.ultimaCompra}</td>
-                                        <td className="text-right font-bold text-main">{formatCurrency(c.totalGasto)}</td>
-                                        <td className="text-center">
-                                            <button className="crm-btn-view" onClick={() => setClienteSelecionado(c)}>
-                                                Ver Perfil <ChevronRight size={16}/>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {/* MODAL 360 DO CLIENTE */}
-            {clienteSelecionado && (
-                <div className="crm-modal-glass">
-                    <div className="crm-modal-card">
-                        <button className="crm-modal-close" onClick={() => setClienteSelecionado(null)}><X size={24}/></button>
-
-                        <div className="cmc-header">
-                            <div className="cmc-avatar">{clienteSelecionado.nome.charAt(0)}</div>
-                            <div>
-                                <h2>{clienteSelecionado.nome}</h2>
-                                <p><Phone size={14}/> {clienteSelecionado.telefone}</p>
-                            </div>
-                        </div>
-
-                        <div className="cmc-tags">
-                            {clienteSelecionado.tags.map((tag, idx) => (
-                                <span key={idx} className="cmc-tag"><Star size={12}/> {tag}</span>
                             ))}
-                        </div>
-
-                        <div className="cmc-stats">
-                            <div className="cmc-stat-box">
-                                <span>Total Gasto na DD</span>
-                                <strong>{formatCurrency(clienteSelecionado.totalGasto)}</strong>
-                            </div>
-                            <div className="cmc-stat-box">
-                                <span>Última Visita</span>
-                                <strong>{clienteSelecionado.ultimaCompra}</strong>
-                            </div>
-                        </div>
-
-                        <div className="cmc-actions">
-                            <button className="crm-btn-whatsapp full" onClick={() => abrirWhatsApp(clienteSelecionado.telefone, `Oi ${clienteSelecionado.nome.split(' ')[0]}, tudo bem? Aqui é da DD Cosméticos!`)}>
-                                <MessageCircle size={20}/> Chamar no WhatsApp
-                            </button>
-                        </div>
-                    </div>
+                        </tbody>
+                    </table>
                 </div>
             )}
+
         </div>
     );
 };

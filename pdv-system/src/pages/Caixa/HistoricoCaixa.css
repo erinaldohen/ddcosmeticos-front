@@ -430,4 +430,436 @@
     align-items: flex-start;
     gap: 8px;
   }
+}/* ================================================================= */
+/* HISTÓRICO DE CAIXA - ESTILO PADRÃO OURO                           */
+/* ================================================================= */
+
+.historico-container {
+  padding: 30px;
+  max-width: 1400px;
+  margin: 0 auto;
+  font-family: 'Inter', sans-serif;
+  animation: fadeIn 0.4s ease-out;
+}
+
+/* --- HEADER --- */
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 20px;
+}
+
+.header-title h1 {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+}
+
+.header-title p {
+  margin: 4px 0 0 44px;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+/* --- TOOLBAR (FILTROS) --- */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  background: white;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+}
+
+.date-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.date-filter-group input {
+  border: none;
+  background: transparent;
+  color: #334155;
+  font-family: inherit;
+  outline: none;
+}
+
+.btn-search-icon {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.2s;
+}
+.btn-search-icon:hover { color: #3b82f6; border-color: #3b82f6; }
+
+.btn-primary {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-primary:hover { background: #1d4ed8; }
+
+.btn-export {
+  background: white;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.btn-export:hover { background: #f8fafc; color: #1e293b; }
+
+/* --- TABELA --- */
+.table-wrapper {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 14px 20px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.data-table td {
+  padding: 14px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+  font-size: 0.9rem;
+  vertical-align: middle;
+}
+
+/* User Cell */
+.user-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.avatar-mini {
+  width: 36px;
+  height: 36px;
+  background: #eff6ff;
+  color: #3b82f6;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.user-cell strong { display: block; color: #1e293b; font-size: 0.95rem; }
+.user-cell span { font-size: 0.8rem; color: #64748b; }
+
+/* Status Pills */
+.status-pill {
+  padding: 6px 12px;
+  border-radius: 6px; /* Bordas levemente arredondadas (Mais moderno que pílula redonda) */
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  letter-spacing: 0.5px;
+}
+.status-pill.open {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+.status-pill.open::before {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
+  background: #2563eb;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.2); /* Efeito de "Pulse" estático */
+}
+.status-pill.closed {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+}
+
+
+/* Badges de Valor */
+.badge-success { background: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; }
+.badge-danger { background: #fee2e2; color: #991b1b; padding: 4px 8px; border-radius: 6px; font-weight: 700; font-size: 0.85rem; }
+.badge-neutral { color: #94a3b8; font-weight: 600; }
+
+.text-right { text-align: right; }
+.font-bold { font-weight: 700; color: #1e293b; }
+
+.btn-icon-view {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.2s;
+}
+.btn-icon-view:hover { background: #eff6ff; color: #3b82f6; border-color: #dbeafe; }
+
+.btn-load-more {
+  width: 100%;
+  padding: 15px;
+  background: #f8fafc;
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  color: #64748b;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-load-more:hover { background: #f1f5f9; color: #334155; }
+
+/* --- MODAL DE DETALHES --- */
+.modal-content-lg {
+  background: white;
+  width: 100%;
+  max-width: 700px;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 90vh;
+  animation: slideUp 0.3s ease-out;
+}
+
+.modal-header {
+  padding: 20px 24px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.modal-header h3 { margin: 0; font-size: 1.2rem; color: #1e293b; display: flex; align-items: center; gap: 10px; }
+
+.btn-close-modal { background: none; border: none; cursor: pointer; color: #94a3b8; }
+.btn-close-modal:hover { color: #ef4444; }
+
+.modal-body-grid {
+  padding: 24px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.info-section label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #64748b;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.info-section p { margin: 0; font-weight: 600; color: #1e293b; }
+
+.divider-full {
+  grid-column: 1 / -1;
+  height: 1px;
+  background: #e2e8f0;
+  margin: 10px 0;
+}
+
+.finance-card {
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.finance-card span { font-size: 0.8rem; color: #64748b; }
+.finance-card strong { font-size: 1.1rem; color: #1e293b; }
+
+.finance-card.success { background: #f0fdf4; border-color: #bbf7d0; }
+.finance-card.success strong { color: #166534; }
+
+.finance-card.danger { background: #fef2f2; border-color: #fecaca; }
+.finance-card.danger strong { color: #991b1b; }
+
+.finance-card.highlight { background: #eff6ff; border-color: #bfdbfe; }
+.finance-card.highlight strong { color: #1e40af; }
+
+.finance-card.dark {
+  background: #1e293b;
+  color: white;
+  border: none;
+  grid-column: span 3; /* Ocupa toda a largura */
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+}
+.finance-card.dark span { color: #cbd5e1; }
+.finance-card.dark strong { color: white; font-size: 1.4rem; }
+
+@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ================================================================= */
+/* MOBILE / TABLET (TRANSFORMAÇÃO EM CARDS)                          */
+/* ================================================================= */
+
+@media (max-width: 768px) {
+  /* 1. Ajuste Geral do Container (CORREÇÃO DE MARGEM) */
+  .historico-container {
+    /* Padding uniforme para garantir espaçamento em ambos os lados */
+    padding: 16px !important;
+    width: 100%;
+    overflow-x: hidden; /* Impede rolagem lateral indesejada da página */
+  }
+
+  /* 2. Header e Toolbar Compactos */
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+  .header-title h1 { font-size: 1.4rem; }
+
+  .toolbar {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch; /* Botões ocupam largura total */
+  }
+
+  .date-filter-group {
+    justify-content: space-between; /* Datas lado a lado */
+  }
+  .date-filter-group input {
+    width: 110px; /* Tamanho fixo para datas não quebrarem */
+    font-size: 0.85rem;
+  }
+
+  /* 3. A Mágica: Tabela vira Cards */
+  .table-wrapper {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    overflow: visible; /* Importante para sombra */
+    /* Garante que o conteúdo respeite o padding do container */
+    width: 100%;
+  }
+
+  .data-table thead {
+    display: none; /* Esconde cabeçalho da tabela */
+  }
+
+  .data-table, .data-table tbody, .data-table tr, .data-table td {
+    display: block;
+    width: 100%;
+    /* Garante que o padding e borda estejam dentro da largura total */
+    box-sizing: border-box;
+  }
+
+  .data-table tr {
+    background: white;
+    margin-bottom: 16px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05); /* Sombra suave */
+    border: 1px solid #e2e8f0;
+    padding: 16px;
+    position: relative;
+  }
+
+  /* Estilização das Células (Linhas do Card) */
+  .data-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #f1f5f9;
+    text-align: right;
+  }
+
+  .data-table td:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+    justify-content: flex-end; /* Botão de ação à direita */
+    margin-top: 8px;
+  }
+
+  /* Rótulos Automáticos (Labels) */
+  .data-table td:nth-of-type(1) {
+    border-bottom: 2px solid #f1f5f9;
+    margin-bottom: 8px;
+    justify-content: flex-start;
+  }
+
+  .data-table td:nth-of-type(2)::before { content: "Abertura"; font-weight: 600; color: #64748b; font-size: 0.85rem; }
+  .data-table td:nth-of-type(3)::before { content: "Fechamento"; font-weight: 600; color: #64748b; font-size: 0.85rem; }
+  .data-table td:nth-of-type(4)::before { content: "Saldo Final"; font-weight: 600; color: #64748b; font-size: 0.85rem; }
+  .data-table td:nth-of-type(5)::before { content: "Diferença"; font-weight: 600; color: #64748b; font-size: 0.85rem; }
+  .data-table td:nth-of-type(6)::before { content: "Status"; font-weight: 600; color: #64748b; font-size: 0.85rem; }
+
+  /* Ajuste no Modal para Mobile */
+  .modal-content-lg {
+    width: 95%;
+    max-height: 90vh;
+    margin: 10px;
+  }
+  .modal-body-grid {
+    grid-template-columns: 1fr; /* 1 Coluna só */
+  }
+
+  /* Card Escuro ocupa largura total no mobile também */
+  .finance-card.dark {
+    grid-column: span 1;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
 }

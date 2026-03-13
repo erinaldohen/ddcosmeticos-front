@@ -3,20 +3,17 @@ import { toast } from 'react-toastify';
 
 let isRedirecting = false;
 
-// Cria a instância do Axios com a URL base do seu Spring Boot
 const api = axios.create({
   baseURL: 'http://localhost:8080/api/v1',
-  timeout: 15000, // Aumentado para 15s (BI costuma demorar mais que o PDV)
+  timeout: 15000,
   withCredentials: true
 });
 
-// --- INTERCEPTOR DE REQUISIÇÃO ---
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
 
     if (token && token !== 'null' && token !== 'undefined') {
-      // Remove aspas extras que o localStorage às vezes coloca
       const cleanToken = token.replace(/['"]+/g, '').trim();
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${cleanToken}`;
@@ -27,11 +24,9 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// --- INTERCEPTOR DE RESPOSTA ---
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    // 1. Erro de Conexão ou Servidor Offline
     if (error.code === 'ECONNABORTED' || !error.response) {
       toast.error("Servidor DD Cosméticos indisponível.", { toastId: 'network-error' });
       return Promise.reject(error);
@@ -41,22 +36,25 @@ api.interceptors.response.use(
     const originalRequest = error.config;
     const url = originalRequest.url || '';
 
-    // Identificadores de rota para evitar alertas desnecessários
     const isLoginRequest = url.includes('/auth/login');
     const isReportRequest = url.includes('/relatorios');
 
-    // CORREÇÃO: Agora ele sabe ler o campo "mensagem" do ErrorResponse do Java
-    const backendMessage = error.response.data?.mensagem || error.response.data?.message || "Operação inválida.";
+    // Se o erro vier de um download de arquivo (blob), precisamos ler o JSON dentro do blob
+    let backendMessage = "Operação inválida.";
+    if (error.response.data instanceof Blob) {
+       // Em downloads falhos, não conseguimos ler o json direto. Aqui apenas silenciamos ou tratamos genérico
+       backendMessage = "Erro ao processar o arquivo solicitado.";
+    } else {
+       backendMessage = error.response.data?.mensagem || error.response.data?.message || "Operação inválida.";
+    }
 
-    // --- REGRA DE OURO PARA A IA DO CAIXA ---
-    // 6. Erro 428 (Precondition Required): Apenas repassa o erro silenciosamente para que o PDV.jsx abra o modal Laranja
+    // 6. Erro 428 (Precondition Required): Apenas repassa
     if (status === 428) {
       return Promise.reject(error);
     }
 
     // 2. Erro 400: Regras de Negócio e Validações
     if (status === 400 && !isLoginRequest) {
-      // SILENCIAR: Se for erro em Relatórios, não mostra Toast (o componente trata com Mocks)
       if (isReportRequest) {
         console.warn("[BI] Erro 400 na rota de relatórios.");
         return Promise.reject(error);
@@ -68,7 +66,7 @@ api.interceptors.response.use(
     if (status === 401 && !isLoginRequest) {
       if (!isRedirecting) {
         isRedirecting = true;
-        localStorage.clear(); // Limpa tudo para garantir segurança
+        localStorage.clear();
 
         toast.error("Sessão expirada. Identifique-se novamente.", { toastId: 'session-expired' });
 

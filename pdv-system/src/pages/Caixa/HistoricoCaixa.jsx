@@ -60,7 +60,7 @@ const HistoricoCaixa = () => {
 
         } catch (error) {
             console.error("Erro histórico:", error);
-            if (reset) toast.error("Não foi possível carregar o histórico.");
+            if (reset) toast.error("Não foi possível carregar o histórico.", { toastId: "erro-historico-caixa" });
         } finally {
             setLoading(false);
         }

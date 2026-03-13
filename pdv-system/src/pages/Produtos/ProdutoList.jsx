@@ -7,9 +7,8 @@ import ConfirmModal from '../../components/ConfirmModal';
 import {
   Search, Plus, Edit3, Trash2, Box,
   ChevronLeft, ChevronRight, Zap, Printer, History, X,
-  RotateCcw, MoreHorizontal, ImageOff, Filter, XCircle, AlertOctagon,
-  Copy, Check, Upload, FileText, FileSpreadsheet, Bot,
-  Tags, Image as ImageIcon, DollarSign
+  RotateCcw, ImageOff, Filter, XCircle, AlertOctagon,
+  Copy, Check, Upload, FileText, FileSpreadsheet, Bot
 } from 'lucide-react';
 import './ProdutoList.css';
 
@@ -104,49 +103,6 @@ const BulkActionBar = ({ count, onClear, onDelete, onPrint, mode }) => {
   );
 };
 
-// --- MODAL HISTÓRICO ---
-const HistoricoModal = ({ isOpen, onClose, historico, produtoNome }) => {
-  if (!isOpen) return null;
-  return (
-    <div className="modal-backdrop">
-      <div className="modal-card wide">
-        <div className="modal-header-simple">
-          <div>
-            <h3>Histórico de Alterações</h3>
-            <span className="subtitle">{produtoNome}</span>
-          </div>
-          <button onClick={onClose} className="btn-close-simple"><X size={20}/></button>
-        </div>
-        <div className="modal-body-scroll">
-          {historico.length === 0 ? (
-            <div className="empty-state-modal">
-              <AlertOctagon size={32} />
-              <p>Sem registros recentes.</p>
-            </div>
-          ) : (
-            <div className="timeline-clean">
-              {historico.map((item, index) => (
-                <div key={index} className="timeline-row">
-                  <div className="timeline-dot"></div>
-                  <div className="timeline-date">{new Date(item.dataAlteracao).toLocaleString()}</div>
-                  <div className="timeline-content">
-                    <span className={`tag-mini ${item.tipo}`}>{item.tipo}</span>
-                    <div className="timeline-grid">
-                      <div><label>Usuario</label> {item.usuario || 'Sistema'}</div>
-                      <div><label>Preço</label> R$ {item.precoVenda?.toFixed(2)}</div>
-                      <div><label>Estoque</label> {item.quantidadeEstoque}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // ==================================================================================
 // COMPONENTE PRINCIPAL
 // ==================================================================================
@@ -154,7 +110,7 @@ const ProdutoList = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
-  // Estados
+  // Estados Principais
   const [produtos, setProdutos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingSaneamento, setLoadingSaneamento] = useState(false);
@@ -163,6 +119,7 @@ const ProdutoList = () => {
   const [selectedIds, setSelectedIds] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
 
+  // Paginação e Filtros
   const [filtros, setFiltros] = useState({ estoque: 'todos', marca: '', categoria: '', semImagem: false, semNcm: false, precoZerado: false });
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -170,17 +127,14 @@ const ProdutoList = () => {
   const [termoBusca, setTermoBusca] = useState('');
   const debouncedSearch = useDebounce(termoBusca, 500);
 
-  const [showHistoricoModal, setShowHistoricoModal] = useState(false);
-  const [historicoData, setHistoricoData] = useState([]);
-  const [selectedProdutoNome, setSelectedProdutoNome] = useState('');
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger', confirmText: 'Confirmar' });
 
-  // Helpers
+  // Helpers de Interface
   const getImageUrl = (url) => url ? (url.startsWith('blob:') || url.startsWith('http') ? url : `http://localhost:8080${url}`) : null;
   const marcasDisponiveis = useMemo(() => Array.from(new Set(produtos.map(p => p.marca).filter(Boolean))).sort(), [produtos]);
   const categoriasDisponiveis = useMemo(() => Array.from(new Set(produtos.map(p => p.categoria).filter(Boolean))).sort(), [produtos]);
 
-  // Carregamento
+  // Busca na API
   const carregarProdutos = useCallback(async (pagina, termo) => {
     setLoading(true);
     try {
@@ -196,24 +150,17 @@ const ProdutoList = () => {
         setTotalElements(filtrados.length);
       } else {
         const dados = await produtoService.listar(pagina, 10, termo, filtros);
-
-        // ------------------------------------------------------------------------
-        // CORREÇÃO CRÍTICA DO MAPEAMENTO DE DADOS AQUI:
-        // O Spring Data JPA com records ou classes DTO pode aninhar os dados.
-        // Vamos garantir que pegamos exatamente a array correta.
-        // ------------------------------------------------------------------------
         let listaProdutos = [];
 
         if (Array.isArray(dados)) {
-            listaProdutos = dados; // Fallback se a API retornar uma array direto
+            listaProdutos = dados;
         } else if (dados && dados.content && Array.isArray(dados.content)) {
-            listaProdutos = dados.content; // Padrão do Page<T> do Spring
+            listaProdutos = dados.content;
         } else if (dados && dados.itens && Array.isArray(dados.itens)) {
-            listaProdutos = dados.itens; // Padrão customizado do seu Backend
+            listaProdutos = dados.itens;
         }
 
         setProdutos(listaProdutos);
-
         setTotalPages(dados?.totalPages || dados?.totalPaginas || 1);
         setTotalElements(dados?.totalElements || dados?.totalElementos || listaProdutos.length);
       }
@@ -228,7 +175,7 @@ const ProdutoList = () => {
   useEffect(() => { carregarProdutos(page, debouncedSearch); }, [page]);
   useEffect(() => { setSelectedIds([]); }, [modoLixeira]);
 
-  // Handlers
+  // Handlers de Interface
   const handleFiltroChange = (key, value) => setFiltros(prev => ({ ...prev, [key]: value }));
   const limparFiltros = () => setFiltros({ estoque: 'todos', marca: '', categoria: '', semImagem: false, semNcm: false, precoZerado: false });
   const handleSearchChange = (e) => setTermoBusca(e.target.value);
@@ -236,7 +183,7 @@ const ProdutoList = () => {
   const handleSelectOne = (id) => selectedIds.includes(id) ? setSelectedIds(selectedIds.filter(itemId => itemId !== id)) : setSelectedIds([...selectedIds, id]);
   const handleTriggerImport = () => { if (fileInputRef.current) fileInputRef.current.click(); };
 
-  // Ações
+  // Funções de Negócio
   const handleImportar = async (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -244,10 +191,9 @@ const ProdutoList = () => {
       const formData = new FormData();
       formData.append("arquivo", file);
 
-      const toastId = toast.loading("Importando e analisando dados (pode demorar alguns segundos)...");
+      const toastId = toast.loading("A importar e processar dados...");
 
       try {
-        // CORREÇÃO: Timeout aumentado para 120 segundos (120000ms) específico para o upload
         const response = await api.post('/produtos/importar', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
             timeout: 120000
@@ -261,7 +207,7 @@ const ProdutoList = () => {
            throw new Error(response.data.mensagem);
         }
       } catch (error) {
-          toast.update(toastId, { render: "Erro na importação. Verifique se o arquivo é muito grande.", type: "error", isLoading: false, autoClose: 5000 });
+          toast.update(toastId, { render: "Erro na importação do arquivo.", type: "error", isLoading: false, autoClose: 5000 });
       }
     };
 
@@ -269,12 +215,12 @@ const ProdutoList = () => {
     setConfirmModal({
       isOpen: true, type: 'robot', title: 'IA Fiscal Inteligente', message: 'O Robô irá corrigir NCMs inválidos automaticamente.', confirmText: 'Iniciar Robô',
       onConfirm: async () => {
-        const toastId = toast.loading("🤖 Analisando base de dados...");
+        const toastId = toast.loading("🤖 A analisar base de dados...");
         try {
           const res = await api.post('/produtos/corrigir-ncms-ia');
           toast.update(toastId, { render: `Sucesso! ${res.data.qtdCorrigidos || 0} NCMs corrigidos.`, type: "success", isLoading: false, autoClose: 5000 });
           carregarProdutos(page, debouncedSearch);
-        } catch (e) { toast.update(toastId, { render: "Erro ao executar.", type: "error", isLoading: false }); }
+        } catch (e) { toast.update(toastId, { render: "Erro ao executar robô fiscal.", type: "error", isLoading: false, autoClose: 3000 }); }
       }
     });
   };
@@ -291,7 +237,7 @@ const ProdutoList = () => {
   };
 
   const handleExportar = async (tipo) => {
-    const toastId = toast.loading(`Gerando...`);
+    const toastId = toast.loading(`Gerando exportação...`);
     try {
       const res = await api.get(`/produtos/exportar/${tipo}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data]));
@@ -304,7 +250,7 @@ const ProdutoList = () => {
 
   const handleBulkPrint = () => {
     if (selectedIds.length === 0) return;
-    toast.info(`Imprimindo ${selectedIds.length} etiquetas...`);
+    toast.info(`Impressão em lote não configurada. A processar ${selectedIds.length} etiquetas...`);
   };
 
   const handleBulkAction = () => {
@@ -318,8 +264,8 @@ const ProdutoList = () => {
             const prod = produtos.find(p => p.id === id);
             return isRestore ? produtoService.restaurar(prod.codigoBarras) : produtoService.excluir(prod.codigoBarras);
           }));
-          toast.success(`Operação realizada.`); setSelectedIds([]); carregarProdutos(page, debouncedSearch);
-        } catch (e) { toast.error("Erro na operação."); }
+          toast.success(`Operação realizada em lote.`); setSelectedIds([]); carregarProdutos(page, debouncedSearch);
+        } catch (e) { toast.error("Erro na operação em lote."); }
       }
     });
   };
@@ -333,8 +279,8 @@ const ProdutoList = () => {
       onConfirm: async () => {
         try {
           if (isDelete) await produtoService.excluir(prod.codigoBarras); else await produtoService.restaurar(prod.codigoBarras);
-          toast.success("Sucesso."); carregarProdutos(isDelete ? page : 0, debouncedSearch);
-        } catch (e) { toast.error("Erro."); }
+          toast.success("Sucesso na operação."); carregarProdutos(isDelete ? page : 0, debouncedSearch);
+        } catch (e) { toast.error("Falha ao atualizar produto."); }
       }
     });
   };
@@ -343,17 +289,22 @@ const ProdutoList = () => {
     setLoadingPrint(id);
     try {
       const zpl = await produtoService.imprimirEtiqueta(id);
-      const w = window.open('', '_blank', 'width=500,height=500'); w.document.write(`<pre>${zpl}</pre>`); w.document.close();
-    } catch (e) { toast.error("Erro ao gerar etiqueta."); } finally { setLoadingPrint(null); }
+      const w = window.open('', '_blank', 'width=500,height=500');
+      w.document.write(`<pre>${zpl}</pre>`);
+      w.document.close();
+    } catch (e) {
+      toast.error("Erro ao gerar etiqueta de impressão.");
+    } finally {
+      setLoadingPrint(null);
+    }
   };
 
-  const handleOpenHistorico = async (id, nome) => {
-    setSelectedProdutoNome(nome); setShowHistoricoModal(true); setHistoricoData([]);
-    try { setHistoricoData(await produtoService.buscarHistorico(id)); } catch (e) { toast.error("Histórico indisponível."); }
+  // NAVEGAÇÃO LIMPA PARA A PÁGINA DE HISTÓRICO
+  const handleOpenHistorico = (id) => {
+    navigate(`/produtos/historico/${id}`);
   };
 
   const StatusIndicator = ({ prod }) => {
-      // Usa o fallback de false se ativo for undefined e 0 se estoque for undefined
       const isAtivo = prod.ativo !== undefined ? prod.ativo : true;
       const estoque = prod.quantidadeEmEstoque || 0;
       const minimo = prod.estoqueMinimo || 5;
@@ -397,7 +348,7 @@ const ProdutoList = () => {
                     <button className="btn-secondary btn-green bordered" onClick={() => handleExportar('excel')} data-label="Excel">
                         <FileSpreadsheet size={18} /> <span className="action-text">Excel</span>
                     </button>
-                    <input type="file" ref={fileInputRef} onChange={handleImportar} accept=".csv, .xls, .xlsx" style={{display: 'none'}} />
+                    <input type="file" ref={fileInputRef} onChange={handleImportar} accept=".csv, .xls, .xlsx, .xml" style={{display: 'none'}} />
                     <button className="btn-secondary btn-blue bordered" onClick={handleTriggerImport} data-label="Importar">
                         <Upload size={18} /> <span className="action-text">Importar</span>
                     </button>
@@ -415,7 +366,7 @@ const ProdutoList = () => {
           <div className="card-toolbar">
             <div className="input-group">
               <Search className="input-icon" size={18} />
-              <input type="text" placeholder="Buscar produto..." value={termoBusca} onChange={handleSearchChange} />
+              <input type="text" placeholder="Procurar produto..." value={termoBusca} onChange={handleSearchChange} />
               {termoBusca && <button className="clear-btn" onClick={() => setTermoBusca('')}><X size={14}/></button>}
             </div>
             <div className="toolbar-actions">
@@ -487,7 +438,6 @@ const ProdutoList = () => {
                             <div className="product-item">
                               <ProductImage src={getImageUrl(prod.urlImagem)} alt={prod.descricao} />
                               <div className="product-meta">
-                                {/* Garantia de exibição da descrição e código */}
                                 <span className="product-name">{prod.descricao || 'Sem Descrição'}</span>
                                 <CopyableCode code={prod.codigoBarras} />
                               </div>
@@ -500,15 +450,18 @@ const ProdutoList = () => {
                           <td className="td-actions" onClick={(e) => e.stopPropagation()}>
                             <div className="actions-flex">
                               {modoLixeira ? (
-                                <button className="btn-icon-soft green" onClick={() => handleSingleAction('restore', prod)} data-label="Restaurar"><RotateCcw size={18} /></button>
+                                <button className="btn-icon-soft green" onClick={() => handleSingleAction('restore', prod)} title="Restaurar Produto"><RotateCcw size={18} /></button>
                               ) : (
                                 <>
-                                  <button className="btn-icon-soft" onClick={() => handlePrint(prod.id)} disabled={loadingPrint === prod.id} data-label="Imprimir">
+                                  <button className="btn-icon-soft" onClick={() => handlePrint(prod.id)} disabled={loadingPrint === prod.id} title="Imprimir Etiqueta ZPL">
                                     {loadingPrint === prod.id ? <div className="spinner-micro dark"></div> : <Printer size={18} />}
                                   </button>
-                                  <button className="btn-icon-soft purple" onClick={() => handleOpenHistorico(prod.id, prod.descricao)} data-label="Histórico"><History size={18} /></button>
-                                  <button className="btn-icon-soft blue" onClick={() => navigate(`/produtos/editar/${prod.id}`)} data-label="Editar"><Edit3 size={18} /></button>
-                                  <button className="btn-icon-soft red" onClick={() => handleSingleAction('delete', prod)} data-label="Inativar"><Trash2 size={18} /></button>
+
+                                  {/* BOTÃO ATUALIZADO: Redireciona para a página em vez de abrir modal */}
+                                  <button className="btn-icon-soft purple" onClick={() => handleOpenHistorico(prod.id)} title="Ver Histórico de Auditoria"><History size={18} /></button>
+
+                                  <button className="btn-icon-soft blue" onClick={() => navigate(`/produtos/editar/${prod.id}`)} title="Editar Produto"><Edit3 size={18} /></button>
+                                  <button className="btn-icon-soft red" onClick={() => handleSingleAction('delete', prod)} title="Mover para Lixeira"><Trash2 size={18} /></button>
                                 </>
                               )}
                             </div>
@@ -534,8 +487,6 @@ const ProdutoList = () => {
       </div>
 
       <BulkActionBar count={selectedIds.length} onClear={() => setSelectedIds([])} onDelete={handleBulkAction} onPrint={handleBulkPrint} mode={modoLixeira} />
-
-      {showHistoricoModal && <HistoricoModal isOpen={showHistoricoModal} onClose={() => setShowHistoricoModal(false)} historico={historicoData} produtoNome={selectedProdutoNome} />}
 
       {confirmModal.isOpen && (
         <ConfirmModal
