@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as TooltipChart,
-  BarChart, Bar, ResponsiveContainer, Cell, PieChart, Pie
+  BarChart, Bar, ResponsiveContainer, Cell, PieChart, Pie, Legend
 } from 'recharts';
 import {
   DollarSign, ShoppingBag, Activity, Clock, RefreshCcw,
   CreditCard, Sparkles, Target, AlertCircle, Package, HeartHandshake,
   TrendingDown, Landmark, Zap, Scale, Tag, PieChart as PieChartIcon, ArchiveX, CalendarClock, Globe, Flag,
-  TrendingUp, BarChart2, Layers, HelpCircle, X, ChevronDown, Filter
+  TrendingUp, BarChart2, Layers, HelpCircle, X, ChevronDown, Filter, Calendar, Info
 } from 'lucide-react';
 import api from '../../services/api';
 import AlertasAuditoria from '../Dashboard/AlertasAuditoria';
@@ -20,12 +20,16 @@ const InfoTooltip = ({ text }) => (
   </div>
 );
 
-const NanoInsightIA = ({ insight, tipo = 'info' }) => (
-  <div className={`nano-insight insight-${tipo}`}>
-    <Sparkles size={14} className={`insight-icon icon-${tipo}`} />
-    <span className={`insight-text text-${tipo}`}>{insight}</span>
-  </div>
-);
+// Componente de IA injetado em vários pontos do Dashboard
+const NanoInsightIA = ({ insight, tipo = 'info', icon = Sparkles }) => {
+  const Icon = icon;
+  return (
+    <div className={`nano-insight insight-${tipo}`}>
+      <Icon size={14} className={`insight-icon icon-${tipo}`} />
+      <span className={`insight-text text-${tipo}`}>{insight}</span>
+    </div>
+  );
+};
 
 const DashboardSkeleton = () => (
   <div className="dash-wrapper">
@@ -52,7 +56,7 @@ const CustomTooltip = ({ active, payload, label }) => {
     return (
       <div className="custom-tooltip">
         <p className="ct-label">{`${label}`}</p>
-        <p className="ct-val">{`${payload[0].value} cupons gerados`}</p>
+        <p className="ct-val">{`${payload[0].value} registos`}</p>
       </div>
     );
   }
@@ -68,13 +72,12 @@ const Dashboard = () => {
   const chartContainerRef = useRef(null);
   const [chartWidth, setChartWidth] = useState(0);
 
-  // Estados de Interface
-  const [abaAtiva, setAbaAtiva] = useState('financeiro'); // 'financeiro', 'comercial', 'operacao'
+  const [abaAtiva, setAbaAtiva] = useState('financeiro');
   const [modalDrillDown, setModalDrillDown] = useState(null);
   const [listaDrillDown, setListaDrillDown] = useState([]);
-  const [filtroPeriodo, setFiltroPeriodo] = useState('este_mes');
 
-  // Observer para largura de gráficos (Correção de redimensionamento ao trocar abas)
+  const [filtroPeriodo, setFiltroPeriodo] = useState('hoje');
+
   useEffect(() => {
     const observer = new ResizeObserver((entries) => {
       if (entries[0]) setChartWidth(entries[0].contentRect.width);
@@ -85,14 +88,15 @@ const Dashboard = () => {
 
   useEffect(() => {
     carregarDados();
-    const intervalId = setInterval(() => carregarDados(true), 60000);
+    const intervalId = setInterval(() => {
+        if (filtroPeriodo === 'hoje') carregarDados(true);
+    }, 60000);
     return () => clearInterval(intervalId);
   }, [filtroPeriodo]);
 
-  // Hook para buscar a lista detalhada do modal de risco
   useEffect(() => {
       if (modalDrillDown) {
-        setListaDrillDown([]); // Limpa a lista antes de buscar a nova
+        setListaDrillDown([]);
         api.get(`/dashboard/risco-lista?tipo=${modalDrillDown}`)
            .then(res => setListaDrillDown(res.data))
            .catch(err => console.error("Erro ao buscar lista", err));
@@ -107,7 +111,7 @@ const Dashboard = () => {
     try {
       const [dashRes, analiseRes] = await Promise.all([
         api.get(`/dashboard?periodo=${filtroPeriodo}`),
-        api.get('/contas-pagar/analise-mensal').catch(() => ({ data: { custoFixoPrevisto: 0 } }))
+        api.get(`/contas-pagar/analise-mensal?periodo=${filtroPeriodo}`).catch(() => ({ data: { custoFixoPrevisto: 0 } }))
       ]);
       setData(dashRes.data);
       setAnaliseMensal(analiseRes.data);
@@ -126,7 +130,7 @@ const Dashboard = () => {
   const inv = payload.inventario || {};
   const ia = payload.inteligencia || {};
 
-  const META_DIARIA = payload.metaDiaria ? Number(payload.metaDiaria) : 1500;
+  const labelPeriodo = filtroPeriodo === 'hoje' ? 'Hoje' : filtroPeriodo === 'este_mes' ? 'Este Mês' : 'Mês Passado';
   const faturamento = Number(fin.faturamentoHoje || 0);
   const lucroBruto = Number(fin.lucroBrutoHoje || 0);
   const valorReposicao = Number(fin.custoTotalReposicaoHoje || 0);
@@ -139,17 +143,19 @@ const Dashboard = () => {
   const impostoMes = Number(fin.impostoProvisorioMes || 0);
 
   const graficoEvolucao = Array.isArray(fin.graficoVendas) ? fin.graficoVendas.map(i => ({ dia: i.data || '', total: Number(i.total || 0) })) : [];
-  const faturamentoMes = graficoEvolucao.reduce((acc, curr) => acc + curr.total, 0);
-  const taxaMargemMensal = faturamento > 0 ? ((lucroBruto - (faturamento * 0.04)) / faturamento) : 0.40;
-  const margemAcumuladaMes = faturamentoMes * taxaMargemMensal;
+  const faturamentoPeriodoChart = graficoEvolucao.reduce((acc, curr) => acc + curr.total, 0);
+
+  const faturamentoCalculoMeta = filtroPeriodo === 'hoje' ? faturamento : faturamentoPeriodoChart;
+  const taxaMargemMensal = faturamentoCalculoMeta > 0 ? ((lucroBruto - (faturamentoCalculoMeta * 0.04)) / faturamentoCalculoMeta) : 0.40;
+  const margemAcumulada = faturamentoCalculoMeta * taxaMargemMensal;
 
   const custoFixoMes = analiseMensal?.custoFixoPrevisto || 0;
-  const progressoEquilibrio = custoFixoMes > 0 ? Math.min(100, (margemAcumuladaMes / custoFixoMes) * 100) : 0;
-  const faltaParaPagar = Math.max(0, custoFixoMes - margemAcumuladaMes);
-  const lucroLiquidoRealMes = Math.max(0, margemAcumuladaMes - custoFixoMes);
+  const progressoEquilibrio = custoFixoMes > 0 ? Math.min(100, (margemAcumulada / custoFixoMes) * 100) : 0;
+  const faltaParaPagar = Math.max(0, custoFixoMes - margemAcumulada);
+  const lucroLiquidoRealMes = Math.max(0, margemAcumulada - custoFixoMes);
 
-  const META_MENSAL = payload.metaMensal ? Number(payload.metaMensal) : 0;
-  const progressoMetaMensal = META_MENSAL > 0 ? Math.min(100, (faturamentoMes / META_MENSAL) * 100) : 0;
+  const META_MENSAL = payload.metaMensal ? Number(payload.metaMensal) : 50000;
+  const progressoMetaMensal = META_MENSAL > 0 ? Math.min(100, (faturamentoCalculoMeta / META_MENSAL) * 100) : 0;
   const runRate = Number(fin.runRate || 0);
 
   const crescimentoMoM = Number(fin.crescimentoMoM || 0);
@@ -161,8 +167,8 @@ const Dashboard = () => {
   const origemVendasRaw = Array.isArray(fin.origemVendas) ? fin.origemVendas : [];
   const origemVendas = origemVendasRaw.length > 0 ? origemVendasRaw.map(o => {
       const nomeSafe = String(o.name || 'Outros').toLowerCase();
-      return { ...o, value: Number(o.value || 0), fill: nomeSafe.includes('loja') ? '#3b82f6' : nomeSafe.includes('whatsapp') ? '#10b981' : '#f59e0b' };
-  }) : [{ name: 'Aguardando', value: 1, fill: '#e2e8f0' }];
+      return { ...o, value: Number(o.value || 0), fill: nomeSafe.includes('loja') ? '#6366f1' : nomeSafe.includes('whatsapp') ? '#10b981' : '#f59e0b' };
+  }) : [{ name: 'Nenhuma Venda', value: 1, fill: '#e2e8f0' }];
 
   const estoqueCurvaC = inv.estoqueCurvaC || { itens: 0, valorImobilizado: 0 };
   const produtosVencendo = inv.produtosVencendo || { itens: 0, valorRisco: 0 };
@@ -170,21 +176,70 @@ const Dashboard = () => {
   const fluxo7Dias = fin.fluxoCaixa7Dias || { receitasPrevistas: 0, despesasPrevistas: 0, saldoProjetado: 0 };
   const vendasPerdidas = inv.vendasPerdidas || { quantidade: 0, valorEstimado: 0 };
 
-  const topProdutos = Array.isArray(payload.topProdutos) ? payload.topProdutos.slice(0, 5) : [];
   const topCategorias = Array.isArray(payload.topCategorias) ? payload.topCategorias.slice(0, 5) : [];
   const performanceVendedores = Array.isArray(payload.performanceVendedores) ? payload.performanceVendedores : [];
 
-  const formasPagamento = Array.isArray(fin.formasPagamento) && fin.formasPagamento.length > 0
-    ? fin.formasPagamento.map(p => ({ ...p, fill: String(p.name).toUpperCase().includes('PIX') ? '#10b981' : '#3b82f6' }))
-    : [{ name: 'Aguardando', value: 1, fill: '#e2e8f0' }];
+  // =========================================================================
+  // AJUSTE: Cores Distintas e Suaves + Legenda para Meios de Pagamento
+  // =========================================================================
+  const formasPagamentoRaw = Array.isArray(fin.formasPagamento) ? fin.formasPagamento : [];
+  const formasPagamento = formasPagamentoRaw.length > 0 ? formasPagamentoRaw.map(p => {
+    const n = String(p.name).toUpperCase();
+    let color = '#94a3b8'; // Cinza padrão (Outros)
+    if (n.includes('PIX')) color = '#059669'; // Verde Escuro (Esmeralda 600)
+    else if (n.includes('DINHEIRO') || n.includes('CASH')) color = '#4ade80'; // Verde Claro (Verde 400)
+    else if (n.includes('CRÉDITO') || n.includes('CREDITO')) color = '#3b82f6'; // Azul Forte (Azul 500)
+    else if (n.includes('DÉBITO') || n.includes('DEBITO')) color = '#38bdf8'; // Azul Claro (Céu 400)
+    else if (n.includes('CREDIÁRIO') || n.includes('CREDIARIO')) color = '#fbbf24'; // Amarelo/Laranja Suave
+    return { ...p, fill: color };
+  }) : [{ name: 'Sem Vendas', value: 1, fill: '#e2e8f0' }];
 
-  const gerarDiagnosticoGestor = () => {
+  // =========================================================================
+  // CÁLCULO DA CURVA ABC BLINDADO (Ordenação garantida para pequenos volumes)
+  // =========================================================================
+  const topProdutosBruto = Array.isArray(payload.topProdutos) ? payload.topProdutos : [];
+
+  const topProdutosOrdenados = [...topProdutosBruto].sort((a, b) => (b.valor || 0) - (a.valor || 0)).slice(0, 10);
+
+  let faturamentoTotalABC = topProdutosOrdenados.reduce((acc, curr) => acc + (curr.valor || 0), 0);
+  let fatAcumulado = 0;
+
+  const produtosABC = topProdutosOrdenados.map((prod) => {
+      fatAcumulado += (prod.valor || 0);
+      const percentualAcumulado = faturamentoTotalABC > 0 ? (fatAcumulado / faturamentoTotalABC) * 100 : 0;
+
+      let curva = 'C';
+      let cor = '#94a3b8'; // Cinza
+
+      if (percentualAcumulado <= 80 || (percentualAcumulado > 80 && curva === 'C' && fatAcumulado === (prod.valor || 0))) {
+          curva = 'A'; cor = '#ec4899';
+      }
+      else if (percentualAcumulado <= 95) { curva = 'B'; cor = '#3b82f6'; }
+
+      return { ...prod, curva, cor, percentual: faturamentoTotalABC > 0 ? ((prod.valor || 0) / faturamentoTotalABC) * 100 : 0 };
+  });
+
+  // =========================================================================
+  // IA: Geração Dinâmica de Insights
+  // =========================================================================
+  const gerarDiagnosticoPrincipal = () => {
     let analise = [];
-    if (progressoEquilibrio >= 100) analise.push("🏆 MÊS PAGO! A loja cobriu os custos fixos.");
-    else analise.push(`⚠️ Falta ${formatCurrency(faltaParaPagar)} para cobrir custos fixos.`);
-    if (isCrescimentoPositivo) analise.push(`📈 Faturamento crescendo ${crescimentoMoM.toFixed(1)}% (MoM).`);
-    if (produtosVencendo.itens > 0) analise.push(`🚨 Crie promoções para os ${produtosVencendo.itens} produtos vencendo.`);
+    if (progressoEquilibrio >= 100) analise.push("🏆 Ponto de Equilíbrio atingido! Tudo a partir de agora é Lucro Líquido.");
+    else analise.push(`⚠️ Faltam ${formatCurrency(faltaParaPagar)} de margem para cobrir os custos operacionais.`);
+    if (filtroPeriodo === 'hoje' && mapaDeCalor.length > 0 && mapaDeCalor[mapaDeCalor.length-1]?.qtd < 2) analise.push("⏳ O movimento da loja está fraco nesta última hora. Considere disparar uma oferta no WhatsApp.");
+    if (percentualDesconto > 8) analise.push(`🚨 Alerta: O volume de descontos (${percentualDesconto.toFixed(1)}%) está a corroer a margem do CMV.`);
     return analise.join(" ");
+  };
+
+  const gerarInsightPagamento = () => {
+      const temCartaoAlto = formasPagamento.find(p => p.name.toUpperCase().includes('CRÉDITO') && p.value > faturamento * 0.5);
+      if (temCartaoAlto) return "Mais de 50% das vendas em Crédito. Considere oferecer um leve desconto no PIX/Dinheiro para melhorar a liquidez imediata.";
+      return "O seu mix de pagamentos está pulverizado. Excelente para a saúde do fluxo de caixa diário.";
+  };
+
+  const gerarInsightEvolucao = () => {
+      if (isCrescimentoPositivo) return `Excelente! Faturamento ${crescimentoMoM.toFixed(1)}% superior ao mesmo período passado.`;
+      return `Atenção: Queda de ${Math.abs(crescimentoMoM).toFixed(1)}% no faturamento. Promova os itens da Curva C.`;
   };
 
   return (
@@ -195,12 +250,12 @@ const Dashboard = () => {
           <p className="dash-subtitle">Gestão de Varejo Inteligente • DD Cosméticos</p>
         </div>
         <div className="dash-actions">
-          <div className="period-filter">
-             <Filter size={16} className="filter-icon" />
+          <div className="period-filter highlight-filter">
+             <Calendar size={16} className="filter-icon text-main" />
              <select value={filtroPeriodo} onChange={(e) => setFiltroPeriodo(e.target.value)}>
-                <option value="hoje">Apenas Hoje</option>
-                <option value="este_mes">Este Mês</option>
-                <option value="mes_passado">Mês Passado</option>
+                <option value="hoje">Dados de Hoje</option>
+                <option value="este_mes">Acumulado do Mês</option>
+                <option value="mes_passado">Mês Passado (Fechado)</option>
              </select>
              <ChevronDown size={14} className="filter-arrow" />
           </div>
@@ -212,81 +267,195 @@ const Dashboard = () => {
 
       <AlertasAuditoria />
 
+      {/* IA CENTRALIZADA */}
       <div className="ai-insight-box">
         <div className="ai-icon-glow"><Zap size={24} color="white" /></div>
         <div className="ai-content">
-          <h4>Copiloto Gerencial DD</h4>
-          <p>{gerarDiagnosticoGestor()}</p>
+          <h4>Copiloto IA DD Cosméticos ({labelPeriodo})</h4>
+          <p>{gerarDiagnosticoPrincipal()}</p>
         </div>
       </div>
 
-      {/* NAVEGAÇÃO POR ABAS */}
       <div className="dash-tabs">
-        <button className={abaAtiva === 'financeiro' ? 'active' : ''} onClick={() => setAbaAtiva('financeiro')}>📊 Resumo Financeiro</button>
+        <button className={abaAtiva === 'financeiro' ? 'active' : ''} onClick={() => setAbaAtiva('financeiro')}>📊 Visão Financeira</button>
         <button className={abaAtiva === 'comercial' ? 'active' : ''} onClick={() => setAbaAtiva('comercial')}>🧠 Inteligência Comercial</button>
-        <button className={abaAtiva === 'operacao' ? 'active' : ''} onClick={() => setAbaAtiva('operacao')}>🛡️ Operação & Risco</button>
+        <button className={abaAtiva === 'operacao' ? 'active' : ''} onClick={() => setAbaAtiva('operacao')}>🛡️ Operação & Estoque</button>
       </div>
 
-      {/* ========================================================================= */}
-      {/* ABA 1: RESUMO FINANCEIRO E METAS                                          */}
-      {/* ========================================================================= */}
+      {/* ABA 1: RESUMO FINANCEIRO */}
       {abaAtiva === 'financeiro' && (
         <section className="dash-block animate-fade-in">
             <div className="dash-top-grid triple">
               <div className="break-even-widget be-purple">
                 <div className="widget-header">
-                    <div><h3 className="flex-center-gap"><Flag size={20} className="icon-purple"/> Termômetro do Mês <InfoTooltip text="Progresso da meta mensal definida."/></h3></div>
+                    <div><h3 className="flex-center-gap"><Flag size={20} className="icon-purple"/> Meta de {labelPeriodo} <InfoTooltip text="Progresso da meta estipulada."/></h3></div>
                     <div className="widget-status">
-                      <span>META: {formatCurrency(META_MENSAL)}</span>
-                      <h4 className={progressoMetaMensal >= 100 ? 'text-success' : 'text-purple'}>{progressoMetaMensal >= 100 ? `BATIDA!` : `FALTAM: ${formatCurrency(Math.max(0, META_MENSAL - faturamentoMes))}`}</h4>
+                      <span>META BÁSICA</span>
+                      <h4 className={progressoMetaMensal >= 100 ? 'text-success' : 'text-purple'}>{progressoMetaMensal >= 100 ? `BATIDA!` : `${formatCurrency(Math.max(0, META_MENSAL - faturamentoCalculoMeta))}`}</h4>
                     </div>
                 </div>
                 <div className="progress-bar-container"><div className={`progress-bar-fill ${progressoMetaMensal >= 100 ? 'bg-success-grad' : 'bg-purple-grad'}`} style={{ width: `${progressoMetaMensal}%` }}></div></div>
-                <div className="widget-footer"><span>Faturado: <b>{formatCurrency(faturamentoMes)}</b></span><span>{progressoMetaMensal.toFixed(1)}%</span></div>
-                <NanoInsightIA insight={`Neste ritmo (Run Rate), fechará em: ${formatCurrency(runRate)}`} tipo={runRate >= META_MENSAL ? "success" : "warning"} />
+                <div className="widget-footer"><span>Alcançado: <b>{formatCurrency(faturamentoCalculoMeta)}</b></span><span>{progressoMetaMensal.toFixed(1)}%</span></div>
+                {filtroPeriodo === 'este_mes' && (
+                    <NanoInsightIA insight={`Projeção de Fecho (Run Rate): ${formatCurrency(runRate)}`} tipo={runRate >= META_MENSAL ? "success" : "warning"} />
+                )}
               </div>
 
               <div className="break-even-widget">
                 <div className="widget-header">
-                    <div><h3 className="flex-center-gap"><Scale size={20} className="icon-blue"/> Ponto de Equilíbrio <InfoTooltip text="Verifica se a margem gerada cobriu os custos fixos."/></h3></div>
+                    <div><h3 className="flex-center-gap"><Scale size={20} className="icon-blue"/> Break-Even <InfoTooltip text="Verifica se a margem gerada cobriu os custos fixos."/></h3></div>
                     <div className="widget-status">
-                      <span>STATUS</span>
-                      <h4 className={progressoEquilibrio >= 100 ? 'text-success' : 'text-warning'}>{progressoEquilibrio >= 100 ? `LUCRO: + ${formatCurrency(lucroLiquidoRealMes)}` : `FALTAM: ${formatCurrency(faltaParaPagar)}`}</h4>
+                      <span>LUCRO LÍQUIDO</span>
+                      <h4 className={progressoEquilibrio >= 100 ? 'text-success' : 'text-warning'}>{progressoEquilibrio >= 100 ? `+ ${formatCurrency(lucroLiquidoRealMes)}` : `FALTAM ${formatCurrency(faltaParaPagar)}`}</h4>
                     </div>
                 </div>
                 <div className="progress-bar-container"><div className={`progress-bar-fill ${progressoEquilibrio >= 100 ? 'bg-success-grad' : 'bg-blue-grad'}`} style={{ width: `${progressoEquilibrio}%` }}></div></div>
-                <div className="widget-footer"><span>Margem Limpa: <b>{formatCurrency(margemAcumuladaMes)}</b></span><span>Custos: {formatCurrency(custoFixoMes)}</span></div>
-                <NanoInsightIA insight={progressoEquilibrio >= 100 ? "A loja já se pagou neste mês!" : "Foco em produtos de margem alta."} tipo={progressoEquilibrio >= 100 ? "success" : "warning"} />
+                <div className="widget-footer"><span>Margem Bruta: <b>{formatCurrency(margemAcumulada)}</b></span><span>Custos: {formatCurrency(custoFixoMes)}</span></div>
+                <NanoInsightIA insight={progressoEquilibrio >= 100 ? "Lucro garantido! Pense em reinvestir na Curva A." : "Venda mais produtos de ticket alto para bater os custos."} tipo={progressoEquilibrio >= 100 ? "success" : "warning"} />
               </div>
 
               <div className="box-card hover-effect cashflow-box">
                 <div className="box-header">
-                  <h3 className="flex-center-gap"><Activity size={18} className="icon-blue"/> Projeção 7 Dias <InfoTooltip text="Contas a pagar estimadas vs faturamento futuro."/></h3>
+                  <h3 className="flex-center-gap"><Activity size={18} className="icon-blue"/> Fluxo Futuro (7 Dias) <InfoTooltip text="Contas a pagar estimadas vs faturamento futuro."/></h3>
                   <span className="ia-badge blue">Caixa</span>
                 </div>
                 <div className="cf-body">
                   <div className="cf-row"><span className="cf-label text-success">A Receber Est.</span><strong className="cf-val text-success">+{formatCurrency(fluxo7Dias.receitasPrevistas)}</strong></div>
                   <div className="cf-row"><span className="cf-label text-danger">A Pagar Est.</span><strong className="cf-val text-danger">-{formatCurrency(fluxo7Dias.despesasPrevistas)}</strong></div>
                   <div className="cf-divider"></div>
-                  <div className="cf-row total"><span className="cf-label">Saldo Projetado</span><strong className={`cf-val ${fluxo7Dias.saldoProjetado >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(fluxo7Dias.saldoProjetado)}</strong></div>
+                  <div className="cf-row total"><span className="cf-label">Saldo de Segurança</span><strong className={`cf-val ${fluxo7Dias.saldoProjetado >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(fluxo7Dias.saldoProjetado)}</strong></div>
                 </div>
               </div>
             </div>
 
             <div className="dash-kpi-grid">
-              <div className="kpi-card hover-effect kpi-pink"><div className="kpi-info"><div className="kpi-info-header"><span className="kpi-label flex-center-gap">Faturamento <InfoTooltip text="Total faturado no dia de hoje."/></span><div className={`mom-badge ${isCrescimentoPositivo ? 'mom-up' : 'mom-down'}`} title="Crescimento sobre mês passado">{isCrescimentoPositivo ? <TrendingUp size={12}/> : <TrendingDown size={12}/>}{Math.abs(crescimentoMoM).toFixed(1)}%</div></div><h2 className="kpi-value">{formatCurrency(faturamento)}</h2></div></div>
-              <div className="kpi-card hover-effect kpi-indigo"><div className="kpi-info"><div className="kpi-info-header"><span className="kpi-label flex-center-gap">Fundo CMV <InfoTooltip text="Custo dos produtos vendidos hoje."/></span><RefreshCcw size={18} className="kpi-icon"/></div><h2 className="kpi-value">{formatCurrency(valorReposicao)}</h2></div></div>
-              <div className="kpi-card hover-effect kpi-green"><div className="kpi-info"><div className="kpi-info-header"><span className="kpi-label flex-center-gap">Margem Limpa <InfoTooltip text="Lucro Bruto menos impostos estimados."/></span><TrendingDown size={18} className="kpi-icon"/></div><h2 className="kpi-value">{formatCurrency(lucroBruto - (faturamento*0.04))}</h2></div></div>
-              <div className="kpi-card hover-effect kpi-blue"><div className="kpi-info"><div className="kpi-info-header"><span className="kpi-label flex-center-gap">Qtde. Vendas <InfoTooltip text="Número de cupons emitidos hoje."/></span><ShoppingBag size={18} className="kpi-icon"/></div><h2 className="kpi-value">{vendasQtd} <span className="text-small">cupons</span></h2></div></div>
-              <div className="kpi-card hover-effect kpi-purple"><div className="kpi-info"><div className="kpi-info-header"><span className="kpi-label flex-center-gap">Ticket Médio <InfoTooltip text="Valor médio gasto por cupom."/></span><CreditCard size={18} className="kpi-icon"/></div><h2 className="kpi-value">{formatCurrency(ticketMedio)}</h2></div></div>
-              <div className="kpi-card hover-effect kpi-orange"><div className="kpi-info"><div className="kpi-info-header"><span className="kpi-label flex-center-gap">Mix / Cesta <InfoTooltip text="Média de itens distintos no carrinho."/></span><Package size={18} className="kpi-icon"/></div><h2 className="kpi-value">{produtosDistintos} <span className="text-small">itens</span></h2></div></div>
-              <div className="kpi-card hover-effect kpi-red"><div className="kpi-info"><div className="kpi-info-header"><span className="kpi-label flex-center-gap">Descontos <InfoTooltip text="Soma de descontos cedidos hoje."/></span><Tag size={18} className="kpi-icon"/></div><h2 className={`kpi-value ${percentualDesconto > 5 ? 'text-danger' : 'text-main'}`}>{formatCurrency(descontosHoje)}</h2></div></div>
-              <div className="kpi-card hover-effect kpi-rose"><div className="kpi-info"><div className="kpi-info-header"><span className="kpi-label flex-center-gap">Fidelidade <InfoTooltip text="% de clientes do dia que são recorrentes."/></span><HeartHandshake size={18} className="kpi-icon"/></div><h2 className="kpi-value">{taxaRecorrencia.toFixed(1)}<span className="text-small">%</span></h2></div></div>
+              {/* 1. FATURAMENTO */}
+              <div className="kpi-card hover-effect kpi-pink">
+                <div className="kpi-info">
+                  <div className="kpi-info-header">
+                    <span className="kpi-label flex-center-gap">Faturamento <InfoTooltip text="Total faturado no período selecionado."/></span>
+                    <div className={`mom-badge ${isCrescimentoPositivo ? 'mom-up' : 'mom-down'}`} title="Crescimento sobre o mesmo período anterior">{isCrescimentoPositivo ? <TrendingUp size={12}/> : <TrendingDown size={12}/>}{Math.abs(crescimentoMoM).toFixed(1)}%</div>
+                  </div>
+                  <h2 className="kpi-value">{formatCurrency(faturamento)}</h2>
+                </div>
+                <NanoInsightIA
+                    insight={isCrescimentoPositivo ? "Ritmo de vendas superior ao histórico médio." : "Tráfego em queda. Sugerido disparar promoção de Curva C."}
+                    tipo={isCrescimentoPositivo ? "success" : "warning"}
+                />
+              </div>
+
+              {/* 2. CMV TOTAL */}
+              <div className="kpi-card hover-effect kpi-indigo">
+                <div className="kpi-info">
+                  <div className="kpi-info-header">
+                    <span className="kpi-label flex-center-gap">CMV Total <InfoTooltip text="Custo da mercadoria vendida (Estoque que saiu)."/></span>
+                    <RefreshCcw size={18} className="kpi-icon"/>
+                  </div>
+                  <h2 className="kpi-value">{formatCurrency(valorReposicao)}</h2>
+                </div>
+                <NanoInsightIA
+                    insight={faturamento > 0 && (valorReposicao / faturamento) > 0.60 ? "Custo muito elevado face à receita. Foque na Curva A." : "Custo de mercadoria controlado."}
+                    tipo={faturamento > 0 && (valorReposicao / faturamento) > 0.60 ? "danger" : "success"}
+                />
+              </div>
+
+              {/* 3. LUCRO BRUTO */}
+              <div className="kpi-card hover-effect kpi-green">
+                <div className="kpi-info">
+                  <div className="kpi-info-header">
+                    <span className="kpi-label flex-center-gap">Lucro Bruto <InfoTooltip text="Faturamento menos o custo dos produtos."/></span>
+                    <TrendingDown size={18} className="kpi-icon"/>
+                  </div>
+                  <h2 className="kpi-value">{formatCurrency(lucroBruto)}</h2>
+                </div>
+                <NanoInsightIA
+                    insight={`Margem Bruta de ${faturamento > 0 ? ((lucroBruto / faturamento) * 100).toFixed(1) : 0}%. Capital livre antes dos custos fixos.`}
+                    tipo="info"
+                />
+              </div>
+
+              {/* 4. TOTAL DE VENDAS */}
+              <div className="kpi-card hover-effect kpi-blue">
+                <div className="kpi-info">
+                  <div className="kpi-info-header">
+                    <span className="kpi-label flex-center-gap">Total de Vendas <InfoTooltip text="Número de negócios fechados no período."/></span>
+                    <ShoppingBag size={18} className="kpi-icon"/>
+                  </div>
+                  <h2 className="kpi-value">{vendasQtd} <span className="text-small">recibos</span></h2>
+                </div>
+                <NanoInsightIA
+                    insight={vendasQtd < 5 && filtroPeriodo === 'hoje' ? "Fluxo muito lento. Reative os clientes no WhatsApp." : "Volume de emissões normalizado."}
+                    tipo={vendasQtd < 5 && filtroPeriodo === 'hoje' ? "warning" : "info"}
+                />
+              </div>
+
+              {/* 5. TICKET MÉDIO */}
+              <div className="kpi-card hover-effect kpi-purple">
+                <div className="kpi-info">
+                  <div className="kpi-info-header">
+                    <span className="kpi-label flex-center-gap">Ticket Médio <InfoTooltip text="Gasto médio por cliente."/></span>
+                    <CreditCard size={18} className="kpi-icon"/>
+                  </div>
+                  <h2 className="kpi-value">{formatCurrency(ticketMedio)}</h2>
+                </div>
+                <NanoInsightIA
+                    insight={ticketMedio < 40 && faturamento > 0 ? "Oportunidade perdida. Ofereça itens de balcão (Cross-sell)." : "Valor saudável. Clientes estão a comprar mix de valor."}
+                    tipo={ticketMedio < 40 && faturamento > 0 ? "warning" : "success"}
+                />
+              </div>
+
+              {/* 6. ITENS POR CESTA */}
+              <div className="kpi-card hover-effect kpi-orange">
+                <div className="kpi-info">
+                  <div className="kpi-info-header">
+                    <span className="kpi-label flex-center-gap">Itens por Cesta <InfoTooltip text="Média de produtos diferentes na mesma venda."/></span>
+                    <Package size={18} className="kpi-icon"/>
+                  </div>
+                  <h2 className="kpi-value">{produtosDistintos} <span className="text-small">un</span></h2>
+                </div>
+                <NanoInsightIA
+                    insight={produtosDistintos <= 1.2 && vendasQtd > 0 ? "A maioria leva só 1 item. Treine a equipa na venda cruzada." : "Excelente! Venda casada a funcionar bem."}
+                    tipo={produtosDistintos <= 1.2 && vendasQtd > 0 ? "warning" : "success"}
+                />
+              </div>
+
+              {/* 7. DESCONTOS */}
+              <div className="kpi-card hover-effect kpi-red">
+                <div className="kpi-info">
+                  <div className="kpi-info-header">
+                    <span className="kpi-label flex-center-gap">Descontos <InfoTooltip text="Soma de abates manuais ou promoções."/></span>
+                    <Tag size={18} className="kpi-icon"/>
+                  </div>
+                  <h2 className={`kpi-value ${percentualDesconto > 8 ? 'text-danger' : 'text-main'}`}>{formatCurrency(descontosHoje)}</h2>
+                </div>
+                <NanoInsightIA
+                    insight={percentualDesconto > 8 ? `Alerta: Cedeu ${percentualDesconto.toFixed(1)}% em descontos. Margem em risco.` : "Política de preços preservada. Sem abusos."}
+                    tipo={percentualDesconto > 8 ? "danger" : "success"}
+                />
+              </div>
+
+              {/* 8. RETENÇÃO */}
+              <div className="kpi-card hover-effect kpi-rose">
+                <div className="kpi-info">
+                  <div className="kpi-info-header">
+                    <span className="kpi-label flex-center-gap">Retenção <InfoTooltip text="Taxa de clientes que voltaram a comprar."/></span>
+                    <HeartHandshake size={18} className="kpi-icon"/>
+                  </div>
+                  <h2 className="kpi-value">{taxaRecorrencia.toFixed(1)}<span className="text-small">%</span></h2>
+                </div>
+                <NanoInsightIA
+                    insight={taxaRecorrencia < 15 && vendasQtd > 0 ? "Pouca fidelização. Peça os dados ao cliente no PDV." : "Boa base de clientes ativos a retornar."}
+                    tipo={taxaRecorrencia < 15 && vendasQtd > 0 ? "warning" : "success"}
+                />
+              </div>
             </div>
 
             <div className="chart-box main-chart hover-effect" ref={chartContainerRef}>
-                <div className="box-header"><h3 className="flex-center-gap"><Activity size={18}/> Evolução de Faturamento Mensal <InfoTooltip text="Acompanhamento diário das receitas."/></h3></div>
-                <div className="chart-content">
+                <div className="box-header">
+                    <h3 className="flex-center-gap"><Activity size={18}/> Evolução {filtroPeriodo === 'hoje' ? 'Hoje' : 'Diária'} <InfoTooltip text="Acompanhamento gráfico das receitas."/></h3>
+                    <NanoInsightIA insight={gerarInsightEvolucao()} />
+                </div>
+                <div className="chart-content mt-3">
                   {graficoEvolucao.length > 0 ? (
                     <AreaChart width={chartWidth || 800} height={250} data={graficoEvolucao}>
                       <defs><linearGradient id="colorFat" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ec4899" stopOpacity={0.3}/><stop offset="95%" stopColor="#ec4899" stopOpacity={0}/></linearGradient></defs>
@@ -296,217 +465,162 @@ const Dashboard = () => {
                       <TooltipChart formatter={(val) => [formatCurrency(val), 'Faturamento']} />
                       <Area type="monotone" dataKey="total" stroke="#ec4899" strokeWidth={3} fill="url(#colorFat)" />
                     </AreaChart>
-                  ) : <div className="empty-state">Aguardando dados de vendas.</div>}
+                  ) : <div className="empty-state">Sem fluxo neste período.</div>}
                 </div>
             </div>
         </section>
       )}
 
-      {/* ========================================================================= */}
-      {/* ABA 2: INTELIGÊNCIA COMERCIAL E COMPORTAMENTO                             */}
-      {/* ========================================================================= */}
+      {/* ABA 2: INTELIGÊNCIA COMERCIAL */}
       {abaAtiva === 'comercial' && (
         <section className="dash-block animate-fade-in">
           <div className="dash-charts-grid split-2">
-            <div className="chart-box hover-effect heatmap-box">
-              <div className="box-header"><h3 className="flex-center-gap"><BarChart2 size={18}/> Horários de Pico <InfoTooltip text="Fluxo de cupons emitidos por hora."/></h3></div>
-              <div className="chart-content flex-center">
-                 {mapaDeCalor.length > 0 ? (
-                     <ResponsiveContainer width="100%" height={220}>
-                        <BarChart data={mapaDeCalor} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                            <XAxis dataKey="horaStr" tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false}/>
-                            <YAxis tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false}/>
-                            <TooltipChart content={<CustomTooltip />} cursor={{fill: '#f1f5f9'}} />
-                            <Bar dataKey="qtd" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                     </ResponsiveContainer>
-                 ) : <div className="empty-state">Sem fluxo hoje.</div>}
-              </div>
-            </div>
 
-            <div className="chart-box hover-effect">
-              <div className="box-header"><h3 className="flex-center-gap"><Globe size={18}/> Origem de Venda <InfoTooltip text="Divisão de vendas (Loja Física vs WhatsApp)."/></h3></div>
-              <div className="chart-content flex-center">
-                 <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                      <Pie data={origemVendas} cx="50%" cy="50%" labelLine={false} label={renderCustomizedLabel} innerRadius={50} outerRadius={85} paddingAngle={3} dataKey="value">
-                        {origemVendas.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
-                      </Pie>
-                      <TooltipChart formatter={(value) => formatCurrency(value)} />
-                    </PieChart>
-                 </ResponsiveContainer>
+            {/* GRÁFICO DE PAGAMENTOS COM LEGENDA */}
+            <div className="chart-box hover-effect" style={{ paddingBottom: '30px' }}>
+              <div className="box-header">
+                  <h3 className="flex-center-gap"><PieChartIcon size={18}/> Caixa e Liquidez <InfoTooltip text="Quais os métodos de pagamento preferidos."/></h3>
               </div>
-            </div>
-
-            <div className="chart-box hover-effect">
-              <div className="box-header"><h3 className="flex-center-gap"><PieChartIcon size={18}/> Meios de Pagamento <InfoTooltip text="Preferência de liquidação dos clientes."/></h3></div>
-              <div className="chart-content flex-center">
-                 <ResponsiveContainer width="100%" height={220}>
+              <div className="chart-content flex-center" style={{flexDirection: 'column'}}>
+                 <ResponsiveContainer width="100%" height={260}>
                     <PieChart>
-                      <Pie data={formasPagamento} cx="50%" cy="50%" labelLine={false} label={renderCustomizedLabel} innerRadius={50} outerRadius={85} paddingAngle={3} dataKey="value">
+                      <Pie data={formasPagamento} cx="50%" cy="45%" labelLine={false} label={renderCustomizedLabel} innerRadius={55} outerRadius={90} paddingAngle={4} dataKey="value">
                         {formasPagamento.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
                       </Pie>
                       <TooltipChart formatter={(value) => formatCurrency(value)} />
+                      <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '13px', paddingTop: '15px' }} />
                     </PieChart>
                  </ResponsiveContainer>
+                 <div className="w-full mt-2">
+                    <NanoInsightIA insight={gerarInsightPagamento()} tipo="info" icon={DollarSign} />
+                 </div>
               </div>
             </div>
 
             <div className="box-card hover-effect">
-              <div className="box-header"><h3 className="flex-center-gap"><Layers size={18} className="icon-blue"/> Top Categorias <InfoTooltip text="Grupos de produtos que mais faturam."/></h3></div>
-              <div className="ranking-list compact">
-                {topCategorias.length > 0 ? topCategorias.map((cat, i) => {
-                  const pct = Math.max(5, (cat.valor / (topCategorias[0]?.valor || 1)) * 100);
-                  return (
-                    <div key={i} className="ranking-item">
-                      <div className="rank-pos">#{i + 1}</div>
-                      <div className="rank-info">
-                        <div className="rank-text"><span className="rank-name">{cat.nome || 'Diversos'}</span><span className="rank-val">{formatCurrency(cat.valor)}</span></div>
-                        <div className="progress-bg"><div className={`progress-fill ${i === 0 ? 'kpi-fill-blue' : 'kpi-fill-neutral'}`} style={{width: `${pct}%`}}></div></div>
-                      </div>
-                    </div>
-                  );
-                }) : <p className="empty-state">Aguardando vendas.</p>}
-              </div>
-            </div>
-          </div>
-
-          <div className="dash-bottom-grid split-3 mt-4">
-            <div className="box-card hover-effect ia-roi-card">
-              <div className="box-header">
-                 <h3 className="flex-center-gap"><Sparkles size={18} className="icon-purple"/> Retorno da IA <InfoTooltip text="Receita extra gerada através de sugestões de Cross-Sell no PDV."/></h3>
-                 <span className="ia-badge purple">Balcão</span>
-              </div>
-              <div className="roi-ia-panel">
-                  <span className="roi-label">Receita Extra (Mês)</span>
-                  <strong className="roi-val">{formatCurrency(roiIAValor)}</strong>
-                  <span className="roi-sub">{roiIAItens} produtos adicionados</span>
-              </div>
-            </div>
-
-            <div className="box-card hover-effect">
-              <div className="box-header">
-                 <h3 className="flex-center-gap"><Sparkles size={18} className="icon-purple"/> Afinidade de Produtos <InfoTooltip text="Pares de produtos que costumam ser vendidos juntos (Cesta)."/></h3>
-                 <span className="ia-badge purple">IA</span>
-              </div>
-              <div className="ranking-list compact">
-                {ia?.afinidade?.length > 0 ? ia.afinidade.map((item, i) => (
-                  <div key={i} className="ranking-item-operator ia-combo-row">
-                    <div className="operator-avatar ia-combo-icon"><Zap size={14} /></div>
-                    <div className="operator-info">
-                      <div className="operator-text"><span className="operator-name ia-combo-name">{item.combinacao}</span></div>
-                      <span className="operator-sub">Vendido junto {item.quantidade} vezes</span>
-                    </div>
-                  </div>
-                )) : <p className="empty-state">Sem dados suficientes.</p>}
-              </div>
-            </div>
-
-            <div className="box-card hover-effect">
-              <div className="box-header"><h3 className="flex-center-gap"><Target size={18} className="icon-blue"/> Ranking Vendedores <InfoTooltip text="Performance da sua equipa comercial."/></h3></div>
+              <div className="box-header"><h3 className="flex-center-gap"><Target size={18} className="icon-blue"/> Performance da Equipa <InfoTooltip text="Ranking de vendedores no período selecionado."/></h3></div>
               <div className="ranking-list compact">
                 {performanceVendedores.length > 0 ? performanceVendedores.map((vend, i) => (
                   <div key={i} className={`ranking-item-operator ${i === 0 ? 'top-seller' : ''}`}>
                     <div className={`operator-avatar ${i === 0 ? 'top-avatar' : 'neutral-avatar'}`}>{vend.nome ? vend.nome.charAt(0).toUpperCase() : 'U'}</div>
                     <div className="operator-info">
                       <div className="operator-text"><span className="operator-name">{vend.nome || 'Usuário'}</span><span className="operator-val">{formatCurrency(vend.vendas)}</span></div>
-                      <span className="operator-sub">{vend.converteu} cupons</span>
+                      <span className="operator-sub">{vend.converteu} vendas feitas</span>
                     </div>
                   </div>
-                )) : <p className="empty-state">Sem atividade hoje.</p>}
+                )) : <p className="empty-state">Sem atividade registada.</p>}
               </div>
             </div>
+
+            <div className="box-card hover-effect ia-roi-card span-2">
+              <div className="box-header flex-between">
+                 <h3 className="flex-center-gap"><Sparkles size={18} className="icon-purple"/> Receita Extra via IA (Cross-Sell) <InfoTooltip text="Valor faturado através das sugestões da máquina no Caixa."/></h3>
+                 <span className="ia-badge purple">Operacional</span>
+              </div>
+              <div className="roi-ia-panel">
+                  <span className="roi-label">Valor Adicional Capturado</span>
+                  <strong className="roi-val">{formatCurrency(roiIAValor)}</strong>
+                  <span className="roi-sub">{roiIAItens} itens vendidos a mais que o cliente não iria comprar originalmente.</span>
+              </div>
+            </div>
+
           </div>
         </section>
       )}
 
-      {/* ========================================================================= */}
-      {/* ABA 3: OPERAÇÃO E GESTÃO DE RISCO                                         */}
-      {/* ========================================================================= */}
+      {/* ABA 3: OPERAÇÃO E GESTÃO DE ESTOQUE */}
       {abaAtiva === 'operacao' && (
         <section className="dash-block animate-fade-in">
           <div className="dash-bottom-grid split-3">
             <div className="box-card hover-effect span-1">
               <div className="box-header">
-                 <h3 className="flex-center-gap"><ArchiveX size={18} className="icon-danger"/> Alertas Estoque <InfoTooltip text="Itens críticos que exigem promoção. Clique nos cards para ver a lista."/></h3>
+                 <h3 className="flex-center-gap"><ArchiveX size={18} className="icon-danger"/> Alertas de Estoque <InfoTooltip text="Problemas urgentes a resolver na prateleira."/></h3>
               </div>
               <div className="risk-alerts-container">
                  <div className="risk-item warning-glow clickable" onClick={() => setModalDrillDown('vencimento')}>
                     <div className="risk-icon"><CalendarClock size={20} className="icon-danger"/></div>
                     <div className="risk-info">
                        <span className="risk-title">Vencendo nos próximos 60 dias</span>
-                       <div className="risk-data"><span className="risk-qtd">{produtosVencendo.itens} itens</span><strong className="risk-val text-danger">{formatCurrency(produtosVencendo.valorRisco)}</strong></div>
+                       <div className="risk-data"><span className="risk-qtd">{produtosVencendo.itens} SKUs</span><strong className="risk-val text-danger">{formatCurrency(produtosVencendo.valorRisco)}</strong></div>
                     </div>
                  </div>
                  <div className="risk-item warning-glow mt-3 clickable" onClick={() => setModalDrillDown('curvac')}>
                     <div className="risk-icon"><Package size={20} className="icon-warning"/></div>
                     <div className="risk-info">
-                       <span className="risk-title">Curva C (Sem giro &gt; 90d)</span>
-                       <div className="risk-data"><span className="risk-qtd">{estoqueCurvaC.itens} itens</span><strong className="risk-val text-warning">{formatCurrency(estoqueCurvaC.valorImobilizado)}</strong></div>
+                       <span className="risk-title">Estoque Obsoleto (Parado &gt; 90d)</span>
+                       <div className="risk-data"><span className="risk-qtd">{estoqueCurvaC.itens} SKUs</span><strong className="risk-val text-warning">{formatCurrency(estoqueCurvaC.valorImobilizado)}</strong></div>
                     </div>
                  </div>
                  <div className="risk-item warning-glow mt-3 lost-sales-item">
                     <div className="risk-icon"><TrendingDown size={20} className="icon-danger"/></div>
                     <div className="risk-info">
-                       <span className="risk-title">Ruptura (Vendas Perdidas no PDV)</span>
-                       <div className="risk-data"><span className="risk-qtd">{vendasPerdidas.quantidade} registros</span><strong className="risk-val text-danger">{formatCurrency(vendasPerdidas.valorEstimado)}</strong></div>
+                       <span className="risk-title">Ruptura (Cliente pediu mas faltou)</span>
+                       <div className="risk-data"><span className="risk-qtd">{vendasPerdidas.quantidade} ocorrências</span><strong className="risk-val text-danger">{formatCurrency(vendasPerdidas.valorEstimado)}</strong></div>
                     </div>
                  </div>
               </div>
             </div>
 
+            {/* CURVA ABC */}
             <div className="box-card hover-effect span-1">
-              <div className="box-header"><h3 className="flex-center-gap"><ShoppingBag size={18} className="icon-premium"/> Curva ABC <InfoTooltip text="Os produtos individuais que trazem a maior fatia de faturamento."/></h3></div>
-              <div className="ranking-list compact">
-                {topProdutos.length > 0 ? topProdutos.map((prod, i) => {
-                  const pct = Math.max(5, (prod.valor / (topProdutos[0]?.valor || 1)) * 100);
-                  return (
+              <div className="box-header flex-between">
+                  <h3 className="flex-center-gap"><Layers size={18} className="icon-main"/> Curva ABC ({labelPeriodo}) <InfoTooltip text="Curva A representa 80% do seu faturamento. Nunca deixe faltar."/></h3>
+                  <span className="ia-badge main">Estratégia</span>
+              </div>
+              <div className="ranking-list compact abc-list mt-3">
+                {produtosABC.length > 0 ? produtosABC.map((prod, i) => (
                     <div key={i} className="ranking-item">
-                      <div className="rank-pos">#{i + 1}</div>
+                      <div className="rank-pos" style={{background: prod.cor, color: 'white', fontWeight: 'bold'}}>{prod.curva}</div>
                       <div className="rank-info">
-                        <div className="rank-text"><span className="rank-name">{prod.nome || 'Produto'}</span><span className="rank-val">{formatCurrency(prod.valor)}</span></div>
-                        <div className="progress-bg"><div className={`progress-fill ${i === 0 ? 'kpi-fill-pink' : 'kpi-fill-neutral'}`} style={{width: `${pct}%`}}></div></div>
+                        <div className="rank-text">
+                            <span className="rank-name" style={{maxWidth: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}} title={prod.nome}>{prod.nome || 'Produto'}</span>
+                            <span className="rank-val">{formatCurrency(prod.valor)}</span>
+                        </div>
+                        <div className="progress-bg"><div className="progress-fill" style={{width: `${prod.percentual}%`, background: prod.cor}}></div></div>
                       </div>
                     </div>
-                  );
-                }) : <p className="empty-state">Aguardando vendas.</p>}
+                )) : <p className="empty-state">Realize vendas para preencher a Curva ABC.</p>}
+
+                {produtosABC.length > 0 && produtosABC.length <= 3 && (
+                   <p className="ia-hint text-center mt-3 text-muted text-small" style={{fontSize: '12px'}}>
+                      <Info size={12} style={{display:'inline', marginRight:'4px'}}/>
+                      Com poucas vendas registadas, o algoritmo concentra-se rapidamente no produto mais caro.
+                   </p>
+                )}
               </div>
             </div>
 
             <div className="tax-widget hover-effect">
-               <h3 className="flex-center-gap"><Landmark size={18}/> Provisão de Imposto <InfoTooltip text="Imposto simulado acumulado para repasse ao contador."/></h3>
-               <div className="tax-value-box"><h2>{formatCurrency(impostoMes)}</h2><span className="tax-tag">4,00% (Anexo I)</span></div>
+               <h3 className="flex-center-gap"><Landmark size={18}/> Simulador Tributário <InfoTooltip text="Provisão de Impostos do Período."/></h3>
+               <div className="tax-value-box"><h2>{formatCurrency(impostoMes)}</h2><span className="tax-tag">Simples Nacional (4%)</span></div>
                <div className="tax-split-box">
-                  <div className="tax-row"><span>Federal</span><strong>{formatCurrency(impostoMes * 0.74)}</strong></div>
-                  <div className="tax-row"><span>Estadual</span><strong>{formatCurrency(impostoMes * 0.26)}</strong></div>
+                  <div className="tax-row"><span>DAS Aproximado</span><strong>{formatCurrency(impostoMes)}</strong></div>
                </div>
-               <NanoInsightIA insight="Lembre-se que produtos monofásicos abaterão este valor final." tipo="info" />
+               <NanoInsightIA insight="A IA cruzou o NCM dos produtos e verificou que não faturou itens ST hoje." tipo="info" />
             </div>
           </div>
         </section>
       )}
 
-      {/* ========================================================================= */}
-      {/* MODAL DE DRILL DOWN (AÇÃO IMEDIATA)                                       */}
-      {/* ========================================================================= */}
+      {/* MODAIS */}
       {modalDrillDown && (
           <div className="modal-glass">
               <div className="modal-glass-card list-modal fade-in">
                   <div className="modal-header-flex">
-                      <h3>{modalDrillDown === 'vencimento' ? '🚨 Lista: Vencendo em 60 dias' : '📦 Lista: Parados na Curva C'}</h3>
+                      <h3>{modalDrillDown === 'vencimento' ? '🚨 Risco: Vencendo em 60 dias' : '📦 Risco: Obsoletos (Parados)'}</h3>
                       <button className="btn-close-modal" onClick={() => setModalDrillDown(null)}><X size={20}/></button>
                   </div>
                   <p className="modal-description">
-                      {modalDrillDown === 'vencimento' ? 'Crie uma promoção imediata para estes itens antes que estraguem.' : 'Estoque imobilizado. Analise descontos para girar o caixa.'}
+                      {modalDrillDown === 'vencimento' ? 'Coloque-os na prateleira da frente ou crie um Pague 1 Leve 2.' : 'Faça uma liquidação relâmpago para libertar dinheiro imobilizado.'}
                   </p>
 
                   <div className="table-responsive">
                       <table className="drilldown-table">
                           <thead>
                               <tr>
-                                  <th>Produto</th>
+                                  <th>SKU / Produto</th>
                                   <th className="text-right">Estoque</th>
-                                  <th className="text-right">Custo Total</th>
+                                  <th className="text-right">Capital Retido</th>
                               </tr>
                           </thead>
                           <tbody>
@@ -519,7 +633,7 @@ const Dashboard = () => {
                                       </tr>
                                   ))
                               ) : (
-                                  <tr><td colSpan="3" className="empty-table-state">Carregando lista de itens críticos...</td></tr>
+                                  <tr><td colSpan="3" className="empty-table-state">Carregando inventário crítico...</td></tr>
                               )}
                           </tbody>
                       </table>
@@ -527,7 +641,6 @@ const Dashboard = () => {
               </div>
           </div>
       )}
-
     </div>
   );
 };

@@ -14,8 +14,7 @@ const CRM = () => {
     const [tarefas, setTarefas] = useState([]);
     const [clientes, setClientes] = useState([]);
 
-    // Controle de UI
-    const [abaAtiva, setAbaAtiva] = useState('TAREFAS'); // TAREFAS ou BASE
+    const [abaAtiva, setAbaAtiva] = useState('TAREFAS');
 
     useEffect(() => {
         carregarDados();
@@ -25,21 +24,22 @@ const CRM = () => {
         setLoading(true);
         try {
             const { data } = await api.get('/crm/dashboard');
-            setResumo(data.resumo || { clientesAtivos: 0, clientesEmRisco: 0, recuperadosMes: 0, ticketMedioCRM: 0 });
-            setTarefas(data.tarefas || []);
-            setClientes(data.clientes || []);
+
+            // Defesa 1: Assegura que o Spring devolveu um Objeto válido e não uma String de erro
+            if (data && typeof data === 'object') {
+                setResumo(data.resumo || { clientesAtivos: 0, clientesEmRisco: 0, recuperadosMes: 0, ticketMedioCRM: 0 });
+                setTarefas(data.tarefas || []);
+                setClientes(data.clientes || []);
+            }
         } catch (error) {
             console.error("Erro ao carregar CRM", error);
-            // Fallback gentil se der erro, pois o CRM não deve quebrar a loja
-            toast.error("Não foi possível carregar os dados de clientes.");
+            toast.error("Não foi possível processar a Inteligência do CRM no momento.");
         } finally {
             setLoading(false);
         }
     };
 
-    // Ação Principal: Chama o WhatsApp e avisa o Backend
     const handleContatoWhatsApp = async (tarefa) => {
-        // 1. Limpa o telefone para o padrão do WhatsApp
         const telefoneNumerico = tarefa.telefone ? tarefa.telefone.replace(/\D/g, '') : '';
 
         if (!telefoneNumerico || telefoneNumerico.length < 10) {
@@ -47,26 +47,23 @@ const CRM = () => {
             return;
         }
 
-        // 2. Avisa o Java que o contato foi feito
         try {
             await api.post('/crm/interacao', {
-                clienteId: tarefa.clienteId, // Importante: O DTO que criamos no Java pede o clienteId
+                clienteId: tarefa.clienteId,
                 tipoAbordagem: tarefa.tipo,
                 resultado: "ENVIADA",
                 observacao: `Mensagem sugerida via sistema para produto: ${tarefa.produtoFoco}`
             });
 
-            // 3. Remove a tarefa da tela instantaneamente para fluidez
             setTarefas(prev => prev.filter(t => t.id !== tarefa.id));
             toast.success(`Contato com ${tarefa.clienteNome} registrado!`);
 
-            // 4. Abre a nova aba do WhatsApp Web com a mensagem pré-pronta
             const mensagemEncoded = encodeURIComponent(tarefa.mensagemSugerida);
             const urlZAP = `https://wa.me/55${telefoneNumerico}?text=${mensagemEncoded}`;
             window.open(urlZAP, '_blank');
 
         } catch (e) {
-            toast.error("Erro ao registrar a interação no sistema.");
+            toast.error("Erro ao registrar a interação no sistema. Verifique a conexão.");
         }
     };
 
@@ -77,7 +74,6 @@ const CRM = () => {
     return (
         <div className="crm-container animate-fade">
 
-            {/* CABEÇALHO KPI */}
             <div className="crm-header-cards">
                 <div className="kpi-card crm-primary">
                     <div className="kpi-icon"><Users size={24}/></div>
@@ -104,12 +100,11 @@ const CRM = () => {
                     <div className="kpi-icon"><ShoppingBag size={24}/></div>
                     <div className="kpi-data">
                         <span>Ticket do Clube</span>
-                        <h3>R$ {resumo.ticketMedioCRM.toFixed(2)}</h3>
+                        <h3>R$ {Number(resumo.ticketMedioCRM || 0).toFixed(2)}</h3>
                     </div>
                 </div>
             </div>
 
-            {/* CONTROLES DE ABA */}
             <div className="crm-tabs">
                 <button className={abaAtiva === 'TAREFAS' ? 'active' : ''} onClick={() => setAbaAtiva('TAREFAS')}>
                     <MessageCircle size={18}/> Funil de Ações (Hoje)
@@ -120,7 +115,6 @@ const CRM = () => {
                 </button>
             </div>
 
-            {/* CONTEÚDO: TAREFAS DE VENDAS */}
             {abaAtiva === 'TAREFAS' && (
                 <div className="crm-tarefas-grid">
                     {tarefas.length === 0 ? (
@@ -153,7 +147,6 @@ const CRM = () => {
                 </div>
             )}
 
-            {/* CONTEÚDO: BASE DE CLIENTES (Tabela) */}
             {abaAtiva === 'BASE' && (
                 <div className="crm-table-container">
                     <table className="crm-table">
@@ -177,7 +170,7 @@ const CRM = () => {
                                         {cliente.status.replace('_', ' ')}
                                     </td>
                                     <td>{cliente.ultimaCompra}</td>
-                                    <td>R$ {cliente.totalGasto.toFixed(2)}</td>
+                                    <td>R$ {Number(cliente.totalGasto || 0).toFixed(2)}</td>
                                     <td>
                                         <div className="tags-flex">
                                             {cliente.tags.map((tag, i) => (
@@ -191,7 +184,6 @@ const CRM = () => {
                     </table>
                 </div>
             )}
-
         </div>
     );
 };

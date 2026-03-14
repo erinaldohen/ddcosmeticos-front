@@ -1,7 +1,4 @@
-.rel-container { padding: 32px; background-color: #f8fafc; min-height: 100vh; font-family: 'Inter', sans-serif; position: relative;}
-
-/* ALERTA DE MOCK (TRAVA DE SEGURANÇA) */
-.mock-alert { background: #fffbeb; color: #d97706; padding: 10px 20px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 20px; border: 1px solid #fcd34d; }
+.rel-container { padding: 32px; background-color: #f8fafc; min-height: 100vh; font-family: 'Inter', sans-serif; position: relative; box-sizing: border-box; overflow-x: hidden; }
 
 /* HEADER */
 .rel-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
@@ -10,34 +7,27 @@
 .rh-title h1 { font-size: 2rem; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.5px; }
 .rh-title p { font-size: 0.85rem; color: #64748b; margin: 4px 0 0 0; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; }
 
-.rh-actions { display: flex; gap: 12px; align-items: center; background: white; padding: 8px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-.rh-date-picker { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 0.75rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;}
-.rh-date-picker input { background: transparent; border: none; outline: none; font-weight: 700; color: #334155; font-size: 0.9rem; cursor: pointer; }
+/* BARRA DE AÇÕES (Datas e Botões) */
+.rh-actions { display: flex; gap: 12px; align-items: center; background: white; padding: 8px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); max-width: 100%;}
+.rh-date-picker { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 0.75rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; flex-wrap: wrap;}
+.rh-date-picker input { background: transparent; border: none; outline: none; font-weight: 700; color: #334155; font-size: 0.9rem; cursor: pointer; flex: 1; min-width: 110px;}
 .btn-export { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: transparent; border: none; font-weight: 700; color: #64748b; cursor: pointer; border-radius: 8px; transition: 0.2s;}
 .btn-export:hover { background: #f1f5f9; color: #3b82f6; }
 .btn-export.pdf:hover { color: #ec4899; }
 
-/* TABS */
-.rel-tabs { display: inline-flex; gap: 4px; background: rgba(255,255,255,0.8); backdrop-filter: blur(10px); padding: 8px; border-radius: 50px; border: 1px solid #e2e8f0; margin-bottom: 32px; overflow-x: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+/* TABS DESKTOP */
+.rel-tabs { display: inline-flex; gap: 4px; background: rgba(255,255,255,0.8); backdrop-filter: blur(10px); padding: 8px; border-radius: 50px; border: 1px solid #e2e8f0; margin-bottom: 32px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); max-width: 100%;}
 .rel-tabs button { display: flex; align-items: center; gap: 8px; padding: 10px 24px; border-radius: 50px; border: none; background: transparent; color: #64748b; font-weight: 700; cursor: pointer; transition: all 0.3s; white-space: nowrap; }
 .rel-tabs button:hover { color: #0f172a; background: white; }
 .rel-tabs button.active { background: linear-gradient(90deg, #ec4899, #d946ef); color: white; box-shadow: 0 8px 15px rgba(236, 72, 153, 0.3); }
-
-/* AI CARD (Insights) */
-.rel-ai-card { position: relative; background: linear-gradient(135deg, #0f172a, #1e293b, #172554); color: white; padding: 24px; border-radius: 24px; overflow: hidden; margin-bottom: 32px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); }
-.ai-bg-glow { position: absolute; bottom: -50px; left: -50px; width: 250px; height: 250px; background: rgba(236, 72, 153, 0.2); filter: blur(60px); border-radius: 50%; }
-.ai-content-row { display: flex; gap: 24px; position: relative; z-index: 10; align-items: center;}
-.ai-icon-box { background: rgba(255,255,255,0.1); padding: 16px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(10px); color: #ec4899; }
-.ai-text-area { flex: 1; }
-.ai-text-area h3 { margin: 0 0 8px 0; font-size: 1.25rem; font-weight: 700; letter-spacing: -0.5px; }
-.ai-text-area h3 span { color: #3b82f6; font-weight: 500; text-transform: capitalize;}
 
 /* KPI GRID */
 .rel-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; margin-bottom: 32px; }
 .rel-kpi-card { background: white; padding: 24px; border-radius: 24px; border: 1px solid #f1f5f9; box-shadow: 0 4px 6px rgba(0,0,0,0.02); transition: 0.3s; display: flex; flex-direction: column; justify-content: space-between;}
 .rel-kpi-card:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.05); border-color: #e2e8f0; }
+.rel-kpi-card.highlight-kpi { border: 2px solid #ec4899; background: #fffdf5; }
 .rkc-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;}
-.rkc-top p { margin: 0 0 4px 0; font-size: 0.65rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; }
+.rkc-top > div > div { flex-wrap: wrap; } /* Garante que o tooltip não quebre em telas pequenas */
 .rkc-top h4 { margin: 0; font-size: 1.75rem; font-weight: 900; color: #0f172a; letter-spacing: -1px; }
 .rkc-icon { padding: 12px; background: #f8fafc; border-radius: 16px; color: #cbd5e1; transition: 0.3s;}
 .rel-kpi-card:hover .rkc-icon { background: rgba(236, 72, 153, 0.1); color: #ec4899; }
@@ -50,36 +40,89 @@
 .rsh-icon { padding: 6px; background: #f1f5f9; border-radius: 8px; color: #3b82f6; }
 .rsh-title-row h2 { margin: 0; font-size: 0.85rem; font-weight: 900; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px; }
 .rsh-line { flex: 1; height: 1px; background: #e2e8f0; margin-left: 8px;}
-.rel-section-header p { margin: 0 0 0 44px; font-size: 0.8rem; color: #64748b; font-weight: 600; }
 
 .rel-chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 24px; margin-bottom: 32px; }
 .rel-chart-card { background: white; border-radius: 24px; border: 1px solid #e2e8f0; padding: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); display: flex; flex-direction: column;}
 .rel-chart-card.col-span-full { grid-column: 1 / -1; }
 .rcc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 1px solid #f8fafc; padding-bottom: 16px;}
+.rcc-header > div { flex-wrap: wrap; } /* Proteção para o Tooltip no título do gráfico */
 .rcc-header h3 { margin: 0; font-size: 1.15rem; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;}
-.rcc-header p { margin: 4px 0 0 0; font-size: 0.65rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px;}
 .rcc-header button { background: transparent; border: none; color: #cbd5e1; cursor: pointer; transition: 0.2s; }
 .rcc-header button:hover { color: #ec4899; }
 
-/* AQUI ESTÁ O SEGREDO PARA O RECHARTS FUNCIONAR PERFEITAMENTE */
-.rcc-content {
-  flex: 1;
-  height: 300px;
-  min-height: 300px;
-  width: 100%;
-  position: relative;
-  display: block;
+.rcc-content { flex: 1; height: 300px; min-height: 300px; width: 100%; position: relative; display: block; margin-bottom: 16px;}
+
+/* NANO INSIGHT IA NO GRÁFICO */
+.rcc-footer-insight { background: #f8fafc; border-radius: 12px; padding: 12px 16px; border: 1px dashed #cbd5e1; margin-top: auto;}
+.nano-insight { display: flex; align-items: flex-start; gap: 8px; }
+.insight-icon { color: #8b5cf6; margin-top: 2px; flex-shrink: 0;}
+.insight-text { font-size: 0.85rem; font-weight: 600; color: #475569; line-height: 1.4; }
+
+/* =========================================================================
+   UX TOOLTIPS DE DESCRIÇÃO DOS GRÁFICOS E KPIS
+   ========================================================================= */
+.info-tooltip-wrapper {
+  display: inline-flex; align-items: center; margin-left: 10px;
+  position: relative; cursor: help; color: #cbd5e1;
+}
+.info-tooltip-wrapper:hover { color: #3b82f6; }
+
+.info-tooltip-content {
+  visibility: hidden; opacity: 0; position: absolute; bottom: 150%; left: 50%; transform: translateX(-50%);
+  background: #1e293b; color: white; padding: 10px 14px; border-radius: 8px; font-size: 0.75rem;
+  white-space: pre-wrap; width: max-content; max-width: 250px; z-index: 100;
+  transition: all 0.2s ease-in-out; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  pointer-events: none; text-align: center; line-height: 1.4; text-transform: none; letter-spacing: normal;
 }
 
-/* TOOLTIP RECHARTS CUSTOMIZADO */
-.rel-tooltip { background: white; border: 1px solid #f1f5f9; padding: 16px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); min-width: 150px;}
-.rel-tooltip-label { margin: 0 0 12px 0; font-size: 0.65rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;}
-.rel-tooltip-item { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 8px; }
-.rel-tooltip-name { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; font-weight: 600; color: #334155;}
-.rel-tooltip-dot { width: 10px; height: 10px; border-radius: 50%; }
-.rel-tooltip-val { font-size: 0.8rem; font-weight: 800; color: #0f172a; }
+.info-tooltip-content::after {
+  content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px;
+  border-width: 5px; border-style: solid; border-color: #1e293b transparent transparent transparent;
+}
+
+.info-tooltip-wrapper:hover .info-tooltip-content {
+  visibility: visible; opacity: 1; bottom: 180%;
+}
 
 /* ANIMAÇÕES */
 .rel-fade-in { animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-.rel-spinner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; border: 4px solid #f1f5f9; border-top-color: #ec4899; border-radius: 50%; animation: spin 1s linear infinite; }
+
+/* =========================================================================
+   BLINDAGEM MOBILE (UX 100% Otimizada para Celular)
+   ========================================================================= */
+@media (max-width: 768px) {
+  .rel-container { padding: 16px; overflow-x: hidden; }
+  .rel-header { flex-direction: column; align-items: flex-start; gap: 20px; }
+  .rh-title h1 { font-size: 1.5rem; }
+
+  .rh-actions { flex-direction: column; width: 100%; align-items: stretch; background: transparent; border: none; box-shadow: none; padding: 0; gap: 8px; }
+  .rh-date-picker { flex-direction: column; width: 100%; align-items: stretch; background: white; padding: 16px; border-radius: 12px; gap: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+  .rh-dp-sep { display: none; }
+  .rh-date-picker input { width: 100%; padding: 14px; border: 1px solid #e2e8f0; border-radius: 8px; text-align: center; box-sizing: border-box; font-size: 1rem; }
+
+  .btn-export { width: 100%; justify-content: center; padding: 16px; background: white; border: 1px solid #e2e8f0; font-size: 1rem; }
+
+  /* Tabs em Grid 2x2 para telas pequenas */
+  .rel-tabs {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    background: transparent; border: none; padding: 0; box-shadow: none;
+  }
+  .rel-tabs button {
+    background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+    padding: 12px; flex-direction: column; gap: 4px; font-size: 0.8rem;
+  }
+  .rel-tabs button.active { border: none; }
+
+  .rel-chart-grid { grid-template-columns: 1fr; }
+}
+
+/* =========================================================================
+   ESTILO DE IMPRESSÃO (PDF NATIVO PERFEITO)
+   ========================================================================= */
+@media print {
+  .no-print { display: none !important; }
+  .rel-container { padding: 0; background: white; }
+  .rel-chart-card, .rel-kpi-card { break-inside: avoid; border: 1px solid #ccc; box-shadow: none; }
+  .rcc-footer-insight { border: 1px solid #ddd; background: #fafafa; }
+}

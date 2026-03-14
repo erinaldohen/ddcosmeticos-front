@@ -4,7 +4,7 @@ import {
   FileText, Server, Download, RefreshCw, Trash2,
   Eye, EyeOff, DollarSign, Printer, FileCheck,
   CheckCircle2, AlertTriangle, Moon, Sun, X, Info, Database, AlertCircle,
-  QrCode, Check, Menu
+  QrCode, Check, Menu, TrendingUp
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
@@ -153,7 +153,9 @@ const Configuracoes = () => {
     fiscal: { ambiente: 'HOMOLOGACAO', homologacao: { serie: '', nfe: '', token: '', cscId: '' }, producao: { serie: '', nfe: '', token: '', cscId: '' }, senhaCert: '', regime: '1', naturezaPadrao: '5.102', aliquotaInterna: '', priorizarMonofasico: false, modoContingencia: false },
     financeiro: { fundoTrocoPadrao: 0, alertaSangria: 0, taxaCredito: 0, fechamentoCego: true, pagamentos: { dinheiro: true, pix: true, credito: true, debito: true, crediario: true }, pixTipo: 'CNPJ', pixChave: '' },
     vendas: { imprimirTicketTroca: false, comportamentoCpf: 'PERGUNTAR', bloquearEstoque: true, metaMensal: 0 },
-    sistema: { tema: 'light', cancelamentoItem: 'ALERTA', cancelamentoVenda: 'SENHA', nomeTerminal: 'CAIXA 01', imprimirLogoCupom: true, impressaoAuto: true, rodape: '' }
+    sistema: { tema: 'light', cancelamentoItem: 'ALERTA', cancelamentoVenda: 'SENHA', nomeTerminal: 'CAIXA 01', imprimirLogoCupom: true, impressaoAuto: true, rodape: '' },
+    // Adicionado de forma limpa
+    comissoes: { tipoCalculo: 'GERAL', percentualGeral: 0, comissionarSobre: 'LUCRO', descontarTaxasCartao: false }
   };
 
   const [form, setForm] = useState(baseForm);
@@ -172,7 +174,8 @@ const Configuracoes = () => {
               fiscal: { ...baseForm.fiscal, ...(dadosLimpos.fiscal || {}), senhaCert: '' },
               financeiro: { ...baseForm.financeiro, ...(dadosLimpos.financeiro || {}) },
               vendas: { ...baseForm.vendas, ...(dadosLimpos.vendas || {}) },
-              sistema: { ...baseForm.sistema, ...(dadosLimpos.sistema || {}) }
+              sistema: { ...baseForm.sistema, ...(dadosLimpos.sistema || {}) },
+              comissoes: { ...baseForm.comissoes, ...(dadosLimpos.comissoes || {}) }
           };
           setForm(formMontado);
           setInitialFormState(JSON.parse(JSON.stringify(formMontado)));
@@ -377,6 +380,8 @@ const Configuracoes = () => {
       { id: 'fiscal', icon: <FileText size={18}/>, label: 'Fiscal e Tributos' },
       { id: 'financeiro', icon: <DollarSign size={18}/>, label: 'Caixa e Financeiro' },
       { id: 'vendas', icon: <Printer size={18}/>, label: 'Operação de Vendas' },
+      // Adicionado de forma limpa
+      { id: 'comissoes', icon: <TrendingUp size={18}/>, label: 'Comissões e Metas' },
       { id: 'sistema', icon: <Server size={18}/>, label: 'Sistema e Segurança' },
   ];
 
@@ -484,7 +489,6 @@ const Configuracoes = () => {
                               <Field label="CEP" value={form.endereco.cep} onChange={e => updateMask('endereco', 'cep', e.target.value, 'cep')} onBlur={searchCEP} actionIcon={<Search size={18}/>} onAction={searchCEP} placeholder="00000-000" />
                           </div>
 
-                          {/* CORREÇÃO MOBILE: Remoção dos styles fixos de 'span' que quebravam o telemóvel */}
                           <div className="cfg-address-grid">
                               <div className="cfg-addr-logradouro"><Field label="Logradouro (Rua/Av)" value={form.endereco.logradouro} onChange={e => update('endereco', 'logradouro', e.target.value)} /></div>
                               <div className="cfg-addr-numero"><Field label="Nº" value={form.endereco.numero} onChange={e => update('endereco', 'numero', e.target.value)} /></div>
@@ -651,6 +655,54 @@ const Configuracoes = () => {
                           </div>
 
                           <Field label="Mensagem no Rodapé do Cupom" type="textarea" value={form.sistema.rodape} onChange={e => update('sistema', 'rodape', e.target.value)} placeholder="Ex: Volte Sempre! Trocas apenas com etiqueta em até 7 dias." />
+                      </div>
+                  </div>
+              )}
+
+              {/* ABA: COMISSÕES (INSERIDA DE FORMA LIMPA) */}
+              {activeTab === 'comissoes' && (
+                  <div className="tab-pane animate-slide-left">
+                      <h2 className="cfg-panel-title">Regras de Comissionamento</h2>
+                      <div className="cfg-card">
+                          <div className="cfg-grid-col-2 mb-5">
+                              <div className="cfg-highlight-box border-blue">
+                                  <Field
+                                      label="Tipo de Cálculo"
+                                      type="select"
+                                      value={form.comissoes?.tipoCalculo || 'GERAL'}
+                                      onChange={e => update('comissoes', 'tipoCalculo', e.target.value)}
+                                      options={[
+                                          { value: 'GERAL', label: 'Percentual Fixo (Loja Toda)' },
+                                          { value: 'CATEGORIA', label: 'Por Categoria/Produto' }
+                                      ]}
+                                  />
+                                  {form.comissoes?.tipoCalculo === 'GERAL' && (
+                                      <div className="mt-3">
+                                          <Field label="Percentual (%)" suffix="%" value={form.comissoes?.percentualGeral || 0} onChange={e => update('comissoes', 'percentualGeral', e.target.value)} />
+                                      </div>
+                                  )}
+                              </div>
+
+                              <div className="cfg-highlight-box border-blue">
+                                  <Field
+                                      label="Base de Cálculo"
+                                      type="select"
+                                      value={form.comissoes?.comissionarSobre || 'LUCRO'}
+                                      onChange={e => update('comissoes', 'comissionarSobre', e.target.value)}
+                                      options={[
+                                          { value: 'TOTAL_VENDA', label: 'Sobre Valor Total da Venda' },
+                                          { value: 'LUCRO', label: 'Sobre o Lucro (Venda - Custo)' }
+                                      ]}
+                                  />
+                              </div>
+                          </div>
+
+                          <ToggleSwitch
+                              label="Descontar Taxas de Cartão"
+                              description="Deduzir taxas financeiras antes de calcular a comissão."
+                              checked={form.comissoes?.descontarTaxasCartao}
+                              onChange={e => update('comissoes', 'descontarTaxasCartao', e.target.checked)}
+                          />
                       </div>
                   </div>
               )}
