@@ -1,128 +1,184 @@
-.rel-container { padding: 32px; background-color: #f8fafc; min-height: 100vh; font-family: 'Inter', sans-serif; position: relative; box-sizing: border-box; overflow-x: hidden; }
+/* =========================================================================
+   ESTRUTURA GLOBAL E VARIÁVEIS
+   ========================================================================= */
+:root {
+  --dd-pink: #ec4899;
+  --dd-dark: #0f172a;
+  --dd-blue: #3b82f6;
+  --dd-slate: #94a3b8;
+  --dd-border: #e2e8f0;
+  --dd-bg: #f8fafc;
+}
 
-/* HEADER */
+.rel-container {
+  padding: 32px;
+  background-color: var(--dd-bg);
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+  position: relative;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+/* HEADER & TITULOS */
 .rel-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
 .rh-title { display: flex; align-items: center; gap: 16px; }
-.rh-icon { background: #ec4899; padding: 12px; border-radius: 16px; color: white; box-shadow: 0 10px 15px -3px rgba(236, 72, 153, 0.3); }
-.rh-title h1 { font-size: 2rem; font-weight: 800; color: #0f172a; margin: 0; letter-spacing: -0.5px; }
-.rh-title p { font-size: 0.85rem; color: #64748b; margin: 4px 0 0 0; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; }
+.rh-icon { background: var(--dd-pink); padding: 12px; border-radius: 16px; color: white; box-shadow: 0 10px 15px -3px rgba(236, 72, 153, 0.3); }
+.rh-title h1 { font-size: 2rem; font-weight: 800; color: var(--dd-dark); margin: 0; letter-spacing: -0.5px; }
+.rh-title p { font-size: 0.85rem; color: var(--dd-slate); margin: 4px 0 0 0; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; }
 
-/* BARRA DE AÇÕES (Datas e Botões) */
-.rh-actions { display: flex; gap: 12px; align-items: center; background: white; padding: 8px; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.02); max-width: 100%;}
-.rh-date-picker { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; font-size: 0.75rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; flex-wrap: wrap;}
-.rh-date-picker input { background: transparent; border: none; outline: none; font-weight: 700; color: #334155; font-size: 0.9rem; cursor: pointer; flex: 1; min-width: 110px;}
-.btn-export { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: transparent; border: none; font-weight: 700; color: #64748b; cursor: pointer; border-radius: 8px; transition: 0.2s;}
-.btn-export:hover { background: #f1f5f9; color: #3b82f6; }
-.btn-export.pdf:hover { color: #ec4899; }
+/* =========================================================================
+   BARRA DE AÇÕES & PORTAL DO INVESTIDOR (NOVO)
+   ========================================================================= */
+.rh-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: white;
+  padding: 8px;
+  border-radius: 16px;
+  border: 1px solid var(--dd-border);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+  max-width: 100%;
+}
 
-/* TABS DESKTOP */
-.rel-tabs { display: inline-flex; gap: 4px; background: rgba(255,255,255,0.8); backdrop-filter: blur(10px); padding: 8px; border-radius: 50px; border: 1px solid #e2e8f0; margin-bottom: 32px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); max-width: 100%;}
-.rel-tabs button { display: flex; align-items: center; gap: 8px; padding: 10px 24px; border-radius: 50px; border: none; background: transparent; color: #64748b; font-weight: 700; cursor: pointer; transition: all 0.3s; white-space: nowrap; }
-.rel-tabs button:hover { color: #0f172a; background: white; }
-.rel-tabs button.active { background: linear-gradient(90deg, #ec4899, #d946ef); color: white; box-shadow: 0 8px 15px rgba(236, 72, 153, 0.3); }
+.rh-date-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--dd-bg);
+  border-radius: 12px;
+  border: 1px solid var(--dd-border);
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--dd-slate);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
 
-/* KPI GRID */
+.rh-date-picker input { background: transparent; border: none; outline: none; font-weight: 700; color: #334155; font-size: 0.9rem; cursor: pointer; }
+
+/* Estilização dos Selects do Balanço Trimestral */
+.corporate-action-box select {
+  cursor: pointer;
+  background: white;
+  transition: border-color 0.2s;
+  color: var(--dd-dark);
+}
+
+.corporate-action-box select:hover {
+  border-color: var(--dd-pink);
+}
+
+.btn-export { display: flex; align-items: center; gap: 8px; padding: 8px 16px; background: transparent; border: none; font-weight: 700; color: var(--dd-slate); cursor: pointer; border-radius: 8px; transition: 0.2s;}
+.btn-export:hover { background: #f1f5f9; color: var(--dd-blue); }
+.btn-export.pdf:hover { opacity: 0.9; }
+
+/* TABS E NAVEGAÇÃO */
+.rel-tabs { display: inline-flex; gap: 4px; background: rgba(255,255,255,0.8); backdrop-filter: blur(10px); padding: 8px; border-radius: 50px; border: 1px solid var(--dd-border); margin-bottom: 32px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); max-width: 100%;}
+.rel-tabs button { display: flex; align-items: center; gap: 8px; padding: 10px 24px; border-radius: 50px; border: none; background: transparent; color: var(--dd-slate); font-weight: 700; cursor: pointer; transition: all 0.3s; white-space: nowrap; }
+.rel-tabs button:hover { color: var(--dd-dark); background: white; }
+.rel-tabs button.active { background: linear-gradient(90deg, var(--dd-pink), #d946ef); color: white; box-shadow: 0 8px 15px rgba(236, 72, 153, 0.3); }
+
+/* KPI CARDS */
 .rel-kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; margin-bottom: 32px; }
 .rel-kpi-card { background: white; padding: 24px; border-radius: 24px; border: 1px solid #f1f5f9; box-shadow: 0 4px 6px rgba(0,0,0,0.02); transition: 0.3s; display: flex; flex-direction: column; justify-content: space-between;}
-.rel-kpi-card:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.05); border-color: #e2e8f0; }
-.rel-kpi-card.highlight-kpi { border: 2px solid #ec4899; background: #fffdf5; }
+.rel-kpi-card:hover { transform: translateY(-4px); box-shadow: 0 10px 20px rgba(0,0,0,0.05); border-color: var(--dd-border); }
+.rel-kpi-card.highlight-kpi { border: 2px solid var(--dd-pink); background: #fffdf5; }
 .rkc-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;}
-.rkc-top > div > div { flex-wrap: wrap; } /* Garante que o tooltip não quebre em telas pequenas */
-.rkc-top h4 { margin: 0; font-size: 1.75rem; font-weight: 900; color: #0f172a; letter-spacing: -1px; }
-.rkc-icon { padding: 12px; background: #f8fafc; border-radius: 16px; color: #cbd5e1; transition: 0.3s;}
-.rel-kpi-card:hover .rkc-icon { background: rgba(236, 72, 153, 0.1); color: #ec4899; }
+.rkc-top h4 { margin: 0; font-size: 1.75rem; font-weight: 900; color: var(--dd-dark); letter-spacing: -1px; }
+.rkc-icon { padding: 12px; background: var(--dd-bg); border-radius: 16px; color: #cbd5e1; transition: 0.3s;}
+.rel-kpi-card:hover .rkc-icon { background: rgba(236, 72, 153, 0.1); color: var(--dd-pink); }
 .rkc-trend { display: inline-flex; align-items: center; gap: 4px; font-size: 0.65rem; font-weight: 800; text-transform: uppercase; padding: 4px 8px; border-radius: 6px; width: max-content;}
-.trend-up { background: #ecfdf5; color: #059669; } .trend-down { background: #fff1f2; color: #e11d48; } .trend-neutral { background: #f8fafc; color: #64748b; }
+.trend-up { background: #ecfdf5; color: #059669; } .trend-down { background: #fff1f2; color: #e11d48; } .trend-neutral { background: var(--dd-bg); color: #64748b; }
 
-/* SECTIONS & CHARTS */
-.rel-section-header { margin: 32px 0 16px 0; }
-.rsh-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 4px;}
-.rsh-icon { padding: 6px; background: #f1f5f9; border-radius: 8px; color: #3b82f6; }
-.rsh-title-row h2 { margin: 0; font-size: 0.85rem; font-weight: 900; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px; }
-.rsh-line { flex: 1; height: 1px; background: #e2e8f0; margin-left: 8px;}
-
+/* CHARTS & ANALYTICS */
 .rel-chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 24px; margin-bottom: 32px; }
-.rel-chart-card { background: white; border-radius: 24px; border: 1px solid #e2e8f0; padding: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); display: flex; flex-direction: column;}
+.rel-chart-card { background: white; border-radius: 24px; border: 1px solid var(--dd-border); padding: 24px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); display: flex; flex-direction: column;}
 .rel-chart-card.col-span-full { grid-column: 1 / -1; }
 .rcc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; border-bottom: 1px solid #f8fafc; padding-bottom: 16px;}
-.rcc-header > div { flex-wrap: wrap; } /* Proteção para o Tooltip no título do gráfico */
-.rcc-header h3 { margin: 0; font-size: 1.15rem; font-weight: 800; color: #0f172a; letter-spacing: -0.5px;}
-.rcc-header button { background: transparent; border: none; color: #cbd5e1; cursor: pointer; transition: 0.2s; }
-.rcc-header button:hover { color: #ec4899; }
+.rcc-header h3 { margin: 0; font-size: 1.15rem; font-weight: 800; color: var(--dd-dark); letter-spacing: -0.5px;}
+.rcc-content { flex: 1; min-height: 300px; width: 100%; position: relative; display: block; margin-bottom: 16px;}
 
-.rcc-content { flex: 1; height: 300px; min-height: 300px; width: 100%; position: relative; display: block; margin-bottom: 16px;}
-
-/* NANO INSIGHT IA NO GRÁFICO */
-.rcc-footer-insight { background: #f8fafc; border-radius: 12px; padding: 12px 16px; border: 1px dashed #cbd5e1; margin-top: auto;}
+/* INSIGHT IA (NANO-FOOTER) */
+.rcc-footer-insight { background: var(--dd-bg); border-radius: 12px; padding: 12px 16px; border: 1px dashed var(--dd-border); margin-top: auto;}
 .nano-insight { display: flex; align-items: flex-start; gap: 8px; }
 .insight-icon { color: #8b5cf6; margin-top: 2px; flex-shrink: 0;}
 .insight-text { font-size: 0.85rem; font-weight: 600; color: #475569; line-height: 1.4; }
 
 /* =========================================================================
-   UX TOOLTIPS DE DESCRIÇÃO DOS GRÁFICOS E KPIS
+   UX TOOLTIPS & HELPERS
    ========================================================================= */
 .info-tooltip-wrapper {
   display: inline-flex; align-items: center; margin-left: 10px;
-  position: relative; cursor: help; color: #cbd5e1;
+  position: relative; cursor: help; color: var(--dd-slate);
 }
-.info-tooltip-wrapper:hover { color: #3b82f6; }
+.info-tooltip-wrapper:hover { color: var(--dd-blue); }
 
 .info-tooltip-content {
   visibility: hidden; opacity: 0; position: absolute; bottom: 150%; left: 50%; transform: translateX(-50%);
-  background: #1e293b; color: white; padding: 10px 14px; border-radius: 8px; font-size: 0.75rem;
-  white-space: pre-wrap; width: max-content; max-width: 250px; z-index: 100;
-  transition: all 0.2s ease-in-out; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  pointer-events: none; text-align: center; line-height: 1.4; text-transform: none; letter-spacing: normal;
+  background: var(--dd-dark); color: white; padding: 12px 16px; border-radius: 8px; font-size: 0.75rem;
+  white-space: pre-wrap; width: max-content; max-width: 280px; z-index: 100;
+  transition: all 0.2s ease-in-out; font-weight: 500; box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  pointer-events: none; text-align: center; line-height: 1.5; text-transform: none;
 }
 
 .info-tooltip-content::after {
   content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px;
-  border-width: 5px; border-style: solid; border-color: #1e293b transparent transparent transparent;
+  border-width: 5px; border-style: solid; border-color: var(--dd-dark) transparent transparent transparent;
 }
 
 .info-tooltip-wrapper:hover .info-tooltip-content {
   visibility: visible; opacity: 1; bottom: 180%;
 }
 
-/* ANIMAÇÕES */
-.rel-fade-in { animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
 /* =========================================================================
-   BLINDAGEM MOBILE (UX 100% Otimizada para Celular)
+   BLINDAGEM MOBILE (UX Otimizada)
    ========================================================================= */
+@media (max-width: 1024px) {
+  .rh-actions { flex-direction: column; align-items: stretch; border-radius: 20px; }
+  .corporate-action-box { border-left: none !important; border-top: 2px solid var(--dd-border); padding: 12px 0 0 0 !important; margin-left: 0 !important; }
+}
+
 @media (max-width: 768px) {
-  .rel-container { padding: 16px; overflow-x: hidden; }
-  .rel-header { flex-direction: column; align-items: flex-start; gap: 20px; }
+  .rel-container { padding: 16px; }
   .rh-title h1 { font-size: 1.5rem; }
 
-  .rh-actions { flex-direction: column; width: 100%; align-items: stretch; background: transparent; border: none; box-shadow: none; padding: 0; gap: 8px; }
-  .rh-date-picker { flex-direction: column; width: 100%; align-items: stretch; background: white; padding: 16px; border-radius: 12px; gap: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-  .rh-dp-sep { display: none; }
-  .rh-date-picker input { width: 100%; padding: 14px; border: 1px solid #e2e8f0; border-radius: 8px; text-align: center; box-sizing: border-box; font-size: 1rem; }
-
-  .btn-export { width: 100%; justify-content: center; padding: 16px; background: white; border: 1px solid #e2e8f0; font-size: 1rem; }
-
-  /* Tabs em Grid 2x2 para telas pequenas */
+  /* Tabs em Grid 2x2 para evitar vazamento lateral */
   .rel-tabs {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-    background: transparent; border: none; padding: 0; box-shadow: none;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    box-shadow: none;
   }
   .rel-tabs button {
-    background: white; border: 1px solid #e2e8f0; border-radius: 12px;
-    padding: 12px; flex-direction: column; gap: 4px; font-size: 0.8rem;
+    background: white;
+    border: 1px solid var(--dd-border);
+    border-radius: 12px;
+    padding: 12px;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.8rem;
+    justify-content: center;
   }
-  .rel-tabs button.active { border: none; }
+  .rel-tabs button.active { border: none; background: var(--dd-dark); color: white; }
+
+  .corporate-action-box { flex-direction: column; align-items: stretch; gap: 8px; }
+  .corporate-action-box select { width: 100%; padding: 12px; }
 
   .rel-chart-grid { grid-template-columns: 1fr; }
 }
 
 /* =========================================================================
-   ESTILO DE IMPRESSÃO (PDF NATIVO PERFEITO)
+   ESTILO DE IMPRESSÃO (DOSSIÊ PDF)
    ========================================================================= */
 @media print {
   .no-print { display: none !important; }
   .rel-container { padding: 0; background: white; }
-  .rel-chart-card, .rel-kpi-card { break-inside: avoid; border: 1px solid #ccc; box-shadow: none; }
+  .rel-chart-card, .rel-kpi-card { break-inside: avoid; border: 1px solid #ccc; box-shadow: none; margin-bottom: 20px; }
   .rcc-footer-insight { border: 1px solid #ddd; background: #fafafa; }
 }

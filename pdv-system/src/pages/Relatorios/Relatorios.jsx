@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { toast } from "react-toastify";
 import api from "../../services/api";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area,
-  ComposedChart, ReferenceLine
+  ComposedChart
 } from "recharts";
 import {
   TrendingUp, Download, Calendar, PackageCheck, DollarSign,
   Layers, FileText, FileSpreadsheet, ArrowUpRight, ArrowDownRight,
   Sparkles, AlertTriangle, Target, ShoppingBag, PiggyBank, Wallet,
   BarChart3, Briefcase, ArrowDownCircle, ArrowUpCircle, Scale, ShieldAlert, HelpCircle,
-  Landmark // CORREÇÃO 1: Importação do ícone que estava faltando!
+  Landmark, Building2
 } from "lucide-react";
 import './Relatorios.css';
 
@@ -56,7 +56,6 @@ const ChartCard = ({ title, infoText, onDownload, insight, children, fullWidth =
       </div>
       <button onClick={onDownload} title="Exportar dados deste gráfico para Excel"><Download size={18} /></button>
     </div>
-    {/* CORREÇÃO 3: Altura hardcoded no ResponsiveContainer destrói o erro (-1) */}
     <div className="rcc-content" style={{ width: '100%', height: 300 }}>
       {isLoading ? <div className="rel-spinner"></div> : <ResponsiveContainer width="99%" height={300}>{children}</ResponsiveContainer>}
     </div>
@@ -68,7 +67,6 @@ const KpiCard = ({ title, value, subtext, icon: Icon, trend, highlight = false, 
   <div className={`rel-kpi-card ${highlight ? 'highlight-kpi' : ''}`}>
     <div className="rkc-top">
       <div>
-        {/* CORREÇÃO 2: Substituído <p> por <div> para resolver o erro "div cannot be a descendant of p" */}
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: '4px', fontSize: '0.65rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '1.5px' }}>
           {title}
           {infoText && <InfoTooltip text={infoText} />}
@@ -115,31 +113,38 @@ export default function RelatoriosDashboard() {
   }, [categoriaAtiva, dataInicio, dataFim]);
 
   // =========================================================================
-    // EXPORTAÇÃO DE DOSSIÊ EXECUTIVO (GERADO PELO JAVA)
-    // =========================================================================
-    const exportarPDF = async () => {
-      const toastId = toast.loading("A IA está a redigir o Dossiê Executivo. Aguarde...");
-      try {
-        const response = await api.get('/relatorios/dossie-executivo/pdf', {
-          params: { inicio: dataInicio, fim: dataFim },
-          responseType: 'blob' // Fundamental para receber ficheiros binários
-        });
+  // MOTOR DE EXPORTAÇÃO (EXCEL, PDF SIMPLES E BALANÇO S/A)
+  // =========================================================================
+  const exportarPDF = async () => {
+    const toastId = toast.loading("A IA está a redigir o Dossiê Executivo Simples...");
+    try {
+      const response = await api.get('/relatorios/dossie-executivo/pdf', {
+        params: { inicio: dataInicio, fim: dataFim },
+        responseType: 'blob'
+      });
 
-        // Cria o link para baixar o ficheiro real que o Java gerou
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a'); link.href = url; link.setAttribute('download', `Dossie_Simples_DD_${dataFim}.pdf`);
+      document.body.appendChild(link); link.click(); link.parentNode.removeChild(link);
+
+      toast.update(toastId, { render: "Dossiê gerado com sucesso!", type: "success", isLoading: false, autoClose: 4000 });
+    } catch (err) {
+      toast.update(toastId, { render: "Erro ao gerar o Dossiê no servidor.", type: "error", isLoading: false, autoClose: 5000 });
+    }
+  };
+
+  const gerarBalancoTrimestral = async () => {
+    const tri = document.getElementById('q-trimestre').value;
+    const ano = document.getElementById('q-ano').value;
+    const toastId = toast.loading("A estruturar Balanço Trimestral S/A de Investidores...");
+    try {
+        const response = await api.get(`/relatorios/balanco-trimestral/pdf?ano=${ano}&trimestre=${tri}`, { responseType: 'blob' });
         const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `Dossie_Executivo_DD_${dataFim}.pdf`);
-        document.body.appendChild(link);
-        link.click();
-        link.parentNode.removeChild(link);
-
-        toast.update(toastId, { render: "Dossiê Executivo gerado com sucesso!", type: "success", isLoading: false, autoClose: 4000 });
-      } catch (err) {
-        toast.update(toastId, { render: "Erro ao gerar o Dossiê no servidor.", type: "error", isLoading: false, autoClose: 5000 });
-        console.error(err);
-      }
-    };
+        const link = document.createElement('a'); link.href = url; link.setAttribute('download', `Balanco_Resultados_${tri}T${ano}.pdf`);
+        document.body.appendChild(link); link.click(); link.parentNode.removeChild(link);
+        toast.update(toastId, { render: "Balanço Corporativo descarregado com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
+    } catch (e) { toast.update(toastId, { render: "Falha ao compilar balanço. Verifique conexão.", type: "error", isLoading: false, autoClose: 3000 }); }
+  };
 
   const exportarExcel = (nomeArquivo, dadosArray) => {
     if (!dadosArray || dadosArray.length === 0) {
@@ -155,9 +160,7 @@ export default function RelatoriosDashboard() {
       const link = document.createElement("a");
       link.setAttribute("href", encodedUri);
       link.setAttribute("download", `${nomeArquivo}_${dataFim}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
       toast.success(`Planilha ${nomeArquivo}.csv baixada!`);
     } catch (e) {
       toast.error("Falha ao converter dados para Excel.");
@@ -196,10 +199,7 @@ export default function RelatoriosDashboard() {
         const despOp = dreData.find(i => i?.name?.includes("Despesas"))?.valor || 0;
 
         return Number(receita) - Number(cmv) - Number(despOp);
-      } catch (e) {
-        console.error("Proteção EBITDA ativada: ", e);
-        return 0;
-      }
+      } catch (e) { return 0; }
   };
 
   return (
@@ -210,7 +210,7 @@ export default function RelatoriosDashboard() {
         </defs>
       </svg>
 
-      {/* HEADER E AÇÕES */}
+      {/* HEADER E AÇÕES DA DIRETORIA */}
       <div className="rel-header no-print">
         <div className="rh-title">
           <div className="rh-icon"><TrendingUp size={28} /></div>
@@ -218,13 +218,33 @@ export default function RelatoriosDashboard() {
         </div>
 
         <div className="rh-actions">
+          {/* AÇÕES DIÁRIAS (Telas Atuais) */}
           <div className="rh-date-picker">
             <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
             <span className="rh-dp-sep">•</span>
             <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} />
           </div>
           <button className="btn-export" onClick={exportarTudoExcel}><FileSpreadsheet size={16} /> EXCEL</button>
-          <button className="btn-export pdf" onClick={exportarPDF}><FileText size={16} /> PDF</button>
+          <button className="btn-export pdf" onClick={exportarPDF}><FileText size={16} /> PDF Diário</button>
+
+          {/* MÓDULO S/A (INVESTIDORES) */}
+          <div className="corporate-action-box" style={{display: 'flex', alignItems: 'center', gap: '8px', borderLeft: '2px solid #e2e8f0', paddingLeft: '12px', marginLeft: '4px'}}>
+             <Building2 size={18} color="#0f172a" title="Portal Corporativo S/A" />
+             <select id="q-trimestre" style={{padding: '8px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontWeight: 'bold'}} defaultValue="1">
+                <option value="1">1º Trimestre</option>
+                <option value="2">2º Trimestre</option>
+                <option value="3">3º Trimestre</option>
+                <option value="4">4º Trimestre</option>
+             </select>
+             <select id="q-ano" style={{padding: '8px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontWeight: 'bold'}} defaultValue={new Date().getFullYear()}>
+                <option value="2024">2024</option>
+                <option value="2025">2025</option>
+                <option value="2026">2026</option>
+             </select>
+             <button className="btn-export pdf" style={{background: '#0f172a', color: 'white'}} onClick={gerarBalancoTrimestral}>
+               Gerar Balanço S/A
+             </button>
+          </div>
         </div>
       </div>
 
