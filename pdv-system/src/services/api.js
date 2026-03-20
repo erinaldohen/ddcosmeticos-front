@@ -3,8 +3,14 @@ import { toast } from 'react-toastify';
 
 let isRedirecting = false;
 
+// =========================================================================
+// A MAGIA ACONTECE AQUI: Lê o IP ou localhost da barra de endereços
+// =========================================================================
+const currentHost = window.location.hostname;
+
 const api = axios.create({
-  baseURL: 'http://localhost:8080/api/v1',
+  // MÁGICA UNIVERSAL: Como usamos Proxy no Vite, a URL agora é apenas a rota relativa!
+  baseURL: '/api/v1',
   timeout: 15000,
   withCredentials: true
 });
