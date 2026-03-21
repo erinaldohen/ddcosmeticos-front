@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Search, Trash2, Plus, Minus, ArrowLeft, X, UserCheck, ArrowRight, Banknote, Smartphone,
   CreditCard, Tag, ShoppingBag, CheckCircle2, LogOut, TrendingDown,
-  Camera, Printer, MessageCircle, Mail, AlertTriangle, ChevronUp, PauseCircle, PlayCircle, Clock
+  Camera, Printer, MessageCircle, AlertTriangle, ChevronUp, PauseCircle, PlayCircle, Clock, FileText, Zap
 } from 'lucide-react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
-import { Html5Qrcode } from 'html5-qrcode';
 import api from '../../services/api';
 import caixaService from '../../services/caixaService';
 import './PDV.css';
@@ -30,6 +30,8 @@ const cleanNumeric = (v) => (v ? String(v).replace(/\D/g, '') : '');
 const formatCurrencyInput = (v) => String(v).replace(/\D/g, "");
 const getValorFormatado = (r) => r ? (parseInt(r, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : "";
 
+const getBackendUrl = () => api.defaults.baseURL ? api.defaults.baseURL.split('/api')[0] : "";
+
 const playAudio = (type = 'success') => {
     try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -41,38 +43,119 @@ const playAudio = (type = 'success') => {
 };
 
 // ==========================================================
-// CÂMERA MOBILE
+// CÂMERA MOBILE (PERFORMANCE MÁXIMA & ANTI-VAZAMENTO DE MEMÓRIA)
 // ==========================================================
 const ScannerModal = ({ onProcessScan, onClose }) => {
-    const lastScannedRef = useRef({ code: '', time: 0 });
+    const [hasFlashlight, setHasFlashlight] = useState(false);
+    const [isFlashlightOn, setIsFlashlightOn] = useState(false);
+    const [manualEan, setManualEan] = useState('');
+    const html5QrCodeRef = useRef(null);
 
     useEffect(() => {
-        const html5QrCode = new Html5Qrcode("reader-core");
-        html5QrCode.start(
+        let wasScanned = false;
+        let scanner = new Html5Qrcode("reader-core");
+        html5QrCodeRef.current = scanner;
+
+        const config = {
+            fps: 15,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0,
+            formatsToSupport: [
+                Html5QrcodeSupportedFormats.EAN_13,
+                Html5QrcodeSupportedFormats.EAN_8,
+                Html5QrcodeSupportedFormats.QR_CODE
+            ]
+        };
+
+        scanner.start(
             { facingMode: "environment" },
-            { fps: 15, qrbox: { width: 250, height: 120 }, aspectRatio: 1.0 },
+            config,
             (decodedText) => {
+                if (wasScanned) return;
                 const valorLimpo = decodedText.replace(/[^a-zA-Z0-9]/g, '');
-                const now = Date.now();
-                if (lastScannedRef.current.code === valorLimpo && (now - lastScannedRef.current.time < 2000)) return;
-                lastScannedRef.current = { code: valorLimpo, time: now };
-                onProcessScan(valorLimpo);
+                if (valorLimpo) {
+                    wasScanned = true;
+                    try { scanner.pause(true); } catch (e) {}
+                    onProcessScan(valorLimpo);
+                }
             },
             () => {}
-        ).catch(() => toast.error("Câmera bloqueada ou indisponível."));
+        ).then(() => {
+            try {
+                const track = scanner.getRunningTrackCameraCapabilities();
+                if (track && track.torchFeature().isSupported) {
+                    setHasFlashlight(true);
+                }
+            } catch (e) {}
+        }).catch(() => toast.error("Falha ao acessar a câmera. Verifique as permissões."));
 
-        return () => { if (html5QrCode.isScanning) html5QrCode.stop().catch(() => {}); };
+        return () => {
+            wasScanned = true;
+            if (scanner) {
+                try {
+                    if (scanner.isScanning || scanner.getState() === 2) {
+                        scanner.stop().then(() => { scanner.clear(); scanner = null; }).catch(() => { scanner.clear(); scanner = null; });
+                    } else { scanner.clear(); scanner = null; }
+                } catch (error) { scanner = null; }
+            }
+        };
     }, [onProcessScan]);
+
+    const handleManualSubmit = (e) => {
+        e.preventDefault();
+        if (manualEan.trim().length >= 3) {
+            onProcessScan(manualEan.trim());
+        }
+    };
+
+    const toggleFlashlight = async () => {
+        if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
+            const newState = !isFlashlightOn;
+            try {
+                await html5QrCodeRef.current.applyVideoConstraints({
+                    advanced: [{ torch: newState }]
+                });
+                setIsFlashlightOn(newState);
+            } catch (e) {
+                toast.warn("Lanterna não suportada neste aparelho.");
+            }
+        }
+    };
 
     return (
         <div className="modal-glass z-max">
-            <div className="modal-glass-card sm text-center fade-in bg-dark-glass">
-                <h3 className="title-main mb-4 text-white">Escaneie o Código</h3>
-                <div className="scanner-viewport">
-                    <div id="reader-core" className="reader-core"></div>
+            <div className="modal-glass-card sm text-center fade-in bg-dark-glass" style={{ padding: '24px' }}>
+                <div className="d-flex justify-between align-center mb-4">
+                    <h3 className="title-main text-white m-0 text-left">Escaneie o Código</h3>
+                    {hasFlashlight && (
+                        <button className={`btn-torch ${isFlashlightOn ? 'active' : ''}`} onClick={toggleFlashlight} title="Lanterna">
+                            <Zap size={22} />
+                        </button>
+                    )}
+                </div>
+
+                <div className="scanner-viewport" style={{ aspectRatio: '1/1', marginBottom: '20px' }}>
+                    <div id="reader-core" className="reader-core" style={{ minHeight: '250px' }}></div>
                     <div className="scanner-overlay"></div>
                     <div className="scanner-laser"></div>
                 </div>
+
+                <div className="fallback-manual" style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '12px' }}>
+                    <p className="text-white mb-2" style={{ fontSize: '0.85rem', fontWeight: '600' }}>Plástico refletindo? Digite o código:</p>
+                    <form onSubmit={handleManualSubmit} className="d-flex gap-2">
+                        <input
+                            type="number"
+                            className="mg-input"
+                            style={{ padding: '10px', fontSize: '1.2rem', textAlign: 'center' }}
+                            placeholder="Ex: 78910..."
+                            value={manualEan}
+                            onChange={(e) => setManualEan(e.target.value)}
+                            autoFocus
+                        />
+                        <button type="submit" className="btn-action-success" style={{ width: 'auto', padding: '0 20px' }}>OK</button>
+                    </form>
+                </div>
+
                 <button className="btn-cancel-dark mt-4" onClick={onClose}>Fechar Câmera</button>
             </div>
         </div>
@@ -86,8 +169,17 @@ const PDV = () => {
   const navigate = useNavigate();
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 992);
   const [horaAtual, setHoraAtual] = useState(new Date());
+  const [lojaLogo, setLojaLogo] = useState(null);
 
-  // LOG DE AUDITORIA (ANTI-FRAUDE)
+  // MÉTODOS DE PAGAMENTO DINÂMICOS
+  const [metodosPagamentoAtivos, setMetodosPagamentoAtivos] = useState([
+      {id: 'PIX', icon: <Smartphone size={20}/>, label: 'Pix'},
+      {id: 'DINHEIRO', icon: <Banknote size={20}/>, label: 'Dinheiro'},
+      {id: 'CREDITO', icon: <CreditCard size={20}/>, label: 'Crédito'},
+      {id: 'DEBITO', icon: <CreditCard size={20}/>, label: 'Débito'}
+  ]);
+
+  // LOG DE AUDITORIA
   const [auditLog, setAuditLog] = useState([]);
 
   const registrarAcaoAuditoria = useCallback((acao, detalhes) => {
@@ -102,6 +194,28 @@ const PDV = () => {
       const handleResize = () => setIsMobile(window.innerWidth <= 992);
       window.addEventListener('resize', handleResize);
       const timer = setInterval(() => setHoraAtual(new Date()), 1000);
+
+      api.get('/configuracoes').then(res => {
+          if (res.data?.loja?.logoUrl) {
+              const url = res.data.loja.logoUrl;
+              setLojaLogo(url.startsWith('http') || url.startsWith('data:image') ? url : `${getBackendUrl()}${url.startsWith('/') ? '' : '/'}${url}`);
+          }
+          if (res.data?.financeiro) {
+              const fin = res.data.financeiro;
+              const ativos = [];
+              if (fin.aceitaPix) ativos.push({id: 'PIX', icon: <Smartphone size={20}/>, label: 'Pix'});
+              if (fin.aceitaDinheiro) ativos.push({id: 'DINHEIRO', icon: <Banknote size={20}/>, label: 'Dinheiro'});
+              if (fin.aceitaCredito) ativos.push({id: 'CREDITO', icon: <CreditCard size={20}/>, label: 'Crédito'});
+              if (fin.aceitaDebito) ativos.push({id: 'DEBITO', icon: <CreditCard size={20}/>, label: 'Débito'});
+              if (fin.aceitaCrediario) ativos.push({id: 'CREDIARIO', icon: <FileText size={20}/>, label: 'Fiado'});
+
+              if (ativos.length > 0) {
+                  setMetodosPagamentoAtivos(ativos);
+                  setMetodoAtual(ativos[0].id);
+              }
+          }
+      }).catch(() => {});
+
       return () => { window.removeEventListener('resize', handleResize); clearInterval(timer); };
   }, []);
 
@@ -130,7 +244,11 @@ const PDV = () => {
   const [showScanner, setShowScanner] = useState(false);
 
   const [showCadastroRapido, setShowCadastroRapido] = useState(false);
-  const [produtoRapido, setProdutoRapido] = useState({ codigoBarras: '', descricao: '', precoVendaRaw: '', categoria: '' });
+  const [produtoRapido, setProdutoRapido] = useState({
+      codigoBarras: '', descricao: '', precoVendaRaw: '',
+      categoria: '', subcategoria: '', ncm: '', loadingIA: false
+  });
+
   const [showClienteModal, setShowClienteModal] = useState(false);
   const [showDescontoModal, setShowDescontoModal] = useState(false);
   const [descontoInputRaw, setDescontoInputRaw] = useState('');
@@ -140,6 +258,7 @@ const PDV = () => {
   const [produtoFaltante, setProdutoFaltante] = useState('');
 
   const [showExitModal, setShowExitModal] = useState(false);
+  const [showCancelVendaModal, setShowCancelVendaModal] = useState(false);
 
   const [showFechamentoModal, setShowFechamentoModal] = useState(false);
   const [valorFechamentoRaw, setValorFechamentoRaw] = useState('');
@@ -175,12 +294,12 @@ const PDV = () => {
 
   useEffect(() => {
       if (isMobile) return;
-      const isModalOpen = showExitModal || showFechamentoModal || showClienteModal || showDescontoModal || showScanner || showCadastroRapido || showRupturaModal || showPausadasModal || showZapModal || vendaFinalizada;
+      const isModalOpen = showExitModal || showCancelVendaModal || showFechamentoModal || showClienteModal || showDescontoModal || showScanner || showCadastroRapido || showRupturaModal || showPausadasModal || showZapModal || vendaFinalizada;
       if (!isModalOpen) {
           if (mobileViewState === 'SCAN') setTimeout(() => inputBuscaRef.current?.focus(), 50);
           else if (mobileViewState === 'PAYMENT') setTimeout(() => inputValorRef.current?.focus(), 50);
       }
-  }, [mobileViewState, showExitModal, showFechamentoModal, showClienteModal, showDescontoModal, showScanner, showCadastroRapido, showRupturaModal, showPausadasModal, showZapModal, vendaFinalizada, isMobile]);
+  }, [mobileViewState, showExitModal, showCancelVendaModal, showFechamentoModal, showClienteModal, showDescontoModal, showScanner, showCadastroRapido, showRupturaModal, showPausadasModal, showZapModal, vendaFinalizada, isMobile]);
 
   useEffect(() => {
       if (selectedIndex >= 0 && dropdownRef.current) {
@@ -199,6 +318,7 @@ const PDV = () => {
               if (showDescontoModal) { setShowDescontoModal(false); return; }
               if (showRupturaModal) { setShowRupturaModal(false); return; }
               if (showFechamentoModal) { setShowFechamentoModal(false); return; }
+              if (showCancelVendaModal) { setShowCancelVendaModal(false); return; }
               if (showExitModal) { setShowExitModal(false); return; }
               if (showScanner) { setShowScanner(false); return; }
               if (showCadastroRapido) { setShowCadastroRapido(false); setBusca(''); return; }
@@ -206,7 +326,7 @@ const PDV = () => {
               setBusca(''); setSugestoesProdutos([]); setSelectedIndex(-1); setMobileView('SCAN'); return;
           }
 
-          const isModalOpen = showExitModal || showFechamentoModal || showRupturaModal || showClienteModal || showDescontoModal || showScanner || showCadastroRapido || showPausadasModal || showZapModal || vendaFinalizada;
+          const isModalOpen = showExitModal || showCancelVendaModal || showFechamentoModal || showRupturaModal || showClienteModal || showDescontoModal || showScanner || showCadastroRapido || showPausadasModal || showZapModal || vendaFinalizada;
           if (isModalOpen) return;
 
           if (e.key === 'F2') { e.preventDefault(); setMobileView('SCAN'); }
@@ -214,11 +334,11 @@ const PDV = () => {
           if (e.key === 'F4') { e.preventDefault(); if (carrinho.length > 0) setShowDescontoModal(true); else toast.warn("Carrinho vazio"); }
           if (e.key === 'F8') { e.preventDefault(); if (carrinho.length > 0) { setMobileView('PAYMENT'); setValorInputRaw(Math.round(saldoDevedor * 100).toString()); } else toast.warn("Carrinho vazio"); }
           if (e.key === 'F9') { e.preventDefault(); setShowRupturaModal(true); }
-          if (e.key === 'Delete' && mobileViewState === 'SCAN') { e.preventDefault(); handleLimparVenda(); }
+          if (e.key === 'Delete' && mobileViewState === 'SCAN') { e.preventDefault(); handleCancelarVenda(); }
       };
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mobileViewState, carrinho.length, showClienteModal, showDescontoModal, showExitModal, showFechamentoModal, showRupturaModal, showScanner, showCadastroRapido, showPausadasModal, showZapModal, vendaFinalizada, saldoDevedor]);
+  }, [mobileViewState, carrinho.length, showClienteModal, showDescontoModal, showExitModal, showCancelVendaModal, showFechamentoModal, showRupturaModal, showScanner, showCadastroRapido, showPausadasModal, showZapModal, vendaFinalizada, saldoDevedor]);
 
   // ==========================================================
   // LOGICA DO CARRINHO E AUDITORIA
@@ -251,19 +371,77 @@ const PDV = () => {
       return () => clearTimeout(delay);
   }, [busca]);
 
+  // ==========================================================
+  // INTELIGÊNCIA ARTIFICIAL: CLASSIFICAÇÃO AUTOMÁTICA
+  // ==========================================================
+  const classificarComIA = async (descricaoProduto, eanProduto) => {
+      if (!descricaoProduto || descricaoProduto.trim().length < 3) return;
+
+      setProdutoRapido(prev => ({ ...prev, loadingIA: true }));
+      try {
+          const res = await api.post('/produtos/analisar-ia', {
+              descricao: descricaoProduto,
+              codigoBarras: eanProduto
+          });
+
+          if (res.data) {
+              setProdutoRapido(prev => ({
+                  ...prev,
+                  categoria: res.data.categoria || prev.categoria,
+                  subcategoria: res.data.subcategoria || prev.subcategoria,
+                  ncm: res.data.ncm || prev.ncm,
+                  loadingIA: false
+              }));
+              toast.success("✨ IA classificou o produto!");
+              setTimeout(() => document.getElementById('input-preco-rapido')?.focus(), 100);
+          }
+      } catch (err) {
+          setProdutoRapido(prev => ({ ...prev, loadingIA: false }));
+      }
+  };
+
+  // ==========================================================
+  // BUSCA E CADASTRO RÁPIDO NO PDV
+  // ==========================================================
   const processarEAN = async (valorRaw) => {
       const valor = valorRaw.replace(/[^a-zA-Z0-9]/g, '');
       if (!valor) return;
       try {
           const { data } = await api.get(`/produtos/ean/${valor}`);
           let produto = Array.isArray(data) ? data[0] : data;
-          if (produto && (produto.id || produto.codigoBarras)) { adicionarProdutoAoCarrinho(produto); }
+
+          if (produto && (produto.id || produto.codigoBarras)) {
+              if (!produto.precoVenda || produto.precoVenda <= 0) {
+                  playAudio('error');
+                  toast.info("Produto encontrado. Qual o preço?");
+
+                  setProdutoRapido({
+                      codigoBarras: produto.codigoBarras || valor,
+                      descricao: produto.descricao || '',
+                      precoVendaRaw: '',
+                      categoria: produto.categoria || '',
+                      subcategoria: produto.subcategoria || '',
+                      ncm: produto.ncm || '',
+                      loadingIA: false
+                  });
+                  setShowCadastroRapido(true);
+
+                  if (!produto.categoria || !produto.ncm) {
+                      classificarComIA(produto.descricao, produto.codigoBarras);
+                  }
+              } else {
+                  adicionarProdutoAoCarrinho(produto);
+              }
+          }
           else { throw new Error("Não encontrado"); }
       } catch (err) {
           playAudio('error');
           toast.warning("Produto não cadastrado! Preencha rápido.");
           setBusca(''); if (inputBuscaRef.current) inputBuscaRef.current.value = '';
-          setProdutoRapido({ codigoBarras: valor, descricao: '', precoVendaRaw: '', categoria: '' });
+          setProdutoRapido({
+              codigoBarras: valor, descricao: '', precoVendaRaw: '',
+              categoria: '', subcategoria: '', ncm: '', loadingIA: false
+          });
           setShowCadastroRapido(true);
       }
   };
@@ -300,16 +478,28 @@ const PDV = () => {
       setDescontoTotalRaw(0); setMobileView('SCAN'); setBusca(''); setAuditLog([]);
   };
 
-  const handleLimparVenda = () => {
-      if(carrinho.length === 0) return;
-      setShowExitModal(true);
+  const handleSairPdv = () => {
+      if(carrinho.length > 0) { setShowExitModal(true); }
+      else { navigate('/dashboard'); }
   };
 
-  const confirmarAbandonoVenda = () => {
-      registrarAcaoAuditoria('VENDA_ABANDONADA', `Venda cancelada no meio do processo. Valor Total: R$ ${totalPagar}`);
-      console.log("Log de Auditoria da venda cancelada:", auditLog);
+  const confirmarSaidaPdv = () => {
+      registrarAcaoAuditoria('SAIDA_ABRUPTA', `Usuário abandonou o PDV com carrinho preenchido.`);
       limparEstadoVenda();
       setShowExitModal(false);
+      navigate('/dashboard');
+  };
+
+  const handleCancelarVenda = () => {
+      if(carrinho.length === 0) return;
+      setShowCancelVendaModal(true);
+  };
+
+  const confirmarCancelamentoVenda = () => {
+      registrarAcaoAuditoria('VENDA_CANCELADA', `Venda cancelada pelo utilizador. Valor: R$ ${totalPagar}`);
+      limparEstadoVenda();
+      setShowCancelVendaModal(false);
+      toast.info("Venda cancelada. Carrinho vazio.");
   };
 
   const handlePausarVenda = () => {
@@ -340,12 +530,60 @@ const PDV = () => {
           if (tipoDesconto === 'R$' && valorBase > subtotalItens) return toast.error("Maior que o subtotal");
           setDescontoTotalRaw(valorReal); toast.success("Desconto aplicado!");
           registrarAcaoAuditoria('APLICOU_DESCONTO', `Valor: R$ ${valorReal.toFixed(2)}`);
-      } else {
-          setDescontoTotalRaw(0); toast.info("Desconto removido.");
-          registrarAcaoAuditoria('REMOVER_DESCONTO', `Desconto zerado.`);
       }
       setDescontoInputRaw(''); setShowDescontoModal(false);
   };
+
+  const removerDescontoGlobal = () => {
+      setDescontoTotalRaw(0);
+      setDescontoInputRaw('');
+      setShowDescontoModal(false);
+      toast.info("Desconto removido!");
+      registrarAcaoAuditoria('REMOVER_DESCONTO', `Desconto zerado.`);
+  };
+
+  const handleSalvarProdutoRapido = async () => { // <-- Agora é async
+        const preco = parseInt(produtoRapido.precoVendaRaw || '0', 10) / 100;
+        if (preco <= 0) return toast.warning("Digite o preço de venda válido!");
+        if (!produtoRapido.descricao || produtoRapido.descricao.trim().length < 3) return toast.warning("Digite uma descrição para a Nota Fiscal.");
+
+        setLoading(true); // Trava o botão para não clicar duas vezes
+
+        try {
+            // 1. Monta o objeto exatamente como o seu backend (ProdutoForm) espera
+            const payloadNovoProduto = {
+                          codigoBarras: produtoRapido.codigoBarras,
+                          descricao: produtoRapido.descricao.toUpperCase(),
+                          precoVenda: preco,
+                          precoCusto: 0,
+                          ncm: produtoRapido.ncm || "33049990",
+                          categoria: produtoRapido.categoria?.toUpperCase() || "GERAL",
+                          subcategoria: produtoRapido.subcategoria?.toUpperCase() || "",
+                          unidade: 'UN',
+                          ativo: true,
+                          cst: '102',
+                          origem: '0',
+                          // 🚩 A MÁGICA AQUI: Avisa o backend que este produto veio do caixa e precisa de revisão
+                          revisaoPendente: true
+                      };
+
+            // 2. Salva o produto DE FATO no banco de dados
+            const response = await api.post('/produtos', payloadNovoProduto);
+            const produtoSalvoNoBanco = response.data; // Aqui vem com o ID real (ex: id: 45)
+
+            // 3. Adiciona o produto real ao carrinho
+            adicionarProdutoAoCarrinho(produtoSalvoNoBanco);
+
+            setShowCadastroRapido(false);
+            setProdutoRapido({ codigoBarras: '', descricao: '', precoVendaRaw: '', categoria: '', subcategoria: '', ncm: '', loadingIA: false });
+            toast.success("Produto cadastrado no sistema e adicionado à venda!");
+
+        } catch (error) {
+            toast.error("Erro ao salvar o produto no banco de dados.");
+        } finally {
+            setLoading(false);
+        }
+    };
 
   // ==========================================================
   // FUNÇÕES DE RUPTURA E FECHAMENTO DE CAIXA
@@ -405,6 +643,12 @@ const PDV = () => {
 
   const finalizarVendaReal = async () => {
       if (saldoDevedor > 0.01) return toast.error(`Falta R$ ${saldoDevedor.toFixed(2)}`);
+
+      const temFiado = pagamentos.some(p => p.tipo === 'CREDIARIO');
+      if (temFiado && (!clienteAvulso.nome || clienteAvulso.nome.trim() === '')) {
+          return toast.warning("Identifique o Cliente (F3) para vender a Fiado.");
+      }
+
       setLoading(true);
       try {
           registrarAcaoAuditoria('FINALIZOU_VENDA', `Tentativa de finalização. Total: R$ ${totalPagar}`);
@@ -425,7 +669,7 @@ const PDV = () => {
   };
 
   // ==========================================================
-  // IMPRESSÃO TÉRMICA NATIVA E WHATSAPP
+  // IMPRESSÃO E WHATSAPP
   // ==========================================================
   const imprimirCupomLocal = () => {
       const dataVenda = new Date();
@@ -494,15 +738,11 @@ const PDV = () => {
 
   const enviarWhatsAppBodyCompleto = () => {
       if(!zapNumber || zapNumber.length < 10) return toast.warning("Digite um número válido com DDD.");
-
       const dataVenda = new Date();
       let listaItens = carrinho.map(i => `▪️ ${i.quantidade}x ${i.descricao} - R$ ${(i.precoVenda * i.quantidade).toFixed(2)}`).join('\n');
-
       const descontosStr = descontoTotalRaw > 0 ? `\n*Desconto:* - R$ ${descontoTotalRaw.toFixed(2)}` : '';
       let pagamentosStr = pagamentos.map(p => `${p.tipo}: R$ ${p.valor.toFixed(2)}`).join('\n');
-
       const texto = `*DD COSMÉTICOS*\nObrigado pela compra! 💖\n\n📅 Data: ${dataVenda.toLocaleDateString('pt-BR')} às ${dataVenda.toLocaleTimeString('pt-BR')}\n🛒 *RESUMO DOS ITENS:*\n${listaItens}\n\n*Subtotal:* R$ ${subtotalItens.toFixed(2)}${descontosStr}\n*TOTAL PAGO:* R$ ${totalPagar.toFixed(2)}\n\n💳 *Pagamento:*\n${pagamentosStr}\n*Troco:* R$ ${troco.toFixed(2)}\n\n🧾 _Para consultar sua nota oficial, acesse o portal do SEFAZ._\n\nVolte sempre! ✨`;
-
       window.open(`https://api.whatsapp.com/send?phone=55${zapNumber.replace(/\D/g, '')}&text=${encodeURIComponent(texto)}`, '_blank');
       setShowZapModal(false);
   };
@@ -521,16 +761,27 @@ const PDV = () => {
           {(!isMobile || mobileViewState === 'SCAN') && (
           <header className="pos-header">
               <div className="pos-brand">
-                  <div className="brand-icon">✨</div>
+                  {lojaLogo ? (
+                      <div className="brand-logo-box"><img src={lojaLogo} alt="Logo" /></div>
+                  ) : (
+                      <div className="brand-icon">✨</div>
+                  )}
                   <div className="brand-info"><h1>DD Cosméticos</h1><span>Terminal Caixa {isOnline ? '🟢' : '🔴'}</span></div>
               </div>
-              <div className="header-clock hide-mobile">
-                  <Clock size={16} className="text-primary" />
-                  {horaAtual.toLocaleTimeString('pt-BR')}
-              </div>
               <div className="header-actions">
-                  <button className="btn-icon-outline" onClick={handleSolicitarFechamento} title="Fechar Caixa"><LogOut size={18}/></button>
-                  <button className="btn-icon-danger" onClick={handleLimparVenda} title="Abandonar Venda"><ArrowLeft size={18}/></button>
+                  <div className="header-clock hide-mobile tooltip-wrap">
+                      <Clock size={16} className="text-primary" />
+                      {horaAtual.toLocaleTimeString('pt-BR')}
+                      <span className="tooltip-text">Hora Atual</span>
+                  </div>
+                  <div className="tooltip-wrap">
+                      <button className="btn-icon-outline" onClick={handleSolicitarFechamento} title="Fechar Caixa"><LogOut size={18}/></button>
+                      <span className="tooltip-text">Fechar o Caixa</span>
+                  </div>
+                  <div className="tooltip-wrap">
+                      <button className="btn-icon-danger" onClick={handleSairPdv} title="Abandonar Venda"><ArrowLeft size={18}/></button>
+                      <span className="tooltip-text text-danger">Sair do PDV</span>
+                  </div>
               </div>
           </header>
           )}
@@ -545,7 +796,10 @@ const PDV = () => {
                   />
                   {busca && <button className="btn-clear" onClick={() => {setBusca(''); inputBuscaRef.current?.focus();}}><X size={16}/></button>}
               </div>
-              <button className="btn-camera" onClick={() => setShowScanner(true)}><Camera size={24} /></button>
+              <div className="tooltip-wrap ml-2">
+                  <button className="btn-camera" onClick={() => setShowScanner(true)}><Camera size={24} /></button>
+                  <span className="tooltip-text">Ler Código pela Câmera</span>
+              </div>
 
               {sugestoesProdutos.length > 0 && busca && (
                   <div className="search-dropdown" ref={dropdownRef}>
@@ -564,7 +818,7 @@ const PDV = () => {
               <div className="mobile-cart-header">
                   <button className="btn-icon-outline" onClick={() => setMobileView('SCAN')}><ChevronUp size={24} /></button>
                   <h2>Carrinho</h2>
-                  <button className="btn-text-danger" onClick={handleLimparVenda}>Esvaziar</button>
+                  <button className="btn-text-danger" onClick={handleCancelarVenda}>Esvaziar</button>
               </div>
           )}
 
@@ -620,25 +874,59 @@ const PDV = () => {
 
           {mobileViewState === 'SCAN' && (
               <div className="panel-venda animate-fade">
-                  <div className="card-cliente" onClick={() => setShowClienteModal(true)}>
+                  <div className="card-cliente tooltip-wrap" onClick={() => setShowClienteModal(true)}>
                       <div className="card-cliente-icon"><UserCheck size={24}/></div>
                       <div className="card-cliente-info"><span>Identificação</span><strong>{clienteAvulso.nome || 'Consumidor Final'}</strong></div>
                       <ArrowRight size={20} className="text-muted"/>
+                      <span className="tooltip-text">Inserir CPF na Nota</span>
                   </div>
 
                   <div className="grid-atalhos">
-                      <button className="btn-atalho" onClick={() => setShowClienteModal(true)}><div className="icon-wrapper"><UserCheck size={20}/></div><span>Cliente</span><kbd className="hide-mobile">F3</kbd></button>
-                      <button className="btn-atalho" onClick={() => { if(carrinho.length) setShowDescontoModal(true); else toast.warn("Vazio"); }}><div className="icon-wrapper"><Tag size={20}/></div><span>Desconto</span><kbd className="hide-mobile">F4</kbd></button>
-                      <button className="btn-atalho" onClick={handlePausarVenda}><div className="icon-wrapper bg-warning-light text-warning"><PauseCircle size={20}/></div><span>Pausar</span></button>
-                      <button className="btn-atalho" onClick={() => { if(vendasPausadas.length > 0) setShowPausadasModal(true); else toast.info("Nenhuma pausa"); }}>
-                          <div className="icon-wrapper bg-info-light text-info relative">
-                              <PlayCircle size={20}/>
-                              {vendasPausadas.length > 0 && <span className="badge-pulse">{vendasPausadas.length}</span>}
-                          </div>
-                          <span>Em Espera</span>
-                      </button>
-                      <button className="btn-atalho" onClick={() => setShowRupturaModal(true)}><div className="icon-wrapper"><TrendingDown size={20}/></div><span>Ruptura</span><kbd className="hide-mobile">F9</kbd></button>
-                      <button className="btn-atalho btn-atalho-danger" onClick={handleLimparVenda}><div className="icon-wrapper"><Trash2 size={20}/></div><span>Cancelar</span><kbd className="hide-mobile">DEL</kbd></button>
+                      <div className="tooltip-wrap w-full">
+                          <button className="btn-atalho atalho-cliente w-full" onClick={() => setShowClienteModal(true)}>
+                              <div className="icon-wrapper"><UserCheck size={20}/></div><span>Cliente</span><kbd className="hide-mobile">F3</kbd>
+                          </button>
+                          <span className="tooltip-text">Atalho para identificar cliente</span>
+                      </div>
+
+                      <div className="tooltip-wrap w-full">
+                          <button className="btn-atalho atalho-desconto w-full" onClick={() => { if(carrinho.length) setShowDescontoModal(true); else toast.warn("Vazio"); }}>
+                              <div className="icon-wrapper"><Tag size={20}/></div><span>Desconto</span><kbd className="hide-mobile">F4</kbd>
+                          </button>
+                          <span className="tooltip-text">Aplicar Desconto (F4)</span>
+                      </div>
+
+                      <div className="tooltip-wrap w-full">
+                          <button className="btn-atalho atalho-pausa w-full" onClick={handlePausarVenda}>
+                              <div className="icon-wrapper bg-warning-light text-warning"><PauseCircle size={20}/></div><span>Pausar</span>
+                          </button>
+                          <span className="tooltip-text">Salvar venda para continuar depois</span>
+                      </div>
+
+                      <div className="tooltip-wrap w-full">
+                          <button className="btn-atalho atalho-espera w-full" onClick={() => { if(vendasPausadas.length > 0) setShowPausadasModal(true); else toast.info("Nenhuma pausa"); }}>
+                              <div className="icon-wrapper bg-info-light text-info relative">
+                                  <PlayCircle size={20}/>
+                                  {vendasPausadas.length > 0 && <span className="badge-pulse">{vendasPausadas.length}</span>}
+                              </div>
+                              <span>Em Espera</span>
+                          </button>
+                          <span className="tooltip-text">Recuperar vendas pausadas</span>
+                      </div>
+
+                      <div className="tooltip-wrap w-full">
+                          <button className="btn-atalho atalho-ruptura w-full" onClick={() => setShowRupturaModal(true)}>
+                              <div className="icon-wrapper"><TrendingDown size={20}/></div><span>Ruptura</span><kbd className="hide-mobile">F9</kbd>
+                          </button>
+                          <span className="tooltip-text">Registrar item que faltou na loja</span>
+                      </div>
+
+                      <div className="tooltip-wrap w-full">
+                          <button className="btn-atalho btn-atalho-danger w-full" onClick={handleCancelarVenda}>
+                              <div className="icon-wrapper"><Trash2 size={20}/></div><span>Cancelar</span><kbd className="hide-mobile">DEL</kbd>
+                          </button>
+                          <span className="tooltip-text text-danger">Limpar carrinho e recomeçar</span>
+                      </div>
                   </div>
 
                   <button className="btn-checkout-giant" disabled={!carrinho.length} onClick={() => { setMobileView('PAYMENT'); setValorInputRaw(Math.round(saldoDevedor * 100).toString()); }}>
@@ -656,7 +944,7 @@ const PDV = () => {
                   </header>
 
                   <div className="pay-methods-grid">
-                      {[{id: 'PIX', icon: <Smartphone size={20}/>, label: 'Pix'}, {id: 'DINHEIRO', icon: <Banknote size={20}/>, label: 'Dinheiro'}, {id: 'CREDITO', icon: <CreditCard size={20}/>, label: 'Crédito'}, {id: 'DEBITO', icon: <CreditCard size={20}/>, label: 'Débito'}].map(m => (
+                      {metodosPagamentoAtivos.map(m => (
                           <button key={m.id} className={`pay-method-card ${metodoAtual === m.id ? 'active' : ''}`} onClick={() => { setMetodoAtual(m.id); if(!isMobile) inputValorRef.current?.focus(); }}>
                               {m.icon}<span>{m.label}</span>
                           </button>
@@ -746,12 +1034,26 @@ const PDV = () => {
       {showExitModal && (
           <div className="modal-glass z-max">
               <div className="modal-glass-card text-center sm fade-in border-top-danger">
-                  <AlertTriangle size={50} color="#ef4444" className="mx-auto mb-3"/>
-                  <h2 className="title-main mb-2 text-xl">Cancelar Venda Atual?</h2>
-                  <p className="text-sec mb-4">Atenção: Todos os itens lidos serão perdidos e este evento será registado para auditoria.</p>
+                  <LogOut size={50} color="#ef4444" className="mx-auto mb-3"/>
+                  <h2 className="title-main mb-2 text-xl">Sair do PDV?</h2>
+                  <p className="text-sec mb-4">Tem certeza que deseja fechar o painel de vendas? A venda atual será perdida.</p>
                   <div className="d-flex gap-3">
                       <button className="btn-outline-sec flex-1" onClick={() => setShowExitModal(false)}>Ficar</button>
-                      <button className="btn-danger-block flex-1" onClick={confirmarAbandonoVenda}>Confirmar Cancelamento</button>
+                      <button className="btn-danger-block flex-1" onClick={confirmarSaidaPdv}>Sim, Sair</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {showCancelVendaModal && (
+          <div className="modal-glass z-max">
+              <div className="modal-glass-card text-center sm fade-in border-top-danger">
+                  <AlertTriangle size={50} color="#ef4444" className="mx-auto mb-3"/>
+                  <h2 className="title-main mb-2 text-xl">Cancelar Venda Atual?</h2>
+                  <p className="text-sec mb-4">Atenção: Todos os itens lidos serão removidos do carrinho e o evento registado na auditoria.</p>
+                  <div className="d-flex gap-3">
+                      <button className="btn-outline-sec flex-1" onClick={() => setShowCancelVendaModal(false)}>Voltar</button>
+                      <button className="btn-danger-block flex-1" onClick={confirmarCancelamentoVenda}>Limpar Carrinho</button>
                   </div>
               </div>
           </div>
@@ -771,6 +1073,9 @@ const PDV = () => {
                   </div>
                   <div className="mg-actions">
                       <button className="mg-btn cancel" onClick={() => setShowDescontoModal(false)}>Voltar</button>
+                      {descontoTotalRaw > 0 && (
+                          <button className="mg-btn danger" onClick={removerDescontoGlobal}>Remover</button>
+                      )}
                       <button className="mg-btn confirm" onClick={aplicarDescontoGlobal}>Aplicar</button>
                   </div>
               </div>
@@ -815,19 +1120,19 @@ const PDV = () => {
 
       {showPausadasModal && (
           <div className="modal-glass z-max">
-              <div className="modal-glass-card fade-in">
-                  <h2 className="title-main mb-4">Vendas em Espera</h2>
+              <div className="modal-glass-card fade-in border-top-warning">
+                  <h2 className="title-main mb-4 text-center">Vendas em Espera</h2>
                   {vendasPausadas.length === 0 ? <p className="text-sec text-center">Nenhuma venda pausada no momento.</p> : (
                       <div className="d-flex-col gap-3">
                           {vendasPausadas.map(v => (
-                              <div key={v.id} className="cart-card flex-col align-start p-3" style={{ borderLeft: '4px solid #f59e0b' }}>
+                              <div key={v.id} className="cart-card flex-col align-start p-3" style={{ borderLeft: '4px solid #10b981' }}>
                                   <div className="d-flex justify-between w-full mb-2">
                                       <strong>{v.clienteAvulso.nome || 'Cliente Anônimo'}</strong>
                                       <span className="text-muted">{v.data}</span>
                                   </div>
                                   <div className="d-flex justify-between w-full align-center">
                                       <span className="text-sec">{v.carrinho.length} itens • R$ {v.totalPagar.toFixed(2)}</span>
-                                      <button className="btn-outline-sec" style={{ borderColor: '#f59e0b', color: '#d97706', padding: '8px 16px' }} onClick={() => handleRestaurarVenda(v.id)}>Restaurar</button>
+                                      <button className="btn-outline-sec" style={{ borderColor: '#10b981', color: '#059669', padding: '8px 16px', width: 'auto' }} onClick={() => handleRestaurarVenda(v.id)}>Restaurar</button>
                                   </div>
                               </div>
                           ))}
@@ -855,33 +1160,93 @@ const PDV = () => {
           </div>
       )}
 
+      {/* MODAL DE CADASTRO RÁPIDO (COM INTELIGÊNCIA ARTIFICIAL) */}
       {showCadastroRapido && (
           <div className="modal-glass z-max">
               <div className="modal-glass-card sm fade-in border-top-primary">
-                  <h2 className="title-main mb-2">Produto Não Encontrado</h2>
-                  <p className="text-sec mb-4 text-sm">O sistema vai gerar a tributação com base na categoria.</p>
-                  <label className="form-label">EAN Lido</label>
-                  <input className="mg-input mb-3 bg-disabled" value={produtoRapido.codigoBarras} disabled />
-                  <label className="form-label">Descrição</label>
-                  <input className="mg-input mb-3" placeholder="Ex: MASCARA HIDRATANTE 200G" value={produtoRapido.descricao} onChange={e => setProdutoRapido({...produtoRapido, descricao: e.target.value})} autoFocus />
-                  <div className="d-flex gap-3 mb-4">
-                      <div className="flex-1">
-                          <label className="form-label">Categoria</label>
-                          <select className="mg-input" value={produtoRapido.categoria} onChange={e => setProdutoRapido({...produtoRapido, categoria: e.target.value})}>
-                              <option value="">Selecione...</option>
-                              <option value="CABELO">Cabelos</option>
-                              <option value="MAQUIAGEM">Maquiagem</option>
-                              <option value="PELE">Cuidados com a Pele</option>
-                          </select>
-                      </div>
+                  <div className="d-flex justify-between align-center mb-2">
+                      <h2 className="title-main m-0">Novo Produto</h2>
+                      {produtoRapido.loadingIA && (
+                          <span className="badge-pulse" style={{position:'relative', width:'auto', padding:'4px 10px', borderRadius:'12px', background:'#e0e7ff', color:'#4338ca', display:'flex', gap:'6px'}}>
+                              <div className="spinner-micro" style={{borderColor:'#4338ca', borderTopColor:'transparent'}}></div> IA Analisando...
+                          </span>
+                      )}
+                  </div>
+                  <p className="text-sec mb-4 text-sm">A IA tenta preencher os dados fiscais por você.</p>
+
+                  <div className="d-flex gap-3 mb-3">
                       <div className="w-45">
-                          <label className="form-label">Preço</label>
-                          <input className="mg-input text-center" inputMode="numeric" value={getValorFormatado(produtoRapido.precoVendaRaw)} onChange={e => setProdutoRapido({...produtoRapido, precoVendaRaw: formatCurrencyInput(e.target.value)})} onKeyDown={e => e.key === 'Enter' && handleSalvarProdutoRapido()} />
+                          <label className="form-label">EAN Lido</label>
+                          <input className="mg-input bg-disabled" value={produtoRapido.codigoBarras} disabled />
+                      </div>
+                      <div className="flex-1">
+                          <label className="form-label">Preço Final (R$)</label>
+                          <input
+                              id="input-preco-rapido"
+                              className="mg-input text-center"
+                              style={{ borderColor: 'var(--success)', color: 'var(--success)', fontWeight: '900', fontSize: '1.4rem' }}
+                              inputMode="numeric"
+                              value={getValorFormatado(produtoRapido.precoVendaRaw)}
+                              onChange={e => setProdutoRapido({...produtoRapido, precoVendaRaw: formatCurrencyInput(e.target.value)})}
+                              onKeyDown={e => e.key === 'Enter' && handleSalvarProdutoRapido()}
+                              autoFocus={!produtoRapido.descricao}
+                          />
                       </div>
                   </div>
+
+                  <label className="form-label d-flex justify-between">
+                      <span>Descrição (Nome na Nota)</span>
+                      {!produtoRapido.loadingIA && produtoRapido.descricao.length > 3 && (
+                          <button className="btn-text-primary p-0" style={{fontSize:'0.75rem', background:'transparent', border:'none', color:'var(--primary)', fontWeight:'800'}} onClick={() => classificarComIA(produtoRapido.descricao, produtoRapido.codigoBarras)}>
+                              ✨ Forçar IA
+                          </button>
+                      )}
+                  </label>
+                  <input
+                      className="mg-input mb-3"
+                      placeholder="Ex: MASCARA HIDRATANTE 200G"
+                      value={produtoRapido.descricao}
+                      onChange={e => setProdutoRapido({...produtoRapido, descricao: e.target.value})}
+                      autoFocus={!produtoRapido.descricao}
+                  />
+
+                  <div className="d-flex gap-3 mb-3">
+                      <div className="flex-1">
+                          <label className="form-label">Categoria</label>
+                          <input
+                              className={`mg-input ${produtoRapido.loadingIA ? 'bg-disabled' : ''}`}
+                              placeholder="Ex: MAQUIAGEM"
+                              value={produtoRapido.categoria}
+                              onChange={e => setProdutoRapido({...produtoRapido, categoria: e.target.value})}
+                              disabled={produtoRapido.loadingIA}
+                          />
+                      </div>
+                      <div className="flex-1">
+                          <label className="form-label">Subcategoria</label>
+                          <input
+                              className={`mg-input ${produtoRapido.loadingIA ? 'bg-disabled' : ''}`}
+                              placeholder="Ex: BATOM"
+                              value={produtoRapido.subcategoria}
+                              onChange={e => setProdutoRapido({...produtoRapido, subcategoria: e.target.value})}
+                              disabled={produtoRapido.loadingIA}
+                          />
+                      </div>
+                  </div>
+
+                  <div className="mb-4">
+                      <label className="form-label">NCM (Fiscal)</label>
+                      <input
+                          className={`mg-input ${produtoRapido.loadingIA ? 'bg-disabled' : ''}`}
+                          placeholder="Ex: 33049990"
+                          value={produtoRapido.ncm}
+                          onChange={e => setProdutoRapido({...produtoRapido, ncm: e.target.value})}
+                          disabled={produtoRapido.loadingIA}
+                      />
+                  </div>
+
                   <div className="d-flex gap-3">
-                      <button className="btn-outline-sec flex-1" onClick={() => { setShowCadastroRapido(false); setBusca(''); }}>Cancelar</button>
-                      <button className="btn-primary-block flex-1" onClick={handleSalvarProdutoRapido} disabled={loading}>Salvar na Venda</button>
+                      <button className="btn-outline-sec flex-1" onClick={() => { setShowCadastroRapido(false); setBusca(''); setProdutoRapido({...produtoRapido, loadingIA: false}); }}>Cancelar</button>
+                      <button className="btn-primary-block flex-1" onClick={handleSalvarProdutoRapido} disabled={produtoRapido.loadingIA || loading}>Adicionar à Venda</button>
                   </div>
               </div>
           </div>

@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as TooltipChart,
   BarChart, Bar, ResponsiveContainer, Cell, PieChart, Pie, Legend
 } from 'recharts';
 import {
-  DollarSign, ShoppingBag, Activity, Clock, RefreshCcw,
+  DollarSign, ShoppingBag, Activity, Clock, RefreshCcw, ArrowRight,
   CreditCard, Sparkles, Target, AlertCircle, Package, HeartHandshake,
   TrendingDown, Landmark, Zap, Scale, Tag, PieChart as PieChartIcon, ArchiveX, CalendarClock, Globe, Flag,
-  TrendingUp, BarChart2, Layers, HelpCircle, X, ChevronDown, Filter, Calendar, Info
+  TrendingUp, BarChart2, Layers, HelpCircle, X, ChevronDown, Filter, Calendar, Info, AlertTriangle
 } from 'lucide-react';
 import api from '../../services/api';
 import AlertasAuditoria from '../Dashboard/AlertasAuditoria';
@@ -51,21 +52,11 @@ const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, per
   );
 };
 
-const CustomTooltip = ({ active, payload, label }) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="custom-tooltip">
-        <p className="ct-label">{`${label}`}</p>
-        <p className="ct-val">{`${payload[0].value} registos`}</p>
-      </div>
-    );
-  }
-  return null;
-};
-
 const Dashboard = () => {
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [analiseMensal, setAnaliseMensal] = useState(null);
+  const [qtdPendentes, setQtdPendentes] = useState(0); // 🚩 Estado do alerta de revisão
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [errorStatus, setErrorStatus] = useState(false);
@@ -109,12 +100,14 @@ const Dashboard = () => {
     if (!isSilent) setLoading(true);
     setErrorStatus(false);
     try {
-      const [dashRes, analiseRes] = await Promise.all([
+      const [dashRes, analiseRes, pendentesRes] = await Promise.all([
         api.get(`/dashboard?periodo=${filtroPeriodo}`),
-        api.get(`/contas-pagar/analise-mensal?periodo=${filtroPeriodo}`).catch(() => ({ data: { custoFixoPrevisto: 0 } }))
+        api.get(`/contas-pagar/analise-mensal?periodo=${filtroPeriodo}`).catch(() => ({ data: { custoFixoPrevisto: 0 } })),
+        api.get('/dashboard/alertas/pendentes-revisao').catch(() => ({ data: 0 })) // 🚩 Busca alertas de revisão
       ]);
       setData(dashRes.data);
       setAnaliseMensal(analiseRes.data);
+      setQtdPendentes(Number(pendentesRes.data) || 0); // 🚩 Atualiza contador
       setLastUpdate(new Date());
     } catch (err) {
       setErrorStatus(true);
@@ -164,12 +157,6 @@ const Dashboard = () => {
   const roiIAItens = Number(ia.roiItens || 0);
   const mapaDeCalor = Array.isArray(fin.vendasPorHora) ? fin.vendasPorHora : [];
 
-  const origemVendasRaw = Array.isArray(fin.origemVendas) ? fin.origemVendas : [];
-  const origemVendas = origemVendasRaw.length > 0 ? origemVendasRaw.map(o => {
-      const nomeSafe = String(o.name || 'Outros').toLowerCase();
-      return { ...o, value: Number(o.value || 0), fill: nomeSafe.includes('loja') ? '#6366f1' : nomeSafe.includes('whatsapp') ? '#10b981' : '#f59e0b' };
-  }) : [{ name: 'Nenhuma Venda', value: 1, fill: '#e2e8f0' }];
-
   const estoqueCurvaC = inv.estoqueCurvaC || { itens: 0, valorImobilizado: 0 };
   const produtosVencendo = inv.produtosVencendo || { itens: 0, valorRisco: 0 };
   const taxaRecorrencia = Number(fin.taxaRecorrencia || 0);
@@ -179,44 +166,49 @@ const Dashboard = () => {
   const topCategorias = Array.isArray(payload.topCategorias) ? payload.topCategorias.slice(0, 5) : [];
   const performanceVendedores = Array.isArray(payload.performanceVendedores) ? payload.performanceVendedores : [];
 
-  // =========================================================================
-  // AJUSTE: Cores Distintas e Suaves + Legenda para Meios de Pagamento
-  // =========================================================================
+  // Cores Distintas para Formas de Pagamento
   const formasPagamentoRaw = Array.isArray(fin.formasPagamento) ? fin.formasPagamento : [];
   const formasPagamento = formasPagamentoRaw.length > 0 ? formasPagamentoRaw.map(p => {
     const n = String(p.name).toUpperCase();
-    let color = '#94a3b8'; // Cinza padrão (Outros)
-    if (n.includes('PIX')) color = '#059669'; // Verde Escuro (Esmeralda 600)
-    else if (n.includes('DINHEIRO') || n.includes('CASH')) color = '#4ade80'; // Verde Claro (Verde 400)
-    else if (n.includes('CRÉDITO') || n.includes('CREDITO')) color = '#3b82f6'; // Azul Forte (Azul 500)
-    else if (n.includes('DÉBITO') || n.includes('DEBITO')) color = '#38bdf8'; // Azul Claro (Céu 400)
-    else if (n.includes('CREDIÁRIO') || n.includes('CREDIARIO')) color = '#fbbf24'; // Amarelo/Laranja Suave
+    let color = '#94a3b8';
+    if (n.includes('PIX')) color = '#059669';
+    else if (n.includes('DINHEIRO') || n.includes('CASH')) color = '#4ade80';
+    else if (n.includes('CRÉDITO') || n.includes('CREDITO')) color = '#3b82f6';
+    else if (n.includes('DÉBITO') || n.includes('DEBITO')) color = '#38bdf8';
+    else if (n.includes('CREDIÁRIO') || n.includes('CREDIARIO')) color = '#fbbf24';
     return { ...p, fill: color };
   }) : [{ name: 'Sem Vendas', value: 1, fill: '#e2e8f0' }];
 
   // =========================================================================
-  // CÁLCULO DA CURVA ABC BLINDADO (Ordenação garantida para pequenos volumes)
+  // 🛡️ MAPEAMENTO SEGURO DA CURVA ABC (FALLBACK PARA CHAVES JSON)
   // =========================================================================
-  const topProdutosBruto = Array.isArray(payload.topProdutos) ? payload.topProdutos : [];
+  const topProdutosBruto = Array.isArray(payload.topProdutos) ? payload.topProdutos
+                         : Array.isArray(payload.produtosMaisVendidos) ? payload.produtosMaisVendidos
+                         : Array.isArray(inv.topProdutos) ? inv.topProdutos
+                         : [];
 
-  const topProdutosOrdenados = [...topProdutosBruto].sort((a, b) => (b.valor || 0) - (a.valor || 0)).slice(0, 10);
+  const topProdutosMapeados = topProdutosBruto.map(p => ({
+      nome: p.nome || p.descricao || p.name || p.produto || 'Produto Desconhecido',
+      valor: Number(p.valor || p.total || p.faturamento || p.vendas || 0)
+  }));
 
-  let faturamentoTotalABC = topProdutosOrdenados.reduce((acc, curr) => acc + (curr.valor || 0), 0);
+  const topProdutosOrdenados = [...topProdutosMapeados].sort((a, b) => b.valor - a.valor).slice(0, 10);
+  const faturamentoTotalABC = topProdutosOrdenados.reduce((acc, curr) => acc + curr.valor, 0);
+
   let fatAcumulado = 0;
-
   const produtosABC = topProdutosOrdenados.map((prod) => {
-      fatAcumulado += (prod.valor || 0);
+      fatAcumulado += prod.valor;
       const percentualAcumulado = faturamentoTotalABC > 0 ? (fatAcumulado / faturamentoTotalABC) * 100 : 0;
 
       let curva = 'C';
-      let cor = '#94a3b8'; // Cinza
+      let cor = '#94a3b8';
 
-      if (percentualAcumulado <= 80 || (percentualAcumulado > 80 && curva === 'C' && fatAcumulado === (prod.valor || 0))) {
+      if (percentualAcumulado <= 80 || (percentualAcumulado > 80 && curva === 'C' && fatAcumulado === prod.valor)) {
           curva = 'A'; cor = '#ec4899';
       }
       else if (percentualAcumulado <= 95) { curva = 'B'; cor = '#3b82f6'; }
 
-      return { ...prod, curva, cor, percentual: faturamentoTotalABC > 0 ? ((prod.valor || 0) / faturamentoTotalABC) * 100 : 0 };
+      return { ...prod, curva, cor, percentual: faturamentoTotalABC > 0 ? (prod.valor / faturamentoTotalABC) * 100 : 0 };
   });
 
   // =========================================================================
@@ -266,6 +258,54 @@ const Dashboard = () => {
       </header>
 
       <AlertasAuditoria />
+
+      {/* 🚨 BANNER DE AVISO: PRODUTOS PENDENTES DE REVISÃO DO PDV */}
+      {qtdPendentes > 0 && (
+          <div
+              className="fade-in"
+              style={{
+                  background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+                  border: '1px solid #f59e0b',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  marginBottom: '24px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  boxShadow: '0 4px 15px -3px rgba(245, 158, 11, 0.15)',
+                  flexWrap: 'wrap',
+                  gap: '15px'
+              }}
+          >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{
+                      background: '#f59e0b', color: 'white', padding: '12px',
+                      borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: '0 4px 10px rgba(245, 158, 11, 0.3)'
+                  }}>
+                      <AlertTriangle size={28} />
+                  </div>
+                  <div>
+                      <h3 style={{ margin: '0 0 4px', color: '#92400e', fontSize: '1.2rem', fontWeight: '800' }}>
+                          Ação Requerida
+                      </h3>
+                      <p style={{ margin: 0, color: '#b45309', fontSize: '1rem', fontWeight: '500' }}>
+                          Existem <strong>{qtdPendentes} novos produtos</strong> cadastrados no caixa aguardando revisão de preços e NCM.
+                      </p>
+                  </div>
+              </div>
+              <button
+                  onClick={() => navigate('/produtos', { state: { filtrarPendentes: true } })}
+                  style={{
+                      background: '#92400e', color: 'white', border: 'none', padding: '12px 24px',
+                      borderRadius: '8px', fontWeight: 'bold', fontSize: '1rem', display: 'flex',
+                      alignItems: 'center', gap: '8px', cursor: 'pointer', transition: '0.2s', whiteSpace: 'nowrap'
+                  }}
+              >
+                  Revisar Agora <ArrowRight size={20} />
+              </button>
+          </div>
+      )}
 
       {/* IA CENTRALIZADA */}
       <div className="ai-insight-box">
@@ -329,7 +369,6 @@ const Dashboard = () => {
             </div>
 
             <div className="dash-kpi-grid">
-              {/* 1. FATURAMENTO */}
               <div className="kpi-card hover-effect kpi-pink">
                 <div className="kpi-info">
                   <div className="kpi-info-header">
@@ -338,58 +377,42 @@ const Dashboard = () => {
                   </div>
                   <h2 className="kpi-value">{formatCurrency(faturamento)}</h2>
                 </div>
-                <NanoInsightIA
-                    insight={isCrescimentoPositivo ? "Ritmo de vendas superior ao histórico médio." : "Tráfego em queda. Sugerido disparar promoção de Curva C."}
-                    tipo={isCrescimentoPositivo ? "success" : "warning"}
-                />
+                <NanoInsightIA insight={isCrescimentoPositivo ? "Ritmo superior ao médio." : "Tráfego em queda. Sugerida promoção."} tipo={isCrescimentoPositivo ? "success" : "warning"} />
               </div>
 
-              {/* 2. CMV TOTAL */}
               <div className="kpi-card hover-effect kpi-indigo">
                 <div className="kpi-info">
                   <div className="kpi-info-header">
-                    <span className="kpi-label flex-center-gap">CMV Total <InfoTooltip text="Custo da mercadoria vendida (Estoque que saiu)."/></span>
+                    <span className="kpi-label flex-center-gap">CMV Total <InfoTooltip text="Custo da mercadoria vendida."/></span>
                     <RefreshCcw size={18} className="kpi-icon"/>
                   </div>
                   <h2 className="kpi-value">{formatCurrency(valorReposicao)}</h2>
                 </div>
-                <NanoInsightIA
-                    insight={faturamento > 0 && (valorReposicao / faturamento) > 0.60 ? "Custo muito elevado face à receita. Foque na Curva A." : "Custo de mercadoria controlado."}
-                    tipo={faturamento > 0 && (valorReposicao / faturamento) > 0.60 ? "danger" : "success"}
-                />
+                <NanoInsightIA insight={faturamento > 0 && (valorReposicao / faturamento) > 0.60 ? "Custo muito elevado." : "Custo controlado."} tipo={faturamento > 0 && (valorReposicao / faturamento) > 0.60 ? "danger" : "success"} />
               </div>
 
-              {/* 3. LUCRO BRUTO */}
               <div className="kpi-card hover-effect kpi-green">
                 <div className="kpi-info">
                   <div className="kpi-info-header">
-                    <span className="kpi-label flex-center-gap">Lucro Bruto <InfoTooltip text="Faturamento menos o custo dos produtos."/></span>
+                    <span className="kpi-label flex-center-gap">Lucro Bruto <InfoTooltip text="Faturamento menos o CMV."/></span>
                     <TrendingDown size={18} className="kpi-icon"/>
                   </div>
                   <h2 className="kpi-value">{formatCurrency(lucroBruto)}</h2>
                 </div>
-                <NanoInsightIA
-                    insight={`Margem Bruta de ${faturamento > 0 ? ((lucroBruto / faturamento) * 100).toFixed(1) : 0}%. Capital livre antes dos custos fixos.`}
-                    tipo="info"
-                />
+                <NanoInsightIA insight={`Margem Bruta de ${faturamento > 0 ? ((lucroBruto / faturamento) * 100).toFixed(1) : 0}%.`} tipo="info" />
               </div>
 
-              {/* 4. TOTAL DE VENDAS */}
               <div className="kpi-card hover-effect kpi-blue">
                 <div className="kpi-info">
                   <div className="kpi-info-header">
-                    <span className="kpi-label flex-center-gap">Total de Vendas <InfoTooltip text="Número de negócios fechados no período."/></span>
+                    <span className="kpi-label flex-center-gap">Total de Vendas <InfoTooltip text="Número de cupons emitidos."/></span>
                     <ShoppingBag size={18} className="kpi-icon"/>
                   </div>
                   <h2 className="kpi-value">{vendasQtd} <span className="text-small">recibos</span></h2>
                 </div>
-                <NanoInsightIA
-                    insight={vendasQtd < 5 && filtroPeriodo === 'hoje' ? "Fluxo muito lento. Reative os clientes no WhatsApp." : "Volume de emissões normalizado."}
-                    tipo={vendasQtd < 5 && filtroPeriodo === 'hoje' ? "warning" : "info"}
-                />
+                <NanoInsightIA insight={vendasQtd < 5 && filtroPeriodo === 'hoje' ? "Fluxo muito lento." : "Volume normalizado."} tipo={vendasQtd < 5 && filtroPeriodo === 'hoje' ? "warning" : "info"} />
               </div>
 
-              {/* 5. TICKET MÉDIO */}
               <div className="kpi-card hover-effect kpi-purple">
                 <div className="kpi-info">
                   <div className="kpi-info-header">
@@ -398,55 +421,40 @@ const Dashboard = () => {
                   </div>
                   <h2 className="kpi-value">{formatCurrency(ticketMedio)}</h2>
                 </div>
-                <NanoInsightIA
-                    insight={ticketMedio < 40 && faturamento > 0 ? "Oportunidade perdida. Ofereça itens de balcão (Cross-sell)." : "Valor saudável. Clientes estão a comprar mix de valor."}
-                    tipo={ticketMedio < 40 && faturamento > 0 ? "warning" : "success"}
-                />
+                <NanoInsightIA insight={ticketMedio < 40 && faturamento > 0 ? "Oportunidade de Cross-sell." : "Valor saudável."} tipo={ticketMedio < 40 && faturamento > 0 ? "warning" : "success"} />
               </div>
 
-              {/* 6. ITENS POR CESTA */}
               <div className="kpi-card hover-effect kpi-orange">
                 <div className="kpi-info">
                   <div className="kpi-info-header">
-                    <span className="kpi-label flex-center-gap">Itens por Cesta <InfoTooltip text="Média de produtos diferentes na mesma venda."/></span>
+                    <span className="kpi-label flex-center-gap">Itens por Cesta <InfoTooltip text="Média de itens por cupom."/></span>
                     <Package size={18} className="kpi-icon"/>
                   </div>
                   <h2 className="kpi-value">{produtosDistintos} <span className="text-small">un</span></h2>
                 </div>
-                <NanoInsightIA
-                    insight={produtosDistintos <= 1.2 && vendasQtd > 0 ? "A maioria leva só 1 item. Treine a equipa na venda cruzada." : "Excelente! Venda casada a funcionar bem."}
-                    tipo={produtosDistintos <= 1.2 && vendasQtd > 0 ? "warning" : "success"}
-                />
+                <NanoInsightIA insight={produtosDistintos <= 1.2 && vendasQtd > 0 ? "Maioria leva só 1 item." : "Venda casada OK."} tipo={produtosDistintos <= 1.2 && vendasQtd > 0 ? "warning" : "success"} />
               </div>
 
-              {/* 7. DESCONTOS */}
               <div className="kpi-card hover-effect kpi-red">
                 <div className="kpi-info">
                   <div className="kpi-info-header">
-                    <span className="kpi-label flex-center-gap">Descontos <InfoTooltip text="Soma de abates manuais ou promoções."/></span>
+                    <span className="kpi-label flex-center-gap">Descontos <InfoTooltip text="Soma de abatimentos."/></span>
                     <Tag size={18} className="kpi-icon"/>
                   </div>
                   <h2 className={`kpi-value ${percentualDesconto > 8 ? 'text-danger' : 'text-main'}`}>{formatCurrency(descontosHoje)}</h2>
                 </div>
-                <NanoInsightIA
-                    insight={percentualDesconto > 8 ? `Alerta: Cedeu ${percentualDesconto.toFixed(1)}% em descontos. Margem em risco.` : "Política de preços preservada. Sem abusos."}
-                    tipo={percentualDesconto > 8 ? "danger" : "success"}
-                />
+                <NanoInsightIA insight={percentualDesconto > 8 ? `Cedeu ${percentualDesconto.toFixed(1)}%. Risco.` : "Descontos normais."} tipo={percentualDesconto > 8 ? "danger" : "success"} />
               </div>
 
-              {/* 8. RETENÇÃO */}
               <div className="kpi-card hover-effect kpi-rose">
                 <div className="kpi-info">
                   <div className="kpi-info-header">
-                    <span className="kpi-label flex-center-gap">Retenção <InfoTooltip text="Taxa de clientes que voltaram a comprar."/></span>
+                    <span className="kpi-label flex-center-gap">Retenção <InfoTooltip text="Clientes que retornaram."/></span>
                     <HeartHandshake size={18} className="kpi-icon"/>
                   </div>
                   <h2 className="kpi-value">{taxaRecorrencia.toFixed(1)}<span className="text-small">%</span></h2>
                 </div>
-                <NanoInsightIA
-                    insight={taxaRecorrencia < 15 && vendasQtd > 0 ? "Pouca fidelização. Peça os dados ao cliente no PDV." : "Boa base de clientes ativos a retornar."}
-                    tipo={taxaRecorrencia < 15 && vendasQtd > 0 ? "warning" : "success"}
-                />
+                <NanoInsightIA insight={taxaRecorrencia < 15 && vendasQtd > 0 ? "Pouca fidelização." : "Boa base de retorno."} tipo={taxaRecorrencia < 15 && vendasQtd > 0 ? "warning" : "success"} />
               </div>
             </div>
 
@@ -476,7 +484,6 @@ const Dashboard = () => {
         <section className="dash-block animate-fade-in">
           <div className="dash-charts-grid split-2">
 
-            {/* GRÁFICO DE PAGAMENTOS COM LEGENDA */}
             <div className="chart-box hover-effect" style={{ paddingBottom: '30px' }}>
               <div className="box-header">
                   <h3 className="flex-center-gap"><PieChartIcon size={18}/> Caixa e Liquidez <InfoTooltip text="Quais os métodos de pagamento preferidos."/></h3>
@@ -497,31 +504,33 @@ const Dashboard = () => {
               </div>
             </div>
 
-            <div className="box-card hover-effect">
-              <div className="box-header"><h3 className="flex-center-gap"><Target size={18} className="icon-blue"/> Performance da Equipa <InfoTooltip text="Ranking de vendedores no período selecionado."/></h3></div>
-              <div className="ranking-list compact">
-                {performanceVendedores.length > 0 ? performanceVendedores.map((vend, i) => (
-                  <div key={i} className={`ranking-item-operator ${i === 0 ? 'top-seller' : ''}`}>
-                    <div className={`operator-avatar ${i === 0 ? 'top-avatar' : 'neutral-avatar'}`}>{vend.nome ? vend.nome.charAt(0).toUpperCase() : 'U'}</div>
-                    <div className="operator-info">
-                      <div className="operator-text"><span className="operator-name">{vend.nome || 'Usuário'}</span><span className="operator-val">{formatCurrency(vend.vendas)}</span></div>
-                      <span className="operator-sub">{vend.converteu} vendas feitas</span>
-                    </div>
+            <div className="dash-charts-grid split-1" style={{ gap: '20px' }}>
+                <div className="box-card hover-effect">
+                  <div className="box-header"><h3 className="flex-center-gap"><Target size={18} className="icon-blue"/> Performance da Equipa <InfoTooltip text="Ranking de vendedores no período selecionado."/></h3></div>
+                  <div className="ranking-list compact">
+                    {performanceVendedores.length > 0 ? performanceVendedores.map((vend, i) => (
+                      <div key={i} className={`ranking-item-operator ${i === 0 ? 'top-seller' : ''}`}>
+                        <div className={`operator-avatar ${i === 0 ? 'top-avatar' : 'neutral-avatar'}`}>{vend.nome ? vend.nome.charAt(0).toUpperCase() : 'U'}</div>
+                        <div className="operator-info">
+                          <div className="operator-text"><span className="operator-name">{vend.nome || 'Usuário'}</span><span className="operator-val">{formatCurrency(vend.vendas)}</span></div>
+                          <span className="operator-sub">{vend.converteu} vendas feitas</span>
+                        </div>
+                      </div>
+                    )) : <p className="empty-state">Sem atividade registada.</p>}
                   </div>
-                )) : <p className="empty-state">Sem atividade registada.</p>}
-              </div>
-            </div>
+                </div>
 
-            <div className="box-card hover-effect ia-roi-card span-2">
-              <div className="box-header flex-between">
-                 <h3 className="flex-center-gap"><Sparkles size={18} className="icon-purple"/> Receita Extra via IA (Cross-Sell) <InfoTooltip text="Valor faturado através das sugestões da máquina no Caixa."/></h3>
-                 <span className="ia-badge purple">Operacional</span>
-              </div>
-              <div className="roi-ia-panel">
-                  <span className="roi-label">Valor Adicional Capturado</span>
-                  <strong className="roi-val">{formatCurrency(roiIAValor)}</strong>
-                  <span className="roi-sub">{roiIAItens} itens vendidos a mais que o cliente não iria comprar originalmente.</span>
-              </div>
+                <div className="box-card hover-effect ia-roi-card">
+                  <div className="box-header flex-between">
+                    <h3 className="flex-center-gap"><Sparkles size={18} className="icon-purple"/> Receita Extra via IA <InfoTooltip text="Valor faturado através das sugestões de Cross-Sell no PDV."/></h3>
+                    <span className="ia-badge purple">Operacional</span>
+                  </div>
+                  <div className="roi-ia-panel">
+                      <span className="roi-label">Valor Adicional Capturado</span>
+                      <strong className="roi-val">{formatCurrency(roiIAValor)}</strong>
+                      <span className="roi-sub">{roiIAItens} itens vendidos a mais sugeridos pelo sistema.</span>
+                  </div>
+                </div>
             </div>
 
           </div>
@@ -561,7 +570,7 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* CURVA ABC */}
+            {/* CURVA ABC CORRIGIDA E BLINDADA */}
             <div className="box-card hover-effect span-1">
               <div className="box-header flex-between">
                   <h3 className="flex-center-gap"><Layers size={18} className="icon-main"/> Curva ABC ({labelPeriodo}) <InfoTooltip text="Curva A representa 80% do seu faturamento. Nunca deixe faltar."/></h3>
@@ -573,20 +582,13 @@ const Dashboard = () => {
                       <div className="rank-pos" style={{background: prod.cor, color: 'white', fontWeight: 'bold'}}>{prod.curva}</div>
                       <div className="rank-info">
                         <div className="rank-text">
-                            <span className="rank-name" style={{maxWidth: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}} title={prod.nome}>{prod.nome || 'Produto'}</span>
+                            <span className="rank-name" style={{maxWidth: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}} title={prod.nome}>{prod.nome}</span>
                             <span className="rank-val">{formatCurrency(prod.valor)}</span>
                         </div>
-                        <div className="progress-bg"><div className="progress-fill" style={{width: `${prod.percentual}%`, background: prod.cor}}></div></div>
+                        <div className="progress-bg"><div className="progress-fill" style={{width: `${Math.max(1, prod.percentual)}%`, background: prod.cor}}></div></div>
                       </div>
                     </div>
-                )) : <p className="empty-state">Realize vendas para preencher a Curva ABC.</p>}
-
-                {produtosABC.length > 0 && produtosABC.length <= 3 && (
-                   <p className="ia-hint text-center mt-3 text-muted text-small" style={{fontSize: '12px'}}>
-                      <Info size={12} style={{display:'inline', marginRight:'4px'}}/>
-                      Com poucas vendas registadas, o algoritmo concentra-se rapidamente no produto mais caro.
-                   </p>
-                )}
+                )) : <p className="empty-state">Sem faturamento suficiente neste período.</p>}
               </div>
             </div>
 
@@ -596,7 +598,7 @@ const Dashboard = () => {
                <div className="tax-split-box">
                   <div className="tax-row"><span>DAS Aproximado</span><strong>{formatCurrency(impostoMes)}</strong></div>
                </div>
-               <NanoInsightIA insight="A IA cruzou o NCM dos produtos e verificou que não faturou itens ST hoje." tipo="info" />
+               <NanoInsightIA insight="A IA cruzou o NCM dos produtos e verificou os itens faturados." tipo="info" />
             </div>
           </div>
         </section>

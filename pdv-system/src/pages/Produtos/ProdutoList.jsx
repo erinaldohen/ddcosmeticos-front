@@ -8,7 +8,7 @@ import {
   Search, Plus, Edit3, Trash2, Box,
   ChevronLeft, ChevronRight, Zap, Printer, History, X,
   RotateCcw, ImageOff, Filter, XCircle, AlertOctagon,
-  Copy, Check, Upload, FileText, FileSpreadsheet, Bot
+  Copy, Check, Upload, FileText, FileSpreadsheet, Bot, AlertTriangle, ChevronRight as ChevronRightIcon
 } from 'lucide-react';
 import './ProdutoList.css';
 
@@ -120,7 +120,7 @@ const ProdutoList = () => {
   const [showFilters, setShowFilters] = useState(false);
 
   // Paginação e Filtros
-  const [filtros, setFiltros] = useState({ estoque: 'todos', marca: '', categoria: '', semImagem: false, semNcm: false, precoZerado: false });
+  const [filtros, setFiltros] = useState({ estoque: 'todos', marca: '', categoria: '', semImagem: false, semNcm: false, precoZerado: false, revisaoPendente: false });
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
@@ -133,6 +133,9 @@ const ProdutoList = () => {
   const getImageUrl = (url) => url ? (url.startsWith('blob:') || url.startsWith('http') ? url : `http://localhost:8080${url}`) : null;
   const marcasDisponiveis = useMemo(() => Array.from(new Set(produtos.map(p => p.marca).filter(Boolean))).sort(), [produtos]);
   const categoriasDisponiveis = useMemo(() => Array.from(new Set(produtos.map(p => p.categoria).filter(Boolean))).sort(), [produtos]);
+
+  // Contagem para o Alerta de Revisão
+  const produtosPendentesDeRevisao = useMemo(() => produtos.filter(p => p.revisaoPendente).length, [produtos]);
 
   // Busca na API
   const carregarProdutos = useCallback(async (pagina, termo) => {
@@ -149,7 +152,7 @@ const ProdutoList = () => {
         setTotalPages(1);
         setTotalElements(filtrados.length);
       } else {
-        const dados = await produtoService.listar(pagina, 10, termo, filtros);
+        const dados = await produtoService.listar(pagina, 1000, termo, filtros); // Ajustei o limite temporário para o Front fazer a contagem dos pendentes (O ideal era via backend)
         let listaProdutos = [];
 
         if (Array.isArray(dados)) {
@@ -177,7 +180,7 @@ const ProdutoList = () => {
 
   // Handlers de Interface
   const handleFiltroChange = (key, value) => setFiltros(prev => ({ ...prev, [key]: value }));
-  const limparFiltros = () => setFiltros({ estoque: 'todos', marca: '', categoria: '', semImagem: false, semNcm: false, precoZerado: false });
+  const limparFiltros = () => setFiltros({ estoque: 'todos', marca: '', categoria: '', semImagem: false, semNcm: false, precoZerado: false, revisaoPendente: false });
   const handleSearchChange = (e) => setTermoBusca(e.target.value);
   const handleSelectAll = (e) => e.target.checked ? setSelectedIds(produtos.map(p => p.id)) : setSelectedIds([]);
   const handleSelectOne = (id) => selectedIds.includes(id) ? setSelectedIds(selectedIds.filter(itemId => itemId !== id)) : setSelectedIds([...selectedIds, id]);
@@ -299,7 +302,6 @@ const ProdutoList = () => {
     }
   };
 
-  // NAVEGAÇÃO LIMPA PARA A PÁGINA DE HISTÓRICO
   const handleOpenHistorico = (id) => {
     navigate(`/produtos/historico/${id}`);
   };
@@ -313,6 +315,9 @@ const ProdutoList = () => {
       if (estoque <= minimo) return <span className="status-badge warning">Baixo</span>;
       return <span className="status-badge active">Ativo</span>;
   };
+
+  // Filtragem Front-end para a flag (até o backend implementar o filtro de revisao_pendente)
+  const produtosExibidos = filtros.revisaoPendente ? produtos.filter(p => p.revisaoPendente) : produtos;
 
   return (
     <>
@@ -361,6 +366,38 @@ const ProdutoList = () => {
             )}
           </div>
         </header>
+
+        {/* 🚨 BANNER DE ALERTA: PRODUTOS CRIADOS NO PDV */}
+        {!modoLixeira && produtosPendentesDeRevisao > 0 && (
+            <div className="alert-banner" style={{
+                background: '#fffbeb', borderLeft: '4px solid #f59e0b', padding: '16px',
+                borderRadius: '8px', display: 'flex', justifyContent: 'space-between',
+                alignItems: 'center', marginBottom: '24px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ background: '#fde68a', color: '#d97706', padding: '8px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <AlertTriangle size={24} />
+                    </div>
+                    <div>
+                        <h3 style={{ margin: '0 0 4px', color: '#92400e', fontSize: '1.1rem', fontWeight: '800' }}>
+                            Revisão Necessária
+                        </h3>
+                        <p style={{ margin: 0, color: '#b45309', fontSize: '0.95rem' }}>
+                            Existem <strong>{produtosPendentesDeRevisao}</strong> produtos cadastrados no PDV aguardando preenchimento de custo e NCM.
+                        </p>
+                    </div>
+                </div>
+                <button
+                    onClick={() => handleFiltroChange('revisaoPendente', !filtros.revisaoPendente)}
+                    style={{
+                        background: '#f59e0b', color: 'white', border: 'none', padding: '10px 16px',
+                        borderRadius: '6px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer'
+                    }}
+                >
+                    {filtros.revisaoPendente ? 'Mostrar Todos' : 'Ver Pendentes'} <ChevronRightIcon size={18} />
+                </button>
+            </div>
+        )}
 
         <div className="content-card">
           <div className="card-toolbar">
@@ -416,7 +453,7 @@ const ProdutoList = () => {
             <table className="modern-table">
               <thead>
                 <tr>
-                  <th className="th-checkbox"><div className="checkbox-wrapper"><input type="checkbox" onChange={handleSelectAll} checked={produtos.length > 0 && selectedIds.length === produtos.length} disabled={produtos.length === 0} /></div></th>
+                  <th className="th-checkbox"><div className="checkbox-wrapper"><input type="checkbox" onChange={handleSelectAll} checked={produtosExibidos.length > 0 && selectedIds.length === produtosExibidos.length} disabled={produtosExibidos.length === 0} /></div></th>
                   <th width="40%">Produto</th>
                   <th>Marca</th>
                   <th>Preço</th>
@@ -426,10 +463,10 @@ const ProdutoList = () => {
                 </tr>
               </thead>
               <tbody>
-                  {loading ? <TableSkeleton /> : produtos.length === 0 ? (
+                  {loading ? <TableSkeleton /> : produtosExibidos.length === 0 ? (
                     <tr><td colSpan="7" className="text-center"><div className="empty-state"><Box size={48} /><h3>Nenhum produto encontrado</h3></div></td></tr>
                   ) : (
-                    produtos.map((prod) => {
+                    produtosExibidos.map((prod) => {
                       const isSelected = selectedIds.includes(prod.id);
                       return (
                         <tr key={prod.id} className={`fade-in ${isSelected ? 'row-selected' : ''}`} onClick={() => handleSelectOne(prod.id)}>
@@ -438,7 +475,14 @@ const ProdutoList = () => {
                             <div className="product-item">
                               <ProductImage src={getImageUrl(prod.urlImagem)} alt={prod.descricao} />
                               <div className="product-meta">
-                                <span className="product-name">{prod.descricao || 'Sem Descrição'}</span>
+                                <span className="product-name" style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                                    {prod.descricao || 'Sem Descrição'}
+                                    {prod.revisaoPendente && (
+                                        <span style={{ background: '#fef3c7', color: '#d97706', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', border: '1px solid #fde68a' }}>
+                                            PENDENTE
+                                        </span>
+                                    )}
+                                </span>
                                 <CopyableCode code={prod.codigoBarras} />
                               </div>
                             </div>
@@ -457,7 +501,6 @@ const ProdutoList = () => {
                                     {loadingPrint === prod.id ? <div className="spinner-micro dark"></div> : <Printer size={18} />}
                                   </button>
 
-                                  {/* BOTÃO ATUALIZADO: Redireciona para a página em vez de abrir modal */}
                                   <button className="btn-icon-soft purple" onClick={() => handleOpenHistorico(prod.id)} title="Ver Histórico de Auditoria"><History size={18} /></button>
 
                                   <button className="btn-icon-soft blue" onClick={() => navigate(`/produtos/editar/${prod.id}`)} title="Editar Produto"><Edit3 size={18} /></button>
@@ -474,7 +517,7 @@ const ProdutoList = () => {
             </table>
           </div>
 
-          {!modoLixeira && totalPages > 1 && (
+          {!modoLixeira && totalPages > 1 && !filtros.revisaoPendente && (
             <div className="pagination-bar">
               <span className="info">Página <strong>{page + 1}</strong> de {totalPages}</span>
               <div className="controls">

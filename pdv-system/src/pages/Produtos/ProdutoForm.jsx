@@ -6,7 +6,7 @@ import { toast } from 'react-toastify';
 import {
   Save, ArrowLeft, Package, Barcode, DollarSign,
   Layers, Landmark, DownloadCloud, Upload, Image as ImageIcon,
-  Info, PlusCircle, Wand2, Sparkles, AlertCircle
+  Info, PlusCircle, Wand2, Sparkles, AlertCircle, Bot, AlertTriangle
 } from 'lucide-react';
 import './ProdutoForm.css';
 
@@ -23,12 +23,13 @@ const ProdutoForm = () => {
   const [loading, setLoading] = useState(false);
   const [searchingEan, setSearchingEan] = useState(false);
   const [validandoFiscal, setValidandoFiscal] = useState(false);
+  const [analisandoIA, setAnalisandoIA] = useState(false);
   const [arquivoImagem, setArquivoImagem] = useState(null);
   const [previewImagem, setPreviewImagem] = useState(null);
   const [sugestoesNcm, setSugestoesNcm] = useState([]);
   const [buscandoNcm, setBuscandoNcm] = useState(false);
 
-  // ESTADO DE ERROS (Gestão de Erros)
+  // ESTADO DE ERROS
   const [errors, setErrors] = useState({});
 
   const [formData, setFormData] = useState({
@@ -36,60 +37,42 @@ const ProdutoForm = () => {
     unidade: 'UN', ncm: '', cest: '', cst: '102', origem: '0', classificacaoReforma: 'PADRAO',
     impostoSeletivo: false, monofasico: false, urlImagem: '',
     precoCusto: '0,00', precoVenda: '0,00', precoMedio: '0,00', margemLucro: '', markup: '',
-    quantidadeEmEstoque: 0, estoqueMinimo: 5, diasParaReposicao: 0, estoqueFiscal: 0, estoqueNaoFiscal: 0
+    quantidadeEmEstoque: 0, estoqueMinimo: 5, diasParaReposicao: 0, estoqueFiscal: 0, estoqueNaoFiscal: 0,
+    revisaoPendente: false // 🚩 Adicionado
   });
 
-  // --- HELPERS ---
   const parseMoeda = (v) => { if(!v) return 0; if(typeof v === 'number') return v; return parseFloat(v.toString().replace(/\./g, '').replace(',', '.')) || 0; };
   const formatarMoeda = (v) => { if(v === undefined || v === null || v === '') return '0,00'; return Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
   const aplicarMascara = (v) => { const n = v.replace(/\D/g, ""); if(n === "") return ""; return (Number(n)/100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
   const getImageUrl = (url) => { if(!url) return null; if(url.startsWith('blob:') || url.startsWith('http')) return url; return `http://localhost:8080${url.startsWith('/')?'':'/'}${url}`; };
 
-  // --- EFEITOS ---
   useEffect(() => {
     const handleKeyDown = (e) => { if(e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveProduct(false); }};
     window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown);
   }, [formData]);
 
-  // Condução: Foco automático no primeiro campo essencial
   useEffect(() => { if(!isEditMode && eanInputRef.current) eanInputRef.current.focus(); }, [isEditMode]);
   useEffect(() => { if(isEditMode) carregarProduto(); }, [id]);
 
-  // --- VALIDAÇÃO (Prevenção de Erros) ---
   const validateField = (name, value) => {
     let errorMsg = '';
-
-    // Regras de validação
     switch (name) {
-      case 'descricao':
-        if (!value || value.trim().length < 3) errorMsg = 'Descrição é obrigatória (mín. 3 letras).';
-        break;
-      case 'precoVenda':
-        if (parseMoeda(value) <= 0) errorMsg = 'Preço de venda deve ser maior que zero.';
-        break;
-      case 'ncm':
-        if (!value || value.length < 2) errorMsg = 'NCM Obrigatório.';
-        break;
-      case 'cst':
-        if (!value) errorMsg = 'CST Obrigatório.';
-        break;
-      default:
-        break;
+      case 'descricao': if (!value || value.trim().length < 3) errorMsg = 'Descrição é obrigatória (mín. 3 letras).'; break;
+      case 'precoVenda': if (parseMoeda(value) <= 0) errorMsg = 'Preço de venda deve ser maior que zero.'; break;
+      case 'ncm': if (!value || value.length < 2) errorMsg = 'NCM Obrigatório.'; break;
+      case 'cst': if (!value) errorMsg = 'CST Obrigatório.'; break;
+      default: break;
     }
-
     setErrors(prev => ({ ...prev, [name]: errorMsg }));
     return errorMsg === '';
   };
 
-  // Wrapper para handleBlur (Validação ao sair do campo)
   const handleBlurValidation = (e) => {
     const { name, value } = e.target;
     validateField(name, value);
-    // Se for NCM, chama a validação fiscal também
     if (name === 'ncm') handleValidacaoFiscal();
   };
 
-  // --- CARREGAMENTO ---
   const carregarProduto = async () => {
     setLoading(true);
     try {
@@ -107,32 +90,26 @@ const ProdutoForm = () => {
         quantidadeEmEstoque: (d.estoqueFiscal||0)+(d.estoqueNaoFiscal||0),
         precoCusto: formatarMoeda(d.precoCusto), precoVenda: formatarMoeda(d.precoVenda), precoMedio: formatarMoeda(d.precoMedioPonderado),
         margemLucro: custo>0 && venda>0 ? (((venda-custo)/venda)*100).toFixed(2).replace('.',',') : '',
-        markup: custo>0 && venda>0 ? (((venda-custo)/custo)*100).toFixed(2).replace('.',',') : ''
+        markup: custo>0 && venda>0 ? (((venda-custo)/custo)*100).toFixed(2).replace('.',',') : '',
+        revisaoPendente: d.revisaoPendente || false // Puxa do backend
       });
       if(d.urlImagem) setPreviewImagem(d.urlImagem);
     } catch(e) { toast.error("Erro ao carregar produto."); navigate('/produtos'); } finally { setLoading(false); }
   };
 
-  // --- CÁLCULOS (Carga de Trabalho Reduzida) ---
   const handlePrecoCustoChange = (e) => {
     const val = aplicarMascara(e.target.value); const custo = parseMoeda(val); const markup = parseFloat(formData.markup?.replace(',','.')||0);
     setFormData(prev => {
       let novaVenda = prev.precoVenda, novaMargem = prev.margemLucro;
-      if(markup > 0 && custo > 0) {
-        const v = custo * (1 + (markup/100)); novaVenda = formatarMoeda(v); novaMargem = (((v-custo)/v)*100).toFixed(2).replace('.',',');
-      } else {
-        const v = parseMoeda(prev.precoVenda);
-        if(v > 0 && custo > 0) { return { ...prev, precoCusto: val, markup: (((v-custo)/custo)*100).toFixed(2).replace('.',','), margemLucro: (((v-custo)/v)*100).toFixed(2).replace('.',',') }; }
-      }
+      if(markup > 0 && custo > 0) { const v = custo * (1 + (markup/100)); novaVenda = formatarMoeda(v); novaMargem = (((v-custo)/v)*100).toFixed(2).replace('.',','); }
+      else { const v = parseMoeda(prev.precoVenda); if(v > 0 && custo > 0) { return { ...prev, precoCusto: val, markup: (((v-custo)/custo)*100).toFixed(2).replace('.',','), margemLucro: (((v-custo)/v)*100).toFixed(2).replace('.',',') }; } }
       return { ...prev, precoCusto: val, precoVenda: novaVenda, margemLucro: novaMargem };
     });
   };
 
   const handlePrecoVendaChange = (e) => {
     const val = aplicarMascara(e.target.value); const venda = parseMoeda(val); const custo = parseMoeda(formData.precoCusto);
-    // Remove erro se valor for válido
     if(parseMoeda(val) > 0) setErrors(prev => ({...prev, precoVenda: ''}));
-
     setFormData(prev => {
       let novoMarkup = prev.markup, novaMargem = prev.margemLucro;
       if(custo > 0) { novoMarkup = (((venda-custo)/custo)*100).toFixed(2).replace('.',','); if(venda > 0) novaMargem = (((venda-custo)/venda)*100).toFixed(2).replace('.',','); }
@@ -145,16 +122,14 @@ const ProdutoForm = () => {
     setFormData(prev => {
       let novaVenda = prev.precoVenda, novaMargem = prev.margemLucro;
       if(custo > 0 && !isNaN(markup)) { const v = custo * (1 + (markup/100)); novaVenda = formatarMoeda(v); if(v > 0) novaMargem = (((v-custo)/v)*100).toFixed(2).replace('.',','); }
-      // Remove erro de preço venda pois ele foi recalculado
       if(parseMoeda(novaVenda) > 0) setErrors(prev => ({...prev, precoVenda: ''}));
       return { ...prev, markup: val, precoVenda: novaVenda, margemLucro: novaMargem };
     });
   };
 
-  // --- NCM & API ---
   const handleNcmChange = (e) => {
     const v = e.target.value; setFormData(prev => ({...prev, ncm: v}));
-    if (v.length >= 2) setErrors(prev => ({...prev, ncm: ''})); // Limpa erro ao digitar
+    if (v.length >= 2) setErrors(prev => ({...prev, ncm: ''}));
     if(typingTimer.current) clearTimeout(typingTimer.current);
     if(v.length >= 2) {
       setBuscandoNcm(true);
@@ -177,8 +152,7 @@ const ProdutoForm = () => {
 
   const selecionarNcm = (item) => {
     setFormData(prev => ({...prev, ncm: item.codigo}));
-    setSugestoesNcm([]);
-    setErrors(prev => ({...prev, ncm: ''})); // Limpa erro
+    setSugestoesNcm([]); setErrors(prev => ({...prev, ncm: ''}));
     setTimeout(handleValidacaoFiscal, 100);
   };
 
@@ -211,6 +185,7 @@ const ProdutoForm = () => {
           setFormData(prev => ({...prev, descricao: dExt.nome||dExt.descricao||prev.descricao, urlImagem: dExt.urlImagem||prev.urlImagem, marca: dExt.marca||prev.marca, ncm: dExt.ncm||prev.ncm}));
           if(dExt.urlImagem) setPreviewImagem(dExt.urlImagem);
           toast.success("Encontrado!");
+          handleAnaliseIA(dExt.nome || dExt.descricao); // Chama a IA se encontrar fora
         } else toast.info("Novo código.");
       } catch(e) { toast.info("Novo cadastro."); }
       setTimeout(() => skuInputRef.current?.focus(), 100);
@@ -218,18 +193,52 @@ const ProdutoForm = () => {
     setSearchingEan(false);
   };
 
+  // --- FUNÇÃO DE ANÁLISE COM IA ---
+  const handleAnaliseIA = async (descricaoParaAnalise = formData.descricao) => {
+    if (!descricaoParaAnalise || descricaoParaAnalise.trim().length < 3) {
+      toast.warning("Informe uma descrição válida para a IA analisar.");
+      return;
+    }
+
+    setAnalisandoIA(true);
+    try {
+      const payload = {
+        descricao: descricaoParaAnalise,
+        codigoBarras: formData.codigoBarras,
+        marca: formData.marca
+      };
+
+      const res = await api.post('/produtos/analisar-ia', payload);
+      const iaData = res.data;
+
+      if (iaData) {
+        setFormData(prev => ({
+          ...prev,
+          categoria: iaData.categoria || prev.categoria,
+          subcategoria: iaData.subcategoria || prev.subcategoria,
+          ncm: iaData.ncm || prev.ncm,
+          marca: iaData.marca || prev.marca
+        }));
+        toast.success("Análise de IA concluída com sucesso! ✨");
+        if(iaData.ncm) handleValidacaoFiscal(); // Valida o NCM encontrado
+      }
+    } catch (e) {
+      toast.error("Erro ao analisar produto com IA.");
+      console.error(e);
+    } finally {
+      setAnalisandoIA(false);
+    }
+  };
+
   const handleChange = (e) => {
     const {name, value, type, checked} = e.target;
     setFormData(prev => ({...prev, [name]: type==='checkbox'?checked:value}));
-
-    // Limpa erro ao digitar
     if (errors[name]) setErrors(prev => ({...prev, [name]: ''}));
   };
 
   const handleFileChange = (e) => { const f = e.target.files[0]; if(f) { setArquivoImagem(f); setPreviewImagem(URL.createObjectURL(f)); }};
 
   const saveProduct = async (stay) => {
-    // 1. Validação Manual Final
     const isValidDesc = validateField('descricao', formData.descricao);
     const isValidPreco = validateField('precoVenda', formData.precoVenda);
     const isValidNcm = validateField('ncm', formData.ncm);
@@ -246,12 +255,13 @@ const ProdutoForm = () => {
     try {
       const p = {
         ...formData, precoCusto: parseMoeda(formData.precoCusto), precoVenda: parseMoeda(formData.precoVenda),
-        diasParaReposicao: Number(formData.diasParaReposicao)||0, estoqueMinimo: Number(formData.estoqueMinimo)||0, origem: Number(formData.origem)
+        diasParaReposicao: Number(formData.diasParaReposicao)||0, estoqueMinimo: Number(formData.estoqueMinimo)||0, origem: Number(formData.origem),
+        revisaoPendente: false // 🧹 LIMPEZA: Ao salvar no admin, o alerta some.
       };
       delete p.margemLucro; delete p.markup; delete p.estoqueFiscal; delete p.estoqueNaoFiscal; delete p.quantidadeEmEstoque;
       let res = isEditMode ? await produtoService.atualizar(id, p) : await produtoService.salvar(p);
       if(arquivoImagem && (res.id || id)) await produtoService.uploadImagem(res.id||id, arquivoImagem);
-      toast.success("Salvo!");
+      toast.success("Salvo com sucesso!");
       if(stay) window.location.reload(); else navigate('/produtos');
     } catch(e) {
       let msg = "Erro desconhecido.";
@@ -274,6 +284,14 @@ const ProdutoForm = () => {
       </header>
 
       <div className="form-container">
+        {/* 🚨 AVISO DE REVISÃO NO TOPO DO FORMULÁRIO */}
+        {formData.revisaoPendente && isEditMode && (
+            <div className="fade-in" style={{ background: '#fffbeb', border: '1px solid #fcd34d', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', color: '#b45309' }}>
+                <AlertTriangle size={20} />
+                <span><strong>Atenção:</strong> Este produto foi criado no caixa. Por favor, preencha o <strong>Preço de Custo</strong>, verifique o <strong>NCM</strong> e salve para concluir o cadastro.</span>
+            </div>
+        )}
+
         {loading && isEditMode && !formData.descricao ? (
           <div className="loading-screen"><div className="spinner"></div> Carregando...</div>
         ) : (
@@ -283,7 +301,14 @@ const ProdutoForm = () => {
             <section className="form-section">
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20}}>
                 <h2 className="section-title" style={{marginBottom:0}}><Package size={20} /> Informações Básicas</h2>
-                <div className="mandatory-legend"><span className="mandatory-star">*</span> Obrigatório</div>
+                <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                    {/* Botão de Análise de IA */}
+                    <button type="button" className="btn-tool magic" style={{padding: '5px 10px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '5px', background: '#e0e7ff', color: '#4338ca', border: '1px solid #c7d2fe', fontWeight: 'bold'}} onClick={() => handleAnaliseIA()} disabled={analisandoIA} title="Analisar Categoria e NCM com IA">
+                        {analisandoIA ? <div className="spinner-micro" /> : <Bot size={16} />}
+                        Analisar com IA
+                    </button>
+                    <div className="mandatory-legend"><span className="mandatory-star">*</span> Obrigatório</div>
+                </div>
               </div>
 
               <div className="form-row">
@@ -301,7 +326,6 @@ const ProdutoForm = () => {
               <div style={{display:'flex', gap:30, flexWrap:'wrap', alignItems:'flex-start'}}>
                 <div style={{flex:2}}>
                   <div className="form-row">
-                    {/* CAMPO EAN COM FERRAMENTAS */}
                     <div className="form-group flex-1">
                       <div className="floating-group input-action-group">
                         <input
@@ -348,7 +372,6 @@ const ProdutoForm = () => {
                   </div>
                 </div>
 
-                {/* ÁREA DE IMAGEM */}
                 <figure className="image-upload-area" style={{flex:1, minWidth:220, margin:0}}>
                   <div className="image-preview-box">
                     {previewImagem ? <img src={getImageUrl(previewImagem)} alt="Preview" style={{width:'100%', height:'100%', objectFit:'contain'}} /> : <ImageIcon size={40} color="#ccc" />}
@@ -422,76 +445,40 @@ const ProdutoForm = () => {
               <h2 className="section-title"><DollarSign size={20} /> Precificação Inteligente</h2>
 
               <div className="form-row" style={{alignItems:'flex-start'}}>
-
-                {/* Preço Custo */}
                 <div className="form-group flex-1">
                   <div className="floating-group group-money">
-                    <input
-                      type="text"
-                      className="ff-input-floating"
-                      value={formData.precoCusto}
-                      onChange={handlePrecoCustoChange}
-                      placeholder=" "
-                    />
+                    <input type="text" className="ff-input-floating" value={formData.precoCusto} onChange={handlePrecoCustoChange} placeholder=" " />
                     <span className="prefix">R$</span>
                     <label className="ff-label-floating">Preço Custo</label>
                   </div>
                 </div>
 
-                {/* Markup */}
                 <div className="form-group" style={{maxWidth:140}}>
                   <div className="floating-group group-percent">
-                    <input
-                      type="text"
-                      className="ff-input-floating"
-                      value={formData.markup}
-                      onChange={handleMarkupChange}
-                      placeholder=" "
-                      style={{fontWeight:'bold', color:'#059669'}}
-                    />
+                    <input type="text" className="ff-input-floating" value={formData.markup} onChange={handleMarkupChange} placeholder=" " style={{fontWeight:'bold', color:'#059669'}} />
                     <span className="suffix">%</span>
                     <label className="ff-label-floating">Markup</label>
-                    <Info size={16} className="tooltip-icon" data-tip="% sobre custo." />
+                    <Info size={16} className="tooltip-icon" title="% sobre custo." />
                   </div>
                 </div>
 
-                {/* Preço Venda */}
                 <div className="form-group flex-1">
                   <div className="floating-group group-money">
-                    <input
-                      type="text"
-                      name="precoVenda"
-                      className={`ff-input-floating ${errors.precoVenda ? 'input-error' : ''}`}
-                      value={formData.precoVenda}
-                      onChange={handlePrecoVendaChange}
-                      onBlur={handleBlurValidation}
-                      required
-                      placeholder=" "
-                      style={{fontWeight:'bold', color:'#6366f1'}}
-                    />
+                    <input type="text" name="precoVenda" className={`ff-input-floating ${errors.precoVenda ? 'input-error' : ''}`} value={formData.precoVenda} onChange={handlePrecoVendaChange} onBlur={handleBlurValidation} required placeholder=" " style={{fontWeight:'bold', color:'#6366f1'}} />
                     <span className="prefix">R$</span>
                     <label className="ff-label-floating">Preço Venda *</label>
                     {errors.precoVenda && <span className="error-message"><AlertCircle size={12}/> {errors.precoVenda}</span>}
                   </div>
                 </div>
 
-                {/* Margem Real */}
                 <div className="form-group" style={{maxWidth:140}}>
                   <div className="floating-group group-percent">
-                    <input
-                      type="text"
-                      className="ff-input-floating"
-                      value={formData.margemLucro}
-                      disabled
-                      placeholder=" "
-                      style={{backgroundColor:'#f1f5f9', fontWeight:'bold'}}
-                    />
+                    <input type="text" className="ff-input-floating" value={formData.margemLucro} disabled placeholder=" " style={{backgroundColor:'#f1f5f9', fontWeight:'bold'}} />
                     <span className="suffix">%</span>
                     <label className="ff-label-floating">Margem</label>
-                    <Info size={16} className="tooltip-icon" data-tip="Lucro real final." />
+                    <Info size={16} className="tooltip-icon" title="Lucro real final." />
                   </div>
                 </div>
-
               </div>
             </section>
 
@@ -538,7 +525,7 @@ const ProdInput = React.forwardRef(({ label, name, value, onChange, type="text",
         value={value} onChange={onChange} onBlur={onBlur} required={required} disabled={disabled}
       />
       <label className="ff-label-floating">{label}</label>
-      {tooltip && <Info size={16} className="tooltip-icon" data-tip={tooltip} />}
+      {tooltip && <Info size={16} className="tooltip-icon" title={tooltip} />}
       {error && <span className="error-message"><AlertCircle size={12}/> {error}</span>}
     </div>
   </div>

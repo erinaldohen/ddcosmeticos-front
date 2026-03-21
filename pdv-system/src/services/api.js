@@ -3,30 +3,18 @@ import { toast } from 'react-toastify';
 
 let isRedirecting = false;
 
-// =========================================================================
-// A MAGIA ACONTECE AQUI: Lê o IP ou localhost da barra de endereços
-// =========================================================================
-const currentHost = window.location.hostname;
-
 const api = axios.create({
-  // MÁGICA UNIVERSAL: Como usamos Proxy no Vite, a URL agora é apenas a rota relativa!
   baseURL: '/api/v1',
   timeout: 15000,
+  // A MÁGICA DA SEGURANÇA: Obriga o navegador a enviar o Cookie HttpOnly
+  // que contém o JWT gerado pelo Java, sem que o Javascript saiba dele.
   withCredentials: true
 });
 
+// Interceptor de Request: REMOVIDO o código que lia o localStorage para buscar o Token!
+// Agora é 100% responsabilidade do Cookie e do Browser.
 api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-
-    if (token && token !== 'null' && token !== 'undefined') {
-      const cleanToken = token.replace(/['"]+/g, '').trim();
-      config.headers = config.headers || {};
-      config.headers.Authorization = `Bearer ${cleanToken}`;
-    }
-
-    return config;
-  },
+  (config) => config,
   (error) => Promise.reject(error)
 );
 
@@ -45,21 +33,15 @@ api.interceptors.response.use(
     const isLoginRequest = url.includes('/auth/login');
     const isReportRequest = url.includes('/relatorios');
 
-    // Se o erro vier de um download de arquivo (blob), precisamos ler o JSON dentro do blob
     let backendMessage = "Operação inválida.";
     if (error.response.data instanceof Blob) {
-       // Em downloads falhos, não conseguimos ler o json direto. Aqui apenas silenciamos ou tratamos genérico
        backendMessage = "Erro ao processar o arquivo solicitado.";
     } else {
        backendMessage = error.response.data?.mensagem || error.response.data?.message || "Operação inválida.";
     }
 
-    // 6. Erro 428 (Precondition Required): Apenas repassa
-    if (status === 428) {
-      return Promise.reject(error);
-    }
+    if (status === 428) return Promise.reject(error);
 
-    // 2. Erro 400: Regras de Negócio e Validações
     if (status === 400 && !isLoginRequest) {
       if (isReportRequest) {
         console.warn("[BI] Erro 400 na rota de relatórios.");
@@ -68,13 +50,17 @@ api.interceptors.response.use(
       toast.warning(backendMessage, { toastId: `bad-request-${status}` });
     }
 
-    // 3. Erro 401: Sessão Expirada (Token Inválido)
-    if (status === 401 && !isLoginRequest) {
+    // 401 ou 403 (Sessão Expirada ou Sem Permissão) - Limpa os dados visuais do user e força login
+    if ((status === 401 || status === 403) && !isLoginRequest) {
       if (!isRedirecting) {
         isRedirecting = true;
-        localStorage.clear();
+        localStorage.removeItem('user'); // Removemos apenas as infos de nome/perfil
 
-        toast.error("Sessão expirada. Identifique-se novamente.", { toastId: 'session-expired' });
+        if (status === 401) {
+            toast.error("Sessão expirada. Identifique-se novamente.", { toastId: 'session-expired' });
+        } else {
+            toast.error("O seu perfil não tem permissão para aceder a este recurso.", { toastId: 'forbidden-error' });
+        }
 
         setTimeout(() => {
           window.location.href = '/login';
@@ -84,13 +70,6 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // 4. Erro 403: Proibido (Permissão de Perfil)
-    if (status === 403 && !isLoginRequest) {
-      toast.error("Seu perfil não tem permissão para acessar este recurso.", { toastId: 'forbidden-error' });
-      console.warn("Acesso negado em:", url);
-    }
-
-    // 5. Erro 500: Erro Crítico no Backend Java
     if (status === 500) {
       if (!isReportRequest) {
         toast.error("Ocorreu um erro interno no servidor.", { toastId: 'server-error-500' });

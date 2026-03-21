@@ -257,16 +257,6 @@ html, body { width: 100%; margin: 0; background: var(--bg-app); font-family: 'In
 @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* MOBILE */
-@media (max-width: 768px) {
-  .page-header { flex-direction: column; align-items: flex-start; gap: 15px; padding: 20px; }
-  .form-row { flex-direction: column; gap: 0; }
-  .form-container { padding-bottom: 100px; }
-  .form-footer { padding: 15px 20px; justify-content: space-between; }
-}
-
-/* ... MANTENHA TODO O CSS ANTERIOR ... */
-
 /* --- ESTILOS DE VALIDAÇÃO E ERRO --- */
 
 /* Borda Vermelha no Input com Erro */
@@ -311,4 +301,34 @@ html, body { width: 100%; margin: 0; background: var(--bg-app); font-family: 'In
 @keyframes slideDown {
   from { opacity: 0; transform: translateY(-5px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   ALERTA DE REVISÃO DO PDV
+   ========================================================================== */
+.form-alert-banner {
+  background-color: #fffbeb;
+  border: 1px solid #fcd34d;
+  padding: 14px 18px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #b45309;
+  font-size: 0.95rem;
+  animation: fadeIn 0.3s ease-out;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+.form-alert-banner strong {
+  color: #92400e;
+}
+
+/* MOBILE */
+@media (max-width: 768px) {
+  .page-header { flex-direction: column; align-items: flex-start; gap: 15px; padding: 20px; }
+  .form-row { flex-direction: column; gap: 0; }
+  .form-container { padding-bottom: 100px; }
+  .form-footer { padding: 15px 20px; justify-content: space-between; }
+  .form-alert-banner { align-items: flex-start; }
 }

@@ -1,18 +1,13 @@
 import React, { useState, useEffect, useCallback, memo, useRef } from 'react';
 import {
-  Store, Save, Upload, Search, Palette,
-  FileText, Server, Download, RefreshCw, Trash2,
-  Eye, EyeOff, DollarSign, Printer, FileCheck,
-  CheckCircle2, AlertTriangle, Moon, Sun, X, Info, Database, AlertCircle,
-  QrCode, Check, Menu, TrendingUp
+  Store, Save, Upload, Search, Palette, FileText, Server, Download, RefreshCw, Trash2,
+  Eye, EyeOff, DollarSign, Printer, FileCheck, CheckCircle2, AlertTriangle, Moon, Sun,
+  X, Info, Database, AlertCircle, QrCode, Check, Menu, TrendingUp, Clock, Settings
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
 import './Configuracoes.css';
 
-// =========================================================================
-// UTILITÁRIOS E SEGURANÇA
-// =========================================================================
 const clean = (v) => v ? String(v).replace(/\D/g, '') : '';
 
 const sanitizarDados = (obj) => {
@@ -32,6 +27,16 @@ const formatMoney = (value) => {
     if (value === null || value === undefined) return "0,00";
     const numero = typeof value === 'string' ? Number(value.replace(/\D/g, '')) / 100 : Number(value);
     return isNaN(numero) ? "0,00" : numero.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+// 🟢 FUNÇÃO MÁGICA: Converte a Imagem para Texto (Base64) para gravar direto no Banco de Dados
+const convertToBase64 = (file) => {
+  return new Promise((resolve, reject) => {
+    const fileReader = new FileReader();
+    fileReader.readAsDataURL(file);
+    fileReader.onload = () => resolve(fileReader.result);
+    fileReader.onerror = (error) => reject(error);
+  });
 };
 
 const masks = {
@@ -55,9 +60,6 @@ const registrarAuditoria = async (acao, detalhes) => {
     try { await api.post('/auditoria', { acao, operador: getUserRole(), dataHora: new Date().toISOString(), detalhes }); } catch (e) {}
 };
 
-// =========================================================================
-// COMPONENTES DE UI ISOLADOS
-// =========================================================================
 const Field = memo(({ label, value, onChange, onBlur, type="text", prefix, suffix, placeholder, options=[], error, disabled, actionIcon, onAction }) => (
     <div className="cfg-field-group">
         <label className="cfg-field-label">{label}</label>
@@ -76,7 +78,7 @@ const Field = memo(({ label, value, onChange, onBlur, type="text", prefix, suffi
                      <span className="cfg-color-hex">{value || '#ec4899'}</span>
                  </div>
             ) : (
-                <input type={type} className="cfg-input" value={value !== null && value !== undefined ? value : ''} onChange={onChange} onBlur={onBlur} placeholder={placeholder} disabled={disabled} />
+                <input type={type} className="cfg-input" value={value !== null && value !== undefined ? value : ''} onChange={onChange} onBlur={onBlur} placeholder={placeholder} disabled={disabled} step={type === 'number' ? "any" : undefined} />
             )}
 
             {suffix && <span className="cfg-addon suffix">{suffix}</span>}
@@ -123,9 +125,6 @@ const DangerModal = ({ isOpen, onClose, onConfirm, keyword }) => {
     );
 };
 
-// =========================================================================
-// PÁGINA PRINCIPAL: CONFIGURAÇÕES
-// =========================================================================
 const Configuracoes = () => {
   const [activeTab, setActiveTab] = useState('loja');
   const [isSaving, setIsSaving] = useState(false);
@@ -148,14 +147,38 @@ const Configuracoes = () => {
 
   const baseForm = {
     id: null,
-    loja: { razaoSocial: '', cnpj: '', ie: '', nomeFantasia: '', slogan: '', whatsapp: '', instagram: '', isMatriz: true, logoUrl: '', corDestaque: '#ec4899' },
-    endereco: { cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '', complemento: '' },
-    fiscal: { ambiente: 'HOMOLOGACAO', homologacao: { serie: '', nfe: '', token: '', cscId: '' }, producao: { serie: '', nfe: '', token: '', cscId: '' }, senhaCert: '', regime: '1', naturezaPadrao: '5.102', aliquotaInterna: '', priorizarMonofasico: false, modoContingencia: false },
-    financeiro: { fundoTrocoPadrao: 0, alertaSangria: 0, taxaCredito: 0, fechamentoCego: true, pagamentos: { dinheiro: true, pix: true, credito: true, debito: true, crediario: true }, pixTipo: 'CNPJ', pixChave: '' },
-    vendas: { imprimirTicketTroca: false, comportamentoCpf: 'PERGUNTAR', bloquearEstoque: true, metaMensal: 0 },
-    sistema: { tema: 'light', cancelamentoItem: 'ALERTA', cancelamentoVenda: 'SENHA', nomeTerminal: 'CAIXA 01', imprimirLogoCupom: true, impressaoAuto: true, rodape: '' },
-    // Adicionado de forma limpa
-    comissoes: { tipoCalculo: 'GERAL', percentualGeral: 0, comissionarSobre: 'LUCRO', descontarTaxasCartao: false }
+    metaFaturamentoMensal: 0,
+    loja: {
+      razaoSocial: '', nomeFantasia: '', cnpj: '', ie: '', im: '', cnae: '', email: '',
+      telefone: '', whatsapp: '', site: '', instagram: '', slogan: '', corDestaque: '#ec4899',
+      isMatriz: true, horarioAbre: '', horarioFecha: '', toleranciaMinutos: 0,
+      bloqueioForaHorario: false, taxaEntregaPadrao: 0, tempoEntregaMin: 30, logoUrl: ''
+    },
+    endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '' },
+    fiscal: {
+      ambiente: 'HOMOLOGACAO', regime: '1', tokenHomologacao: '', cscIdHomologacao: '', serieHomologacao: 1, nfeHomologacao: 1,
+      tokenProducao: '', cscIdProducao: '', serieProducao: 1, nfeProducao: 1, caminhoCertificado: '', senhaCert: '',
+      csrtId: '', csrtHash: '', ibptToken: '', naturezaPadrao: '5.102', emailContabil: '', enviarXmlAutomatico: true,
+      aliquotaInterna: 18.00, modoContingencia: false, priorizarMonofasico: true, obsPadraoCupom: ''
+    },
+    financeiro: {
+      comissaoProdutos: 0, comissaoServicos: 0, alertaSangria: 500.00, fundoTrocoPadrao: 0, metaDiaria: 0,
+      taxaDebito: 0, taxaCredito: 0, descCaixa: 5.00, descGerente: 20.00, descExtraPix: false, bloquearAbaixoCusto: true,
+      pixTipo: 'CNPJ', pixChave: '', aceitaDinheiro: true, aceitaPix: true, aceitaCredito: true, aceitaDebito: true,
+      aceitaCrediario: false, jurosMensal: 0, multaAtraso: 0, diasCarencia: 0, fechamentoCego: true
+    },
+    vendas: {
+      comportamentoCpf: 'PERGUNTAR', bloquearEstoque: true, layoutCupom: '', imprimirVendedor: false,
+      imprimirTicketTroca: false, autoEnterScanner: false, fidelidadeAtiva: false, pontosPorReal: 0,
+      usarBalanca: false, agruparItens: false, metaMensal: 0
+    },
+    sistema: {
+      impressaoAuto: true, larguraPapel: '80MM', backupAuto: true, backupHora: '23:00', rodape: '',
+      tema: 'light', backupNuvem: false, senhaGerenteCancelamento: true, nomeTerminal: 'CAIXA 01', imprimirLogoCupom: true
+    },
+    comissoes: {
+      tipoCalculo: 'GERAL', percentualGeral: 0, comissionarSobre: 'LUCRO', descontarTaxasCartao: false
+    }
   };
 
   const [form, setForm] = useState(baseForm);
@@ -169,6 +192,7 @@ const Configuracoes = () => {
           const dadosLimpos = sanitizarDados(data);
           const formMontado = {
               ...baseForm, ...dadosLimpos,
+              metaFaturamentoMensal: dadosLimpos.metaFaturamentoMensal || 0,
               loja: { ...baseForm.loja, ...(dadosLimpos.loja || {}) },
               endereco: { ...baseForm.endereco, ...(dadosLimpos.endereco || {}) },
               fiscal: { ...baseForm.fiscal, ...(dadosLimpos.fiscal || {}), senhaCert: '' },
@@ -180,7 +204,18 @@ const Configuracoes = () => {
           setForm(formMontado);
           setInitialFormState(JSON.parse(JSON.stringify(formMontado)));
 
-          if (data.loja?.logoUrl) setLogoPreview(`${getBackendUrl()}${data.loja.logoUrl}`);
+          // 🟢 CARREGAMENTO BLINDADO DA LOGO
+          if (data.loja?.logoUrl) {
+              const url = data.loja.logoUrl;
+              // Se for Base64 ou URL externa de internet, carrega direto
+              if (url.startsWith('data:image') || url.startsWith('http')) {
+                  setLogoPreview(url);
+              } else {
+                  // Fallback caso ainda haja algo antigo na pasta uploads
+                  const separator = url.startsWith('/') ? '' : '/';
+                  setLogoPreview(`${getBackendUrl()}${separator}${url}`);
+              }
+          }
 
           if (data.fiscal?.caminhoCertificado) {
               setCertData({
@@ -196,7 +231,6 @@ const Configuracoes = () => {
       finally { setIsLoading(false); }
     };
     loadConfig();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -217,22 +251,32 @@ const Configuracoes = () => {
 
   const update = useCallback((section, field, value) => {
     setIsDirty(true); setErrors(prev => ({ ...prev, [`${section}.${field}`]: null }));
-    setForm(prev => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
+    if (section === 'raiz') {
+       setForm(prev => ({ ...prev, [field]: value }));
+    } else {
+       setForm(prev => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
+    }
   }, []);
 
   const updateMask = useCallback((section, field, value, type) => { update(section, field, masks[type](value)); }, [update]);
-  const updateMoney = (section, field, value) => { const raw = value.replace(/\D/g, ''); update(section, field, raw ? Number(raw) / 100 : 0); };
 
-  const updateFiscalEnv = (field, value) => {
-    const amb = (form.fiscal.ambiente || 'HOMOLOGACAO').toLowerCase();
-    setForm(prev => { setIsDirty(true); return { ...prev, fiscal: { ...prev.fiscal, [amb]: { ...(prev.fiscal[amb] || {}), [field]: value } } }; });
+  const updateMoney = (section, field, value) => {
+      const raw = String(value).replace(/\D/g, '');
+      const valFinal = raw ? Number(raw) / 100 : 0;
+      if (section === 'raiz') update('raiz', field, valFinal);
+      else update(section, field, valFinal);
+  };
+
+  const updateFiscalEnv = (baseField, value) => {
+    const sulfix = form.fiscal.ambiente === 'PRODUCAO' ? 'Producao' : 'Homologacao';
+    const fieldName = baseField + sulfix;
+    setForm(prev => { setIsDirty(true); return { ...prev, fiscal: { ...prev.fiscal, [fieldName]: value } }; });
   };
 
   const handlePayment = (key) => {
     setForm(prev => {
       setIsDirty(true);
-      const pag = prev.financeiro?.pagamentos || {};
-      return { ...prev, financeiro: { ...prev.financeiro, pagamentos: { ...pag, [key]: !pag[key] } } };
+      return { ...prev, financeiro: { ...prev.financeiro, [key]: !prev.financeiro[key] } };
     });
   };
 
@@ -286,13 +330,14 @@ const Configuracoes = () => {
     try {
       let finalLogoUrl = form.loja.logoUrl;
 
+      // 🟢 O SALVAMENTO BLINDADO: Converte a imagem direto no navegador e salva como texto no banco
       if (logoFile) {
-        const formData = new FormData(); formData.append('file', logoFile);
         try {
-            const respLogo = await api.post('/configuracoes/logo', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
-            if (typeof respLogo.data === 'string') finalLogoUrl = respLogo.data;
-            setLogoFile(null);
-        } catch (e) { toast.warn("Aviso: Logo não atualizada no servidor."); }
+            finalLogoUrl = await convertToBase64(logoFile);
+            setLogoFile(null); // Limpa o arquivo da memória se der certo
+        } catch (e) {
+            toast.warn("Aviso: Falha ao processar a imagem da logo.");
+        }
       }
 
       if (certFile) {
@@ -322,7 +367,7 @@ const Configuracoes = () => {
       const payload = { ...form, loja: { ...form.loja, logoUrl: finalLogoUrl }, fiscal: { ...form.fiscal, senhaCert: '' } };
 
       if (initialFormState) {
-          if (initialFormState.sistema.cancelamentoVenda !== payload.sistema.cancelamentoVenda) await registrarAuditoria('CONFIG_SISTEMA', 'Regra de cancelamento PDV alterada');
+          if (initialFormState.sistema.senhaGerenteCancelamento !== payload.sistema.senhaGerenteCancelamento) await registrarAuditoria('CONFIG_SISTEMA', 'Regra de cancelamento PDV alterada');
           if (initialFormState.financeiro.fechamentoCego !== payload.financeiro.fechamentoCego) await registrarAuditoria('CONFIG_FINANCEIRO', 'Fechamento de caixa alterado');
       }
 
@@ -331,6 +376,7 @@ const Configuracoes = () => {
 
       const formAtualizado = {
           ...form, ...dadosLimpos,
+          metaFaturamentoMensal: dadosLimpos.metaFaturamentoMensal || 0,
           loja: { ...form.loja, ...(dadosLimpos.loja || {}) },
           fiscal: { ...form.fiscal, ...(dadosLimpos.fiscal || {}), senhaCert: '' }
       };
@@ -339,6 +385,18 @@ const Configuracoes = () => {
       setInitialFormState(JSON.parse(JSON.stringify(formAtualizado)));
       setIsDirty(false);
       localStorage.removeItem('@dd:config_draft');
+
+      // Atualiza a imagem com a String Base64 que veio do banco
+      if (formAtualizado.loja.logoUrl) {
+          const url = formAtualizado.loja.logoUrl;
+          if (url.startsWith('data:image') || url.startsWith('http')) {
+              setLogoPreview(url);
+          } else {
+              const separator = url.startsWith('/') ? '' : '/';
+              setLogoPreview(`${getBackendUrl()}${separator}${url}`);
+          }
+      }
+
       toast.success("Configurações salvas e aplicadas!");
 
     } catch (error) { toast.error("Erro Crítico: Falha de comunicação com o servidor."); }
@@ -372,15 +430,17 @@ const Configuracoes = () => {
 
   if (isLoading) return <div className="cfg-loader"><RefreshCw className="spin" size={40} /><h2>Sincronizando Sistema</h2></div>;
 
-  const currentEnv = (form.fiscal.ambiente || 'HOMOLOGACAO').toLowerCase();
-  const currentFiscalData = form.fiscal[currentEnv] || { serie: '', nfe: '', token: '', cscId: '' };
+  const isProd = form.fiscal.ambiente === 'PRODUCAO';
+  const cSerie = isProd ? form.fiscal.serieProducao : form.fiscal.serieHomologacao;
+  const cNfe = isProd ? form.fiscal.nfeProducao : form.fiscal.nfeHomologacao;
+  const cToken = isProd ? form.fiscal.tokenProducao : form.fiscal.tokenHomologacao;
+  const cCscId = isProd ? form.fiscal.cscIdProducao : form.fiscal.cscIdHomologacao;
 
   const tabs = [
       { id: 'loja', icon: <Store size={18}/>, label: 'Identidade e Empresa' },
       { id: 'fiscal', icon: <FileText size={18}/>, label: 'Fiscal e Tributos' },
       { id: 'financeiro', icon: <DollarSign size={18}/>, label: 'Caixa e Financeiro' },
       { id: 'vendas', icon: <Printer size={18}/>, label: 'Operação de Vendas' },
-      // Adicionado de forma limpa
       { id: 'comissoes', icon: <TrendingUp size={18}/>, label: 'Comissões e Metas' },
       { id: 'sistema', icon: <Server size={18}/>, label: 'Sistema e Segurança' },
   ];
@@ -411,7 +471,6 @@ const Configuracoes = () => {
               </button>
               <button className={`cfg-btn-save ${isSaving ? 'saving' : ''} ${!isDirty && !logoFile && !certFile ? 'disabled' : ''}`} onClick={handleSave} disabled={isSaving || (!isDirty && !logoFile && !certFile)}>
                   {isSaving ? <RefreshCw className="spin" size={20}/> : <Save size={20}/>}
-                  {/* Classe para esconder o texto num telemóvel e deixar só o ícone */}
                   <span className="cfg-hide-mobile">{isSaving ? 'Salvando...' : 'Salvar Alterações'}</span>
               </button>
           </div>
@@ -419,7 +478,6 @@ const Configuracoes = () => {
 
       <div className="cfg-layout">
 
-          {/* NOVIDADE MOBILE: Dropdown Nativo para navegação nas abas */}
           <div className="cfg-mobile-tab-selector">
               <label>Menu de Configurações:</label>
               <div className="cfg-mobile-select-wrapper">
@@ -432,7 +490,6 @@ const Configuracoes = () => {
               </div>
           </div>
 
-          {/* SIDEBAR DESKTOP (Escondida no Mobile via CSS) */}
           <aside className="cfg-sidebar">
               <nav className="cfg-nav">
                   {tabs.map(tab => (
@@ -445,11 +502,10 @@ const Configuracoes = () => {
 
           <main className={`cfg-content-area ${isSaving ? 'fade-out' : ''}`}>
 
-              {/* ABA: EMPRESA E IDENTIDADE */}
               {activeTab === 'loja' && (
                   <div className="cfg-panel animate-fade">
-                      <h2 className="cfg-panel-title">Informações Públicas</h2>
-                      <div className="cfg-card">
+                      <h2 className="cfg-panel-title">Identidade Visual e Informações</h2>
+                      <div className="cfg-card mb-5">
                           <div className="cfg-grid-col-2">
                               <div className="cfg-logo-uploader">
                                   <div className="cfg-logo-box" style={{ width: '120px', height: '120px', borderRadius: '12px', background: '#f1f5f9', border: '2px dashed #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
@@ -464,41 +520,69 @@ const Configuracoes = () => {
                                       </div>
                                   </div>
                               </div>
-                              <div className="cfg-card-divider"></div>
+                              <div className="cfg-card-divider hide-mobile"></div>
                               <div className="cfg-visual-controls">
                                   <Field label="Cor Primária do Sistema" type="color" value={form.loja.corDestaque} onChange={e => update('loja', 'corDestaque', e.target.value)} />
-                                  <div className="mt-3"><ToggleSwitch label="Esta Loja é a Matriz" description="Apenas matrizes recebem produtos." checked={form.loja.isMatriz} onChange={e => update('loja', 'isMatriz', e.target.checked)} /></div>
+                                  <div className="mt-3"><ToggleSwitch label="Esta Loja é a Matriz" description="Apenas matrizes podem distribuir produtos." checked={form.loja.isMatriz} onChange={e => update('loja', 'isMatriz', e.target.checked)} /></div>
                               </div>
                           </div>
                       </div>
 
-                      <h2 className="cfg-panel-title mt-6">Dados Fiscais e Endereço</h2>
+                      <h2 className="cfg-panel-title">Dados Cadastrais e Endereço</h2>
                       <div className="cfg-card">
-                          <div className="cfg-grid-col-2 mb-4">
-                              <Field label="CNPJ" value={form.loja.cnpj} onChange={e => updateMask('loja', 'cnpj', e.target.value, 'cnpj')} onBlur={searchCNPJ} error={errors['loja.cnpj']} actionIcon={isSearching ? <RefreshCw className="spin" size={18}/> : <Search size={18}/>} onAction={searchCNPJ} placeholder="00.000.000/0000-00" />
-                              <Field label="Inscrição Estadual (IE)" value={form.loja.ie} onChange={e => updateMask('loja', 'ie', e.target.value, 'ie')} error={errors['loja.ie']} placeholder="Obrigatório p/ NFC-e" />
-                          </div>
-                          <div className="mb-4"><Field label="Razão Social (Contrato Social)" value={form.loja.razaoSocial} onChange={e => update('loja', 'razaoSocial', e.target.value)} error={errors['loja.razaoSocial']} /></div>
-                          <div className="cfg-grid-col-2 mb-4">
-                              <Field label="Nome Fantasia (Aparece no Sistema)" value={form.loja.nomeFantasia} onChange={e => update('loja', 'nomeFantasia', e.target.value)} />
-                              <Field label="Slogan / Frase de Impacto" value={form.loja.slogan} onChange={e => update('loja', 'slogan', e.target.value)} />
-                          </div>
                           <div className="cfg-grid-col-3 mb-4">
-                              <Field label="WhatsApp de Contato" value={form.loja.whatsapp} onChange={e => updateMask('loja', 'whatsapp', e.target.value, 'phone')} placeholder="(81) 90000-0000" />
-                              <Field label="Instagram" prefix="@" value={form.loja.instagram} onChange={e => update('loja', 'instagram', e.target.value)} placeholder="sua.loja" />
-                              <Field label="CEP" value={form.endereco.cep} onChange={e => updateMask('endereco', 'cep', e.target.value, 'cep')} onBlur={searchCEP} actionIcon={<Search size={18}/>} onAction={searchCEP} placeholder="00000-000" />
+                              <Field label="CNPJ" value={form.loja.cnpj} onChange={e => updateMask('loja', 'cnpj', e.target.value, 'cnpj')} onBlur={searchCNPJ} error={errors['loja.cnpj']} actionIcon={isSearching ? <RefreshCw className="spin" size={18}/> : <Search size={18}/>} onAction={searchCNPJ} placeholder="00.000.000/0000-00" />
+                              <Field label="Inscrição Estadual (IE)" value={form.loja.ie} onChange={e => updateMask('loja', 'ie', e.target.value, 'ie')} error={errors['loja.ie']} placeholder="Obrigatório p/ NF-e" />
+                              <Field label="Inscrição Municipal (IM)" value={form.loja.im} onChange={e => update('loja', 'im', clean(e.target.value))} placeholder="Opcional" />
                           </div>
 
-                          <div className="cfg-address-grid">
-                              <div className="cfg-addr-logradouro"><Field label="Logradouro (Rua/Av)" value={form.endereco.logradouro} onChange={e => update('endereco', 'logradouro', e.target.value)} /></div>
-                              <div className="cfg-addr-numero"><Field label="Nº" value={form.endereco.numero} onChange={e => update('endereco', 'numero', e.target.value)} /></div>
-                              <div className="cfg-addr-bairro"><Field label="Bairro" value={form.endereco.bairro} onChange={e => update('endereco', 'bairro', e.target.value)} /></div>
+                          <div className="mb-4"><Field label="Razão Social (Contrato Social)" value={form.loja.razaoSocial} onChange={e => update('loja', 'razaoSocial', e.target.value)} error={errors['loja.razaoSocial']} /></div>
+
+                          <div className="cfg-grid-col-3 mb-4">
+                              <Field label="Nome Fantasia" value={form.loja.nomeFantasia} onChange={e => update('loja', 'nomeFantasia', e.target.value)} />
+                              <Field label="Slogan / Frase" value={form.loja.slogan} onChange={e => update('loja', 'slogan', e.target.value)} />
+                              <Field label="CNAE Principal" value={form.loja.cnae} onChange={e => update('loja', 'cnae', clean(e.target.value))} placeholder="Opcional" />
+                          </div>
+
+                          <div className="cfg-grid-col-4 mb-4">
+                              <Field label="WhatsApp de Contato" value={form.loja.whatsapp} onChange={e => updateMask('loja', 'whatsapp', e.target.value, 'phone')} placeholder="(81) 90000-0000" />
+                              <Field label="Instagram" prefix="@" value={form.loja.instagram} onChange={e => update('loja', 'instagram', e.target.value)} placeholder="sua.loja" />
+                              <Field label="Email" value={form.loja.email} onChange={e => update('loja', 'email', e.target.value)} placeholder="loja@email.com" />
+                              <Field label="Site" value={form.loja.site} onChange={e => update('loja', 'site', e.target.value)} placeholder="www.sualoja.com.br" />
+                          </div>
+
+                          <div className="cfg-card-divider mb-4"></div>
+
+                          <div className="cfg-grid-col-3 mb-4">
+                              <Field label="CEP" value={form.endereco.cep} onChange={e => updateMask('endereco', 'cep', e.target.value, 'cep')} onBlur={searchCEP} actionIcon={<Search size={18}/>} onAction={searchCEP} placeholder="00000-000" />
+                              <div className="cfg-addr-logradouro" style={{gridColumn: 'span 2'}}><Field label="Logradouro (Rua/Av)" value={form.endereco.logradouro} onChange={e => update('endereco', 'logradouro', e.target.value)} /></div>
+                          </div>
+
+                          <div className="cfg-grid-col-4 mb-4">
+                              <Field label="Nº" value={form.endereco.numero} onChange={e => update('endereco', 'numero', e.target.value)} />
+                              <Field label="Complemento" value={form.endereco.complemento} onChange={e => update('endereco', 'complemento', e.target.value)} placeholder="Sala, Galpão..." />
+                              <Field label="Bairro" value={form.endereco.bairro} onChange={e => update('endereco', 'bairro', e.target.value)} />
+                              <Field label="Cidade" value={form.endereco.cidade} onChange={e => update('endereco', 'cidade', e.target.value)} />
+                          </div>
+
+                          <div className="cfg-card-divider mb-4"></div>
+
+                          <h3 className="cfg-card-title mb-4">Horários e Entregas</h3>
+                          <div className="cfg-grid-col-4 mb-4">
+                              <Field label="Abertura" type="time" value={form.loja.horarioAbre} onChange={e => update('loja', 'horarioAbre', e.target.value)} />
+                              <Field label="Fechamento" type="time" value={form.loja.horarioFecha} onChange={e => update('loja', 'horarioFecha', e.target.value)} />
+                              <Field label="Tolerância (min)" type="number" value={form.loja.toleranciaMinutos} onChange={e => update('loja', 'toleranciaMinutos', parseInt(e.target.value) || 0)} />
+                              <div className="pt-2"><ToggleSwitch label="Bloquear PDV fora do horário" checked={form.loja.bloqueioForaHorario} onChange={e => update('loja', 'bloqueioForaHorario', e.target.checked)} danger /></div>
+                          </div>
+
+                          <div className="cfg-grid-col-2">
+                              <Field label="Taxa Padrão de Entrega" prefix="R$" value={formatMoney(form.loja.taxaEntregaPadrao)} onChange={e => updateMoney('loja', 'taxaEntregaPadrao', e.target.value)} placeholder="0,00" />
+                              <Field label="Tempo Mínimo de Entrega (Minutos)" type="number" value={form.loja.tempoEntregaMin} onChange={e => update('loja', 'tempoEntregaMin', parseInt(e.target.value) || 0)} />
                           </div>
                       </div>
                   </div>
               )}
 
-              {/* ABA: FISCAL E SEFAZ */}
               {activeTab === 'fiscal' && (
                   <div className="tab-pane animate-slide-left">
                       <div className="cfg-card-header flex-between flex-wrap">
@@ -559,28 +643,61 @@ const Configuracoes = () => {
                           </div>
 
                           <div className="cfg-grid-col-3 mb-4">
-                              <Field label="Série da NFC-e" value={currentFiscalData.serie || ""} onChange={e => updateFiscalEnv('serie', clean(e.target.value))} placeholder="Normalmente: 1" />
-                              <Field label="Próximo Número (NFC-e)" value={currentFiscalData.nfe || ""} onChange={e => updateFiscalEnv('nfe', clean(e.target.value))} placeholder="Ex: 1500" />
+                              <Field label="Série da NFC-e" value={cSerie || ""} onChange={e => updateFiscalEnv('serie', clean(e.target.value))} placeholder="Normalmente: 1" />
+                              <Field label="Próximo Número (NFC-e)" value={cNfe || ""} onChange={e => updateFiscalEnv('nfe', clean(e.target.value))} placeholder="Ex: 1500" />
                               <Field label="Alíquota ICMS do Estado" suffix="%" value={form.fiscal.aliquotaInterna || ""} onChange={e => update('fiscal', 'aliquotaInterna', e.target.value)} placeholder="Ex: 18 ou 20.5" />
                           </div>
 
-                          <div className="cfg-grid-col-2">
-                              <Field label="Token CSC (Código de Segurança)" type="password" value={currentFiscalData.token} onChange={e => updateFiscalEnv('token', e.target.value)} placeholder="Fornecido pela sua contabilidade" />
-                              <Field label="ID do CSC" value={currentFiscalData.cscId} onChange={e => updateFiscalEnv('cscId', clean(e.target.value))} placeholder="Ex: 1 ou 2" />
+                          <div className="cfg-grid-col-2 mb-4">
+                              <Field label="Token CSC (Código de Segurança)" type="password" value={cToken || ""} onChange={e => updateFiscalEnv('token', e.target.value)} placeholder="Fornecido pela sua contabilidade" />
+                              <Field label="ID do CSC" value={cCscId || ""} onChange={e => updateFiscalEnv('cscId', clean(e.target.value))} placeholder="Ex: 1 ou 2" />
                           </div>
+
+                          <div className="cfg-card-divider mb-4"></div>
+
+                          <h3 className="cfg-card-title mb-4">Tokens e Contabilidade</h3>
+                          <div className="cfg-grid-col-2 mb-4">
+                              <Field label="ID CSRT" value={form.fiscal.csrtId} onChange={e => update('fiscal', 'csrtId', clean(e.target.value))} placeholder="Opcional em alguns estados" />
+                              <Field label="Hash CSRT" type="password" value={form.fiscal.csrtHash} onChange={e => update('fiscal', 'csrtHash', e.target.value)} />
+                          </div>
+
+                          <div className="cfg-grid-col-2 mb-4">
+                              <Field label="Token IBPT (Imposto na Nota)" value={form.fiscal.ibptToken} onChange={e => update('fiscal', 'ibptToken', e.target.value)} placeholder="Para cálculo de tributos transparentes" />
+                              <Field label="E-mail da Contabilidade" value={form.fiscal.emailContabil} onChange={e => update('fiscal', 'emailContabil', e.target.value)} placeholder="contato@contabilidade.com" />
+                          </div>
+
+                          <div className="cfg-grid-col-2 mb-4">
+                              <ToggleSwitch label="Enviar XML Automático" description="Dispara os fechamentos e XMLs para a contabilidade ao fechar o mês." checked={form.fiscal.enviarXmlAutomatico} onChange={e => update('fiscal', 'enviarXmlAutomatico', e.target.checked)} />
+                              <ToggleSwitch label="Priorizar Monofásico" description="Se marcado, força CST específico para cosméticos monofásicos." checked={form.fiscal.priorizarMonofasico} onChange={e => update('fiscal', 'priorizarMonofasico', e.target.checked)} />
+                          </div>
+
+                          <Field label="Observação Padrão da Nota" type="textarea" value={form.fiscal.obsPadraoCupom} onChange={e => update('fiscal', 'obsPadraoCupom', e.target.value)} placeholder="Ex: Documento emitido por ME ou EPP optante pelo Simples Nacional." />
                       </div>
                   </div>
               )}
 
-              {/* ABA: FINANCEIRO E CAIXA */}
               {activeTab === 'financeiro' && (
                   <div className="tab-pane animate-slide-left">
-                      <h2 className="cfg-panel-title">Operação Financeira</h2>
+                      <h2 className="cfg-panel-title">Operação Financeira do Caixa</h2>
                       <div className="cfg-card">
+                          <h3 className="cfg-card-title border-bottom pb-2 mb-4">Valores de Fundo e Alertas</h3>
                           <div className="cfg-grid-col-3 mb-5">
                               <Field label="Fundo de Troco Fixo" prefix="R$" value={formatMoney(form.financeiro.fundoTrocoPadrao)} onChange={e => updateMoney('financeiro', 'fundoTrocoPadrao', e.target.value)} placeholder="0,00" />
-                              <Field label="Alerta Sangria (Teto da Gaveta)" prefix="R$" value={formatMoney(form.financeiro.alertaSangria)} onChange={e => updateMoney('financeiro', 'alertaSangria', e.target.value)} placeholder="0,00" />
-                              <Field label="Taxa Média Crédito" suffix="%" value={form.financeiro.taxaCredito} onChange={e => update('financeiro', 'taxaCredito', e.target.value)} placeholder="Para cálculo de lucro" />
+                              <Field label="Alerta de Sangria (Teto da Gaveta)" prefix="R$" value={formatMoney(form.financeiro.alertaSangria)} onChange={e => updateMoney('financeiro', 'alertaSangria', e.target.value)} placeholder="0,00" />
+                              <Field label="Meta Diária Padrão" prefix="R$" value={formatMoney(form.financeiro.metaDiaria)} onChange={e => updateMoney('financeiro', 'metaDiaria', e.target.value)} placeholder="0,00" />
+                          </div>
+
+                          <h3 className="cfg-card-title border-bottom pb-2 mb-4">Taxas e Limites</h3>
+                          <div className="cfg-grid-col-4 mb-5">
+                              <Field label="Taxa Crédito" suffix="%" value={formatMoney(form.financeiro.taxaCredito)} onChange={e => updateMoney('financeiro', 'taxaCredito', e.target.value)} />
+                              <Field label="Taxa Débito" suffix="%" value={formatMoney(form.financeiro.taxaDebito)} onChange={e => updateMoney('financeiro', 'taxaDebito', e.target.value)} />
+                              <Field label="Desconto Máx. Caixa" suffix="%" value={formatMoney(form.financeiro.descCaixa)} onChange={e => updateMoney('financeiro', 'descCaixa', e.target.value)} />
+                              <Field label="Desconto Máx. Gerente" suffix="%" value={formatMoney(form.financeiro.descGerente)} onChange={e => updateMoney('financeiro', 'descGerente', e.target.value)} />
+                          </div>
+
+                          <div className="cfg-grid-col-2 mb-5">
+                              <ToggleSwitch label="Permitir Desconto Extra no PIX" checked={form.financeiro.descExtraPix} onChange={e => update('financeiro', 'descExtraPix', e.target.checked)} />
+                              <ToggleSwitch label="Bloquear Venda Abaixo do Custo" checked={form.financeiro.bloquearAbaixoCusto} onChange={e => update('financeiro', 'bloquearAbaixoCusto', e.target.checked)} danger />
                           </div>
 
                           <div className="cfg-highlight-box border-red mb-5">
@@ -590,21 +707,21 @@ const Configuracoes = () => {
                           <h3 className="cfg-card-title border-bottom pb-2 mb-4">Meios de Pagamento Aceitos</h3>
                           <div className="cfg-payment-grid mb-4">
                               {[
-                                  {id: 'dinheiro', icon: <DollarSign size={20}/>, label: 'Dinheiro'},
-                                  {id: 'pix', icon: <QrCode size={20}/>, label: 'PIX Direto'},
-                                  {id: 'credito', icon: <Printer size={20}/>, label: 'Cartão Crédito'},
-                                  {id: 'debito', icon: <Printer size={20}/>, label: 'Cartão Débito'},
-                                  {id: 'crediario', icon: <FileText size={20}/>, label: 'Fiado / Crediário'}
+                                  {id: 'aceitaDinheiro', icon: <DollarSign size={20}/>, label: 'Dinheiro'},
+                                  {id: 'aceitaPix', icon: <QrCode size={20}/>, label: 'PIX Direto'},
+                                  {id: 'aceitaCredito', icon: <Printer size={20}/>, label: 'Cartão Crédito'},
+                                  {id: 'aceitaDebito', icon: <Printer size={20}/>, label: 'Cartão Débito'},
+                                  {id: 'aceitaCrediario', icon: <FileText size={20}/>, label: 'Fiado / Crediário'}
                               ].map(metodo => (
-                                  <button key={metodo.id} className={`cfg-pay-card ${form.financeiro.pagamentos?.[metodo.id] ? 'active' : ''}`} onClick={() => handlePayment(metodo.id)}>
-                                      <div className="pay-check">{form.financeiro.pagamentos?.[metodo.id] && <Check size={14}/>}</div>
+                                  <button key={metodo.id} className={`cfg-pay-card ${form.financeiro[metodo.id] ? 'active' : ''}`} onClick={() => handlePayment(metodo.id)}>
+                                      <div className="pay-check">{form.financeiro[metodo.id] && <Check size={14}/>}</div>
                                       {metodo.icon} <span>{metodo.label}</span>
                                   </button>
                               ))}
                           </div>
 
-                          {form.financeiro.pagamentos?.pix && (
-                              <div className="cfg-highlight-box border-blue fade-in">
+                          {form.financeiro.aceitaPix && (
+                              <div className="cfg-highlight-box border-blue fade-in mb-5">
                                   <h4 className="mb-3 text-blue">Configuração da Chave PIX (QR Code Tela)</h4>
                                   <div className="cfg-grid-col-2">
                                       <Field label="Tipo de Chave" type="select" value={form.financeiro.pixTipo || "CNPJ"} onChange={e => update('financeiro', 'pixTipo', e.target.value)} options={[ { value: 'CNPJ', label: 'CNPJ' }, { value: 'CELULAR', label: 'Celular' }, { value: 'ALEATORIA', label: 'Chave Aleatória' }, { value: 'EMAIL', label: 'E-mail' } ]} />
@@ -612,94 +729,128 @@ const Configuracoes = () => {
                                   </div>
                               </div>
                           )}
+
+                          {form.financeiro.aceitaCrediario && (
+                              <div className="cfg-highlight-box border-warning fade-in mb-5">
+                                  <h4 className="mb-3 text-warning">Regras do Crediário / Fiado</h4>
+                                  <div className="cfg-grid-col-3">
+                                      <Field label="Juros Mensal" suffix="%" value={formatMoney(form.financeiro.jurosMensal)} onChange={e => updateMoney('financeiro', 'jurosMensal', e.target.value)} />
+                                      <Field label="Multa por Atraso" prefix="R$" value={formatMoney(form.financeiro.multaAtraso)} onChange={e => updateMoney('financeiro', 'multaAtraso', e.target.value)} />
+                                      <Field label="Dias de Carência" type="number" value={form.financeiro.diasCarencia} onChange={e => update('financeiro', 'diasCarencia', parseInt(e.target.value) || 0)} />
+                                  </div>
+                              </div>
+                          )}
                       </div>
                   </div>
               )}
 
-              {/* ABA: VENDAS */}
               {activeTab === 'vendas' && (
                   <div className="tab-pane animate-slide-left">
-                      <h2 className="cfg-panel-title">Operação e Metas (PDV)</h2>
+                      <h2 className="cfg-panel-title">Operação de Vendas (PDV)</h2>
                       <div className="cfg-card">
 
                           <div className="cfg-highlight-box border-blue mb-5">
-                              <h4 className="mb-3 text-blue">Termômetro do Dashboard</h4>
-                              <div className="cfg-grid-col-2 items-center">
-                                  <Field
-                                      label="Meta de Faturamento Mensal (Loja Física)"
-                                      prefix="R$"
-                                      value={formatMoney(form.vendas.metaMensal)}
-                                      onChange={e => updateMoney('vendas', 'metaMensal', e.target.value)}
-                                      placeholder="Ex: 50.000,00"
-                                  />
-                                  <div className="cfg-info-msg m-0-mobile">
-                                      <Info size={16}/> <span>Este valor será usado no painel inicial para calcular se a loja está a bater as metas.</span>
-                                  </div>
+                              <h4 className="mb-3 text-blue">Comportamento de Venda</h4>
+                              <div className="cfg-grid-col-3 items-center">
+                                  <Field label="Identificar Cliente (CPF)" type="select" value={form.vendas.comportamentoCpf || "PERGUNTAR"} onChange={e => update('vendas', 'comportamentoCpf', e.target.value)} options={[ { value: 'PERGUNTAR', label: 'Sugerir Identificação' }, { value: 'SEMPRE', label: 'Obrigatório (Trava a Venda)' }, { value: 'NUNCA', label: 'Não Sugerir' } ]} />
+                                  <Field label="Layout do Cupom" type="select" value={form.vendas.layoutCupom || "PADRAO"} onChange={e => update('vendas', 'layoutCupom', e.target.value)} options={[ { value: 'PADRAO', label: 'Padrão (Compacto)' }, { value: 'DETALHADO', label: 'Detalhado (Com Descontos)' } ]} />
+                                  <div className="pt-2 pl-4"><ToggleSwitch label="Bloquear Estoque Zerado" checked={form.vendas.bloquearEstoque} onChange={e => update('vendas', 'bloquearEstoque', e.target.checked)} danger /></div>
                               </div>
                           </div>
 
+                          <div className="cfg-grid-col-3 mb-5">
+                              <ToggleSwitch label="Imprimir Ticket Troca" checked={form.vendas.imprimirTicketTroca} onChange={e => update('vendas', 'imprimirTicketTroca', e.target.checked)} />
+                              <ToggleSwitch label="Imprimir Vendedor no Cupom" checked={form.vendas.imprimirVendedor} onChange={e => update('vendas', 'imprimirVendedor', e.target.checked)} />
+                              <ToggleSwitch label="Agrupar Itens Iguais" checked={form.vendas.agruparItens} onChange={e => update('vendas', 'agruparItens', e.target.checked)} />
+                          </div>
+
                           <div className="cfg-grid-col-2 mb-5">
-                              <ToggleSwitch label="Impressão Automática" description="Dispara a bobina assim que o pagamento for confirmado." checked={form.sistema.impressaoAuto} onChange={e => update('sistema', 'impressaoAuto', e.target.checked)} />
-                              <ToggleSwitch label="Emitir Ticket de Troca" description="Imprime uma via extra sem valores." checked={form.vendas.imprimirTicketTroca} onChange={e => update('vendas', 'imprimirTicketTroca', e.target.checked)} />
+                              <ToggleSwitch label="Auto-Enter no Scanner" description="Adiciona o produto automaticamente sem apertar Enter." checked={form.vendas.autoEnterScanner} onChange={e => update('vendas', 'autoEnterScanner', e.target.checked)} />
+                              <ToggleSwitch label="Integração de Balança" description="Busca peso via porta COM automaticamente." checked={form.vendas.usarBalanca} onChange={e => update('vendas', 'usarBalanca', e.target.checked)} />
                           </div>
 
                           <div className="cfg-card-divider mb-5"></div>
 
-                          <div className="cfg-grid-col-2 mb-4">
-                              <Field label="Tamanho da Impressora (Bobina)" type="select" value={form.sistema.larguraPapel || "80mm"} onChange={e => update('sistema', 'larguraPapel', e.target.value)} options={[ { value: '80mm', label: '80mm (Lojas/Supermercado)' }, { value: '58mm', label: '58mm (Mini Bluetooth)' } ]} />
-                              <Field label="Identificar Cliente na Venda (CPF)" type="select" value={form.vendas.comportamentoCpf || "PERGUNTAR"} onChange={e => update('vendas', 'comportamentoCpf', e.target.value)} options={[ { value: 'PERGUNTAR', label: 'Sugerir (Abre Modal Fidelidade)' }, { value: 'SEMPRE', label: 'Obrigatório (Trava a Venda)' }, { value: 'NUNCA', label: 'Não Sugerir' } ]} />
+                          <div className="cfg-highlight-box border-warning mb-5">
+                              <h4 className="mb-3 text-warning">Programa de Fidelidade</h4>
+                              <div className="cfg-grid-col-2">
+                                  <ToggleSwitch label="Ativar Fidelidade" description="Acumula pontos pelo CPF na hora da compra." checked={form.vendas.fidelidadeAtiva} onChange={e => update('vendas', 'fidelidadeAtiva', e.target.checked)} />
+                                  {form.vendas.fidelidadeAtiva && (
+                                      <Field label="Pontos a cada R$ 1,00 gasto" type="number" value={form.vendas.pontosPorReal} onChange={e => update('vendas', 'pontosPorReal', parseFloat(e.target.value) || 0)} />
+                                  )}
+                              </div>
                           </div>
 
-                          <div className="cfg-highlight-box border-red mb-5">
-                              <ToggleSwitch label="Trava de Ruptura (Venda Negativa)" description="Se o estoque estiver zerado, o sistema não deixa passar o produto no caixa." checked={form.vendas.bloquearEstoque} onChange={e => update('vendas', 'bloquearEstoque', e.target.checked)} danger />
-                          </div>
-
-                          <Field label="Mensagem no Rodapé do Cupom" type="textarea" value={form.sistema.rodape} onChange={e => update('sistema', 'rodape', e.target.value)} placeholder="Ex: Volte Sempre! Trocas apenas com etiqueta em até 7 dias." />
                       </div>
                   </div>
               )}
 
-              {/* ABA: COMISSÕES (INSERIDA DE FORMA LIMPA) */}
               {activeTab === 'comissoes' && (
                   <div className="tab-pane animate-slide-left">
-                      <h2 className="cfg-panel-title">Regras de Comissionamento</h2>
+                      <h2 className="cfg-panel-title">Metas e Comissionamento</h2>
                       <div className="cfg-card">
+
+                          <div className="cfg-highlight-box border-blue mb-5">
+                              <h4 className="mb-3 text-blue">Termômetro de Dashboard (Meta da Loja)</h4>
+                              <div className="cfg-grid-col-2 items-center">
+                                  <Field
+                                      label="Meta de Faturamento Mensal"
+                                      prefix="R$"
+                                      value={formatMoney(form.metaFaturamentoMensal)}
+                                      onChange={e => updateMoney('raiz', 'metaFaturamentoMensal', e.target.value)}
+                                      placeholder="Ex: 50.000,00"
+                                  />
+                                  <div className="cfg-info-msg m-0-mobile">
+                                      <Info size={16}/> <span>Usado nos painéis principais para calcular progresso do mês.</span>
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div className="cfg-card-divider mb-5"></div>
+
+                          <h3 className="cfg-card-title mb-4">Cálculo de Comissões dos Vendedores</h3>
                           <div className="cfg-grid-col-2 mb-5">
                               <div className="cfg-highlight-box border-blue">
                                   <Field
-                                      label="Tipo de Cálculo"
+                                      label="Regra Base de Comissão"
                                       type="select"
                                       value={form.comissoes?.tipoCalculo || 'GERAL'}
                                       onChange={e => update('comissoes', 'tipoCalculo', e.target.value)}
                                       options={[
                                           { value: 'GERAL', label: 'Percentual Fixo (Loja Toda)' },
-                                          { value: 'CATEGORIA', label: 'Por Categoria/Produto' }
+                                          { value: 'CATEGORIA', label: 'Por Categoria de Produto' }
                                       ]}
                                   />
                                   {form.comissoes?.tipoCalculo === 'GERAL' && (
                                       <div className="mt-3">
-                                          <Field label="Percentual (%)" suffix="%" value={form.comissoes?.percentualGeral || 0} onChange={e => update('comissoes', 'percentualGeral', e.target.value)} />
+                                          <Field
+                                              label="Percentual Pago (%)"
+                                              type="number"
+                                              suffix="%"
+                                              value={form.comissoes?.percentualGeral || 0}
+                                              onChange={e => update('comissoes', 'percentualGeral', parseFloat(e.target.value) || 0)}
+                                          />
                                       </div>
                                   )}
                               </div>
 
                               <div className="cfg-highlight-box border-blue">
                                   <Field
-                                      label="Base de Cálculo"
+                                      label="A Comissão é calculada sobre o quê?"
                                       type="select"
                                       value={form.comissoes?.comissionarSobre || 'LUCRO'}
                                       onChange={e => update('comissoes', 'comissionarSobre', e.target.value)}
                                       options={[
-                                          { value: 'TOTAL_VENDA', label: 'Sobre Valor Total da Venda' },
-                                          { value: 'LUCRO', label: 'Sobre o Lucro (Venda - Custo)' }
+                                          { value: 'TOTAL_VENDA', label: 'Sobre o Valor Bruto da Venda' },
+                                          { value: 'LUCRO', label: 'Sobre o Lucro Líquido (Venda - Custo)' }
                                       ]}
                                   />
                               </div>
                           </div>
 
                           <ToggleSwitch
-                              label="Descontar Taxas de Cartão"
-                              description="Deduzir taxas financeiras antes de calcular a comissão."
+                              label="Descontar Taxas da Maquininha?"
+                              description="Se ativado, subtrai a taxa do cartão de crédito/débito antes de aplicar o percentual do vendedor."
                               checked={form.comissoes?.descontarTaxasCartao}
                               onChange={e => update('comissoes', 'descontarTaxasCartao', e.target.checked)}
                           />
@@ -707,24 +858,36 @@ const Configuracoes = () => {
                   </div>
               )}
 
-              {/* ABA: SISTEMA */}
               {activeTab === 'sistema' && (
                   <div className="tab-pane animate-slide-left">
-                      <h2 className="cfg-panel-title">Manutenção e Permissões</h2>
+                      <h2 className="cfg-panel-title">Sistema, Backup e Segurança</h2>
                       <div className="cfg-card mb-5">
-                          <div className="cfg-grid-col-2 mb-4">
+                          <div className="cfg-grid-col-3 mb-4">
                               <Field label="Nome do Terminal Atual" value={form.sistema?.nomeTerminal} onChange={e => update('sistema', 'nomeTerminal', e.target.value)} placeholder="Ex: CAIXA PRINCIPAL" />
-                              <div className="pt-2"><ToggleSwitch label="Imprimir Logo no Cupom Físico" checked={form.sistema?.imprimirLogoCupom} onChange={e => update('sistema', 'imprimirLogoCupom', e.target.checked)} /></div>
+                              <Field label="Tamanho da Impressora" type="select" value={form.sistema?.larguraPapel || "80MM"} onChange={e => update('sistema', 'larguraPapel', e.target.value)} options={[ { value: '80MM', label: '80mm Padrão' }, { value: '58MM', label: '58mm Mini Bluetooth' } ]} />
+                              <div className="pt-2"><ToggleSwitch label="Imprimir Logo no Cupom" checked={form.sistema?.imprimirLogoCupom} onChange={e => update('sistema', 'imprimirLogoCupom', e.target.checked)} /></div>
                           </div>
 
+                          <div className="cfg-grid-col-2 mb-4">
+                              <ToggleSwitch label="Impressão Automática no Final da Venda" checked={form.sistema?.impressaoAuto} onChange={e => update('sistema', 'impressaoAuto', e.target.checked)} />
+                          </div>
+
+                          <Field label="Mensagem no Rodapé do Cupom Fiscal/Não Fiscal" type="textarea" value={form.sistema?.rodape} onChange={e => update('sistema', 'rodape', e.target.value)} placeholder="Ex: Volte Sempre! Trocas em 7 dias." />
+
+                          <div className="cfg-card-divider my-5"></div>
+
                           <h3 className="cfg-card-title border-bottom pb-2 mb-4 mt-2">Níveis de Permissão no Balcão</h3>
-                          <div className="cfg-grid-col-2">
-                              <div className="cfg-highlight-box border-blue">
-                                  <Field label="Remover 1 ITEM do Carrinho" type="select" value={form.sistema?.cancelamentoItem || "ALERTA"} onChange={e => update('sistema', 'cancelamentoItem', e.target.value)} options={[ { value: 'ALERTA', label: 'Livre p/ o Operador' }, { value: 'SENHA', label: 'Exigir Senha Gerencial' } ]} />
-                              </div>
-                              <div className="cfg-highlight-box border-red">
-                                  <Field label="Cancelar a VENDA INTEIRA" type="select" value={form.sistema?.cancelamentoVenda || "SENHA"} onChange={e => update('sistema', 'cancelamentoVenda', e.target.value)} options={[ { value: 'SENHA', label: 'Exigir Senha Gerencial (Recomendado)' }, { value: 'ALERTA', label: 'Livre p/ o Operador (Risco)' } ]} />
-                              </div>
+                          <div className="cfg-highlight-box border-red mb-5">
+                              <ToggleSwitch label="Exigir Senha do Gerente para Cancelamentos" description="Requer permissão de nível Gerencial para cancelar itens ou a venda inteira no PDV." checked={form.sistema?.senhaGerenteCancelamento} onChange={e => update('sistema', 'senhaGerenteCancelamento', e.target.checked)} danger />
+                          </div>
+
+                          <div className="cfg-card-divider my-5"></div>
+
+                          <h3 className="cfg-card-title mb-4">Rotinas de Backup</h3>
+                          <div className="cfg-grid-col-3 mb-4">
+                              <ToggleSwitch label="Ativar Backup Automático" checked={form.sistema?.backupAuto} onChange={e => update('sistema', 'backupAuto', e.target.checked)} />
+                              <Field label="Hora do Backup" type="time" value={form.sistema?.backupHora} onChange={e => update('sistema', 'backupHora', e.target.value)} disabled={!form.sistema?.backupAuto}/>
+                              <ToggleSwitch label="Sincronizar em Nuvem" checked={form.sistema?.backupNuvem} onChange={e => update('sistema', 'backupNuvem', e.target.checked)} disabled={!form.sistema?.backupAuto}/>
                           </div>
                       </div>
 
@@ -742,10 +905,10 @@ const Configuracoes = () => {
                                       <Database size={20}/> <span>Otimizar BD</span>
                                   </button>
                                   <button type="button" className="cfg-btn-action green" onClick={handleBackup}>
-                                      <Download size={20}/> <span>Baixar Backup</span>
+                                      <Download size={20}/> <span>Baixar Backup Manual</span>
                                   </button>
                                   <button type="button" className="cfg-btn-action red outline" onClick={() => setShowResetModal(true)}>
-                                      <Trash2 size={20}/> <span>Zerar Sistema</span>
+                                      <Trash2 size={20}/> <span>Zerar Sistema (Format)</span>
                                   </button>
                               </div>
                           </div>

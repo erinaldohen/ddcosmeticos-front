@@ -2,16 +2,17 @@ import api from './api';
 
 const authService = {
   login: async (credentials) => {
-    // Adapter: Garante que enviamos 'login' e 'password' para o backend
-    // mesmo que o form use 'matricula' ou 'senha'
     const payload = {
         login: credentials.login || credentials.matricula || credentials.email,
         password: credentials.password || credentials.senha
     };
 
+    // Ao fazer este POST, o Java (AuthenticationController) irá devolver
+    // um "Set-Cookie" no cabeçalho. O navegador guarda esse cookie automaticamente.
     const response = await api.post('/auth/login', payload);
 
     if (response.data.usuario) {
+      // Guardamos apenas os dados "inocentes" para desenhar a interface gráfica
       localStorage.setItem('user', JSON.stringify(response.data.usuario));
     }
     return response.data;
@@ -19,6 +20,7 @@ const authService = {
 
   logout: async () => {
     try {
+        // Ao chamar esta rota, o Java destrói o Cookie de sessão
         await api.post('/auth/logout');
     } catch (e) {
         console.error("Logout error", e);

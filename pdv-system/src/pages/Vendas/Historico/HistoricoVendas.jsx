@@ -19,12 +19,13 @@ const HistoricoVendas = () => {
   const carregarVendas = async () => {
     setLoading(true);
     try {
+      // Assumindo que o Java tem Paginação, idealmente aqui passaria um ?page=0&size=50 futuramente
       const response = await api.get('/vendas');
-      // Lida tanto com paginação do Spring (content) quanto lista direta
       const dados = response.data.content || response.data || [];
       setVendas(dados);
     } catch (error) {
       console.error("Erro ao buscar vendas:", error);
+      setVendas([]); // Garante que não quebra a tabela se der erro 500/403
     } finally {
       setLoading(false);
     }
@@ -141,7 +142,6 @@ const HistoricoVendas = () => {
               <ul className="modal-lista-itens">
                 {vendaSelecionada.itens && vendaSelecionada.itens.length > 0 ? (
                   vendaSelecionada.itens.map((item, idx) => {
-                    // REDE DE ARRASTO: Busca o nome, EAN e preço independente de como o Java enviou
                     const nomeProduto = item.nomeProduto || item.nome || item.produtoNome || item.descricao || item.produto?.nome || item.produto?.descricao || `Produto ID: ${item.produtoId || item.produto?.id || '?'}`;
                     const eanProduto = item.codigoBarras || item.ean || item.produto?.codigoBarras || item.produto?.ean || 'Não informado';
                     const precoUnit = item.precoUnitario || item.valorUnitario || item.preco || 0;
@@ -157,7 +157,6 @@ const HistoricoVendas = () => {
                           <span className="item-preco">{formatCurrency(precoUnit * qtd)}</span>
                         </div>
 
-                        {/* Sub-linha com EAN e Valor Unitário */}
                         <div className="item-sub-row">
                           <span className="item-ean" title="Código de Barras">
                             EAN: {eanProduto}
@@ -201,7 +200,9 @@ const HistoricoVendas = () => {
 
             <div className="modal-footer">
               <button className="btn-secondary" onClick={fecharModal}>Fechar</button>
-              <button className="btn-primary"><FileText size={16}/> Reimprimir Recibo</button>
+              <button className="btn-primary" onClick={() => window.open(`/api/v1/fiscal/nfce/imprimir/${vendaSelecionada.idVenda || vendaSelecionada.id}`, '_blank')}>
+                <FileText size={16}/> Reimprimir Recibo
+              </button>
             </div>
           </div>
         </div>
