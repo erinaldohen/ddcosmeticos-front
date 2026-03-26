@@ -29,7 +29,6 @@ const formatMoney = (value) => {
     return isNaN(numero) ? "0,00" : numero.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-// 🟢 FUNÇÃO MÁGICA: Converte a Imagem para Texto (Base64) para gravar direto no Banco de Dados
 const convertToBase64 = (file) => {
   return new Promise((resolve, reject) => {
     const fileReader = new FileReader();
@@ -204,14 +203,11 @@ const Configuracoes = () => {
           setForm(formMontado);
           setInitialFormState(JSON.parse(JSON.stringify(formMontado)));
 
-          // 🟢 CARREGAMENTO BLINDADO DA LOGO
           if (data.loja?.logoUrl) {
               const url = data.loja.logoUrl;
-              // Se for Base64 ou URL externa de internet, carrega direto
               if (url.startsWith('data:image') || url.startsWith('http')) {
                   setLogoPreview(url);
               } else {
-                  // Fallback caso ainda haja algo antigo na pasta uploads
                   const separator = url.startsWith('/') ? '' : '/';
                   setLogoPreview(`${getBackendUrl()}${separator}${url}`);
               }
@@ -330,11 +326,10 @@ const Configuracoes = () => {
     try {
       let finalLogoUrl = form.loja.logoUrl;
 
-      // 🟢 O SALVAMENTO BLINDADO: Converte a imagem direto no navegador e salva como texto no banco
       if (logoFile) {
         try {
             finalLogoUrl = await convertToBase64(logoFile);
-            setLogoFile(null); // Limpa o arquivo da memória se der certo
+            setLogoFile(null);
         } catch (e) {
             toast.warn("Aviso: Falha ao processar a imagem da logo.");
         }
@@ -364,7 +359,17 @@ const Configuracoes = () => {
          }
       }
 
-      const payload = { ...form, loja: { ...form.loja, logoUrl: finalLogoUrl }, fiscal: { ...form.fiscal, senhaCert: '' } };
+      // 🟢 A MÁGICA FINAL: Forçamos o CSC a ter exatamente 6 dígitos como string, garantindo que o Backend não receba um "número cru"
+      const payload = {
+          ...form,
+          loja: { ...form.loja, logoUrl: finalLogoUrl },
+          fiscal: {
+              ...form.fiscal,
+              senhaCert: '',
+              cscIdHomologacao: form.fiscal.cscIdHomologacao ? String(form.fiscal.cscIdHomologacao).padStart(6, '0') : '',
+              cscIdProducao: form.fiscal.cscIdProducao ? String(form.fiscal.cscIdProducao).padStart(6, '0') : ''
+          }
+      };
 
       if (initialFormState) {
           if (initialFormState.sistema.senhaGerenteCancelamento !== payload.sistema.senhaGerenteCancelamento) await registrarAuditoria('CONFIG_SISTEMA', 'Regra de cancelamento PDV alterada');
@@ -386,7 +391,6 @@ const Configuracoes = () => {
       setIsDirty(false);
       localStorage.removeItem('@dd:config_draft');
 
-      // Atualiza a imagem com a String Base64 que veio do banco
       if (formAtualizado.loja.logoUrl) {
           const url = formAtualizado.loja.logoUrl;
           if (url.startsWith('data:image') || url.startsWith('http')) {
@@ -649,8 +653,8 @@ const Configuracoes = () => {
                           </div>
 
                           <div className="cfg-grid-col-2 mb-4">
-                              <Field label="Token CSC (Código de Segurança)" type="password" value={cToken || ""} onChange={e => updateFiscalEnv('token', e.target.value)} placeholder="Fornecido pela sua contabilidade" />
-                              <Field label="ID do CSC" value={cCscId || ""} onChange={e => updateFiscalEnv('cscId', clean(e.target.value))} placeholder="Ex: 1 ou 2" />
+                              <Field label="Token CSC (Código de Segurança)" type="password" value={cToken || ""} onChange={e => updateFiscalEnv('token', e.target.value.replace(/[\s\u200B-\u200D\uFEFF]/g, ''))} placeholder="Fornecido pela sua contabilidade" />
+                              <Field label="ID do CSC (Obrigatório 6 dígitos)" value={cCscId || ""} onChange={e => updateFiscalEnv('cscId', clean(e.target.value))} placeholder="Ex: 000001" />
                           </div>
 
                           <div className="cfg-card-divider mb-4"></div>
