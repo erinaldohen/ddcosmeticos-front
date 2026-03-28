@@ -1,0 +1,121 @@
+.insights-container {
+    margin-bottom: 2rem;
+    animation: fade-in-up 0.5s ease-out;
+}
+
+.insights-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.insights-header h2 {
+    font-size: 1.25rem;
+    color: var(--text-dark);
+    margin: 0;
+    font-weight: 700;
+}
+
+.insights-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.insight-card {
+    display: flex;
+    align-items: flex-start;
+    padding: 1.25rem;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+    position: relative;
+    border-left: 5px solid transparent;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.insight-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+}
+
+.insight-icon {
+    padding: 12px;
+    border-radius: 50%;
+    margin-right: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.insight-content {
+    flex: 1;
+}
+
+.insight-content h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.1rem;
+    color: var(--text-dark);
+    font-weight: 700;
+}
+
+.insight-msg {
+    margin: 0 0 0.75rem 0;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.insight-action {
+    background: rgba(255, 255, 255, 0.6);
+    padding: 0.85rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    color: var(--text-dark);
+    border: 1px solid rgba(0,0,0,0.05);
+}
+
+.insight-resolve-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 50%;
+    transition: 0.2s;
+    margin-left: 10px;
+}
+
+.insight-resolve-btn:hover {
+    color: var(--success);
+    background: rgba(16, 185, 129, 0.1);
+}
+
+/* Variações de Criticidade */
+.insight-danger {
+    border-left-color: #ef4444;
+    background: linear-gradient(to right, #fef2f2, #ffffff);
+}
+.insight-danger .insight-icon {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+.insight-warning {
+    border-left-color: #f59e0b;
+    background: linear-gradient(to right, #fffbeb, #ffffff);
+}
+.insight-warning .insight-icon {
+    background: #fef3c7;
+    color: #f59e0b;
+}
+
+.insight-info {
+    border-left-color: #3b82f6;
+    background: linear-gradient(to right, #eff6ff, #ffffff);
+}
+.insight-info .insight-icon {
+    background: #dbeafe;
+    color: #3b82f6;
+}

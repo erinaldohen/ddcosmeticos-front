@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Menu } from 'lucide-react';
-import Sidebar from '../Sidebar/Sidebar'; // Verifique se o caminho está correto na sua pasta
+import Sidebar from '../Sidebar/Sidebar';
 import './MainLayout.css';
 
 const MainLayout = () => {
@@ -60,7 +60,6 @@ const MainLayout = () => {
 
       {/* Área de Conteúdo Principal */}
       <main className={`main-content ${isSidebarCollapsed ? 'expanded' : ''}`}>
-        {/* O Outlet renderiza as páginas como Dashboard, Produtos, Histórico, etc. */}
         <Outlet />
       </main>
     </div>

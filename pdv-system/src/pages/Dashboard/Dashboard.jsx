@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import InsightsPanel from './components/InsightsPanel';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as TooltipChart,
-  BarChart, Bar, ResponsiveContainer, Cell, PieChart, Pie, Legend
+  ResponsiveContainer, Cell, PieChart, Pie, Legend
 } from 'recharts';
 import {
   DollarSign, ShoppingBag, Activity, Clock, RefreshCcw, ArrowRight,
   CreditCard, Sparkles, Target, AlertCircle, Package, HeartHandshake,
-  TrendingDown, Landmark, Zap, Scale, Tag, PieChart as PieChartIcon, ArchiveX, CalendarClock, Globe, Flag,
-  TrendingUp, BarChart2, Layers, HelpCircle, X, ChevronDown, Filter, Calendar, Info, AlertTriangle
+  TrendingDown, Landmark, Zap, Scale, Tag, PieChart as PieChartIcon, ArchiveX, CalendarClock, Flag,
+  TrendingUp, Layers, HelpCircle, X, ChevronDown, Calendar, AlertTriangle
 } from 'lucide-react';
 import api from '../../services/api';
 import AlertasAuditoria from '../Dashboard/AlertasAuditoria';
@@ -54,9 +55,11 @@ const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, per
 
 const Dashboard = () => {
   const navigate = useNavigate();
+
+  // 🚨 TODOS OS HOOKS NO TOPO (CORREÇÃO DO ERRO DO REACT)
   const [data, setData] = useState(null);
   const [analiseMensal, setAnaliseMensal] = useState(null);
-  const [qtdPendentes, setQtdPendentes] = useState(0); // 🚩 Estado do alerta de revisão
+  const [qtdPendentes, setQtdPendentes] = useState(0);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [errorStatus, setErrorStatus] = useState(false);
@@ -66,8 +69,16 @@ const Dashboard = () => {
   const [abaAtiva, setAbaAtiva] = useState('financeiro');
   const [modalDrillDown, setModalDrillDown] = useState(null);
   const [listaDrillDown, setListaDrillDown] = useState([]);
-
   const [filtroPeriodo, setFiltroPeriodo] = useState('hoje');
+  const [user, setUser] = useState(null);
+
+  // Carrega o usuário local
+  useEffect(() => {
+      try {
+          const u = localStorage.getItem('user');
+          if (u) setUser(JSON.parse(u));
+      } catch (e) {}
+  }, []);
 
   useEffect(() => {
     const observer = new ResizeObserver((entries) => {
@@ -103,11 +114,11 @@ const Dashboard = () => {
       const [dashRes, analiseRes, pendentesRes] = await Promise.all([
         api.get(`/dashboard?periodo=${filtroPeriodo}`),
         api.get(`/contas-pagar/analise-mensal?periodo=${filtroPeriodo}`).catch(() => ({ data: { custoFixoPrevisto: 0 } })),
-        api.get('/dashboard/alertas/pendentes-revisao').catch(() => ({ data: 0 })) // 🚩 Busca alertas de revisão
+        api.get('/dashboard/alertas/pendentes-revisao').catch(() => ({ data: 0 }))
       ]);
       setData(dashRes.data);
       setAnaliseMensal(analiseRes.data);
-      setQtdPendentes(Number(pendentesRes.data) || 0); // 🚩 Atualiza contador
+      setQtdPendentes(Number(pendentesRes.data) || 0);
       setLastUpdate(new Date());
     } catch (err) {
       setErrorStatus(true);
@@ -116,6 +127,7 @@ const Dashboard = () => {
 
   const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
 
+  // 🚨 SÓ DEPOIS DE DECLARAR TODOS OS HOOKS É QUE PODEMOS TER UM EARLY RETURN
   if (loading && !data) return <DashboardSkeleton />;
 
   const payload = data?.data || data?.body || data || {};
@@ -166,7 +178,6 @@ const Dashboard = () => {
   const topCategorias = Array.isArray(payload.topCategorias) ? payload.topCategorias.slice(0, 5) : [];
   const performanceVendedores = Array.isArray(payload.performanceVendedores) ? payload.performanceVendedores : [];
 
-  // Cores Distintas para Formas de Pagamento
   const formasPagamentoRaw = Array.isArray(fin.formasPagamento) ? fin.formasPagamento : [];
   const formasPagamento = formasPagamentoRaw.length > 0 ? formasPagamentoRaw.map(p => {
     const n = String(p.name).toUpperCase();
@@ -180,7 +191,7 @@ const Dashboard = () => {
   }) : [{ name: 'Sem Vendas', value: 1, fill: '#e2e8f0' }];
 
   // =========================================================================
-  // 🛡️ MAPEAMENTO SEGURO DA CURVA ABC (FALLBACK PARA CHAVES JSON)
+  // 🛡️ MAPEAMENTO SEGURO DA CURVA ABC
   // =========================================================================
   const topProdutosBruto = Array.isArray(payload.topProdutos) ? payload.topProdutos
                          : Array.isArray(payload.produtosMaisVendidos) ? payload.produtosMaisVendidos
@@ -211,15 +222,13 @@ const Dashboard = () => {
       return { ...prod, curva, cor, percentual: faturamentoTotalABC > 0 ? (prod.valor / faturamentoTotalABC) * 100 : 0 };
   });
 
-  // =========================================================================
-  // IA: Geração Dinâmica de Insights
-  // =========================================================================
   const gerarDiagnosticoPrincipal = () => {
     let analise = [];
     if (progressoEquilibrio >= 100) analise.push("🏆 Ponto de Equilíbrio atingido! Tudo a partir de agora é Lucro Líquido.");
     else analise.push(`⚠️ Faltam ${formatCurrency(faltaParaPagar)} de margem para cobrir os custos operacionais.`);
-    if (filtroPeriodo === 'hoje' && mapaDeCalor.length > 0 && mapaDeCalor[mapaDeCalor.length-1]?.qtd < 2) analise.push("⏳ O movimento da loja está fraco nesta última hora. Considere disparar uma oferta no WhatsApp.");
-    if (percentualDesconto > 8) analise.push(`🚨 Alerta: O volume de descontos (${percentualDesconto.toFixed(1)}%) está a corroer a margem do CMV.`);
+    if (filtroPeriodo === 'hoje' && mapaDeCalor.length > 0 && mapaDeCalor[mapaDeCalor.length-1]?.qtd < 2) {
+      analise.push("⏳ O movimento da loja está fraco nesta última hora. Considere disparar uma oferta no WhatsApp.");
+    }
     return analise.join(" ");
   };
 
@@ -257,9 +266,49 @@ const Dashboard = () => {
         </div>
       </header>
 
+      {/* COMPONENTE DE INTELIGÊNCIA IA DA FASE 2 */}
+      <InsightsPanel />
+
       <AlertasAuditoria />
 
-      {/* 🚨 BANNER DE AVISO: PRODUTOS PENDENTES DE REVISÃO DO PDV */}
+      {/* 🚨 BANNER DE ALERTA CRÍTICO: HEMORRAGIA DE DESCONTOS */}
+      {percentualDesconto > 8 && (
+          <div
+              className="fade-in"
+              style={{
+                  background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
+                  border: '1px solid #ef4444',
+                  borderRadius: '12px',
+                  padding: '20px',
+                  marginBottom: '24px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  boxShadow: '0 4px 15px -3px rgba(239, 68, 68, 0.15)',
+                  flexWrap: 'wrap',
+                  gap: '15px'
+              }}
+          >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{
+                      background: '#ef4444', color: 'white', padding: '12px',
+                      borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      boxShadow: '0 4px 10px rgba(239, 68, 68, 0.3)'
+                  }}>
+                      <TrendingDown size={28} />
+                  </div>
+                  <div>
+                      <h3 style={{ margin: '0 0 4px', color: '#991b1b', fontSize: '1.2rem', fontWeight: '800' }}>
+                          Hemorragia de Margem (Descontos Excessivos)
+                      </h3>
+                      <p style={{ margin: 0, color: '#b91c1c', fontSize: '1rem', fontWeight: '500' }}>
+                          Atenção! O volume de descontos concedidos atingiu <strong>{percentualDesconto.toFixed(1)}%</strong> do faturamento ({formatCurrency(descontosHoje)}). Isso está a corroer diretamente o lucro da operação.
+                      </p>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {qtdPendentes > 0 && (
           <div
               className="fade-in"
@@ -307,12 +356,59 @@ const Dashboard = () => {
           </div>
       )}
 
-      {/* IA CENTRALIZADA */}
-      <div className="ai-insight-box">
-        <div className="ai-icon-glow"><Zap size={24} color="white" /></div>
+      {/* 🚨 BLOCO ATUALIZADO: MELHORIA DE LEITURA DO COPILOTO */}
+      <div
+        className="ai-insight-box"
+        style={{
+            background: 'linear-gradient(135deg, #fffcf0 0%, #fef9e6 100%)', /* Creme/Sépia Suave */
+            border: '1px solid #f1e4b8', /* Borda combinando */
+            borderRadius: '12px',
+            padding: '20px',
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '18px',
+            boxShadow: '0 4px 15px -3px rgba(184, 134, 11, 0.1)', /* Sombra dourada suave */
+        }}
+      >
+        <div
+            className="ai-icon-glow"
+            style={{
+                background: '#4b3621', /* Castanho Escuro/Chocolate */
+                color: 'white',
+                padding: '12px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 4px 10px rgba(75, 54, 33, 0.3)',
+                flexShrink: 0 /* Garante que o ícone não amasse */
+            }}
+        >
+            <Zap size={26} color="white" />
+        </div>
         <div className="ai-content">
-          <h4>Copiloto IA DD Cosméticos ({labelPeriodo})</h4>
-          <p>{gerarDiagnosticoPrincipal()}</p>
+          <h4
+            style={{
+                margin: '0 0 5px',
+                color: '#4b3621', /* Chocolate */
+                fontSize: '1.15rem',
+                fontWeight: '800'
+            }}
+          >
+            Copiloto IA DD Cosméticos ({labelPeriodo})
+          </h4>
+          <p
+            style={{
+                margin: 0,
+                color: '#5c4033', /* Castanho levemente mais claro para o texto */
+                fontSize: '1rem',
+                fontWeight: '600',
+                lineHeight: '1.5'
+            }}
+          >
+            {gerarDiagnosticoPrincipal()}
+          </p>
         </div>
       </div>
 
@@ -322,7 +418,6 @@ const Dashboard = () => {
         <button className={abaAtiva === 'operacao' ? 'active' : ''} onClick={() => setAbaAtiva('operacao')}>🛡️ Operação & Estoque</button>
       </div>
 
-      {/* ABA 1: RESUMO FINANCEIRO */}
       {abaAtiva === 'financeiro' && (
         <section className="dash-block animate-fade-in">
             <div className="dash-top-grid triple">
@@ -570,7 +665,6 @@ const Dashboard = () => {
               </div>
             </div>
 
-            {/* CURVA ABC CORRIGIDA E BLINDADA */}
             <div className="box-card hover-effect span-1">
               <div className="box-header flex-between">
                   <h3 className="flex-center-gap"><Layers size={18} className="icon-main"/> Curva ABC ({labelPeriodo}) <InfoTooltip text="Curva A representa 80% do seu faturamento. Nunca deixe faltar."/></h3>
