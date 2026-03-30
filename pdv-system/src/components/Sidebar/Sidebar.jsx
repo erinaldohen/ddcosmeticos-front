@@ -73,7 +73,6 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
       {
         title: 'Configurações',
         items: [
-          { path: '/fiscal', icon: <FileText size={20} />, label: 'Motor Fiscal', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
           { path: '/auditoria', icon: <ShieldCheck size={20} />, label: 'Logs de Segurança', roles: ['ROLE_ADMIN'] },
           { path: '/configuracoes', icon: <Settings size={20} />, label: 'Ajustes da Loja', roles: ['ROLE_ADMIN'] },
         ]

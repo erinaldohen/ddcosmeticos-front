@@ -22,6 +22,12 @@ const BRAND = { primary: '#ec4899', secondary: '#3b82f6', accent: '#8b5cf6', suc
 const BRAND_PALETTE = [BRAND.secondary, BRAND.primary, BRAND.accent, BRAND.success, BRAND.warning, BRAND.slate];
 const formatarMoeda = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
 
+// ✅ ATUALIZAÇÃO DE UX: Rótulos percentuais nos gráficos de Pizza
+const renderLabelEmPorcentagem = ({ percent }) => {
+  if (percent < 0.05) return null; // Esconde se for muito pequeno para não sobrepor texto
+  return `${(percent * 100).toFixed(1)}%`;
+};
+
 // ==========================================
 // 2. COMPONENTES AUXILIARES (UX & TOOLTIPS)
 // ==========================================
@@ -112,9 +118,6 @@ export default function RelatoriosDashboard() {
     carregarRelatorio();
   }, [categoriaAtiva, dataInicio, dataFim]);
 
-  // =========================================================================
-  // MOTOR DE EXPORTAÇÃO (EXCEL, PDF SIMPLES E BALANÇO S/A)
-  // =========================================================================
   const exportarPDF = async () => {
     const toastId = toast.loading("A IA está a redigir o Dossiê Executivo Simples...");
     try {
@@ -176,9 +179,6 @@ export default function RelatoriosDashboard() {
     if(categoriaAtiva === 'fiscal') exportarExcel("Impostos", dadosBase.segregacao);
   };
 
-  // =========================================================================
-  // CÁLCULOS AVANÇADOS EXECUTIVOS (BLINDAGEM TOTAL ANTI-CRASH)
-  // =========================================================================
   const calcGMROI = () => {
       try {
         if(!dadosBase || categoriaAtiva !== 'estoque') return 0;
@@ -210,7 +210,6 @@ export default function RelatoriosDashboard() {
         </defs>
       </svg>
 
-      {/* HEADER E AÇÕES DA DIRETORIA */}
       <div className="rel-header no-print">
         <div className="rh-title">
           <div className="rh-icon"><TrendingUp size={28} /></div>
@@ -218,7 +217,6 @@ export default function RelatoriosDashboard() {
         </div>
 
         <div className="rh-actions">
-          {/* AÇÕES DIÁRIAS (Telas Atuais) */}
           <div className="rh-date-picker">
             <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
             <span className="rh-dp-sep">•</span>
@@ -227,7 +225,6 @@ export default function RelatoriosDashboard() {
           <button className="btn-export" onClick={exportarTudoExcel}><FileSpreadsheet size={16} /> EXCEL</button>
           <button className="btn-export pdf" onClick={exportarPDF}><FileText size={16} /> PDF Diário</button>
 
-          {/* MÓDULO S/A (INVESTIDORES) */}
           <div className="corporate-action-box" style={{display: 'flex', alignItems: 'center', gap: '8px', borderLeft: '2px solid #e2e8f0', paddingLeft: '12px', marginLeft: '4px'}}>
              <Building2 size={18} color="#0f172a" title="Portal Corporativo S/A" />
              <select id="q-trimestre" style={{padding: '8px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontWeight: 'bold'}} defaultValue="1">
@@ -248,17 +245,14 @@ export default function RelatoriosDashboard() {
         </div>
       </div>
 
-      {/* ABAS */}
       <div className="rel-tabs no-print">
         <button className={categoriaAtiva === "vendas" ? "active" : ""} onClick={() => setCategoriaAtiva("vendas")}><TrendingUp size={16}/> Comercial</button>
         <button className={categoriaAtiva === "estoque" ? "active" : ""} onClick={() => setCategoriaAtiva("estoque")}><PackageCheck size={16}/> Estoque</button>
         <button className={categoriaAtiva === "financeiro" ? "active" : ""} onClick={() => setCategoriaAtiva("financeiro")}><DollarSign size={16}/> Financeiro</button>
-        <button className={categoriaAtiva === "fiscal" ? "active" : ""} onClick={() => setCategoriaAtiva("fiscal")}><Layers size={16}/> Fiscal</button>
+        {/* A Aba Fiscal foi removida daqui, como pedido (sem CBS e IBS) */}
       </div>
 
-      {/* CONTEÚDO (ÁREA DE IMPRESSÃO) */}
       <div id="dashboard-print-area" className="rel-content-area">
-
         {/* ======================= ABA: VENDAS ======================= */}
         {categoriaAtiva === "vendas" && dadosBase && (
           <div className="rel-fade-in">
@@ -281,8 +275,9 @@ export default function RelatoriosDashboard() {
                     <AreaChart data={dadosBase.vendasDiarias || []} margin={{top: 10, right: 10, left: -10, bottom: 0}}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={BRAND.grid} />
                       <XAxis dataKey="data" tick={{fill: BRAND.slate, fontSize: 11}} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} tick={{fill: BRAND.slate, fontSize: 11}} />
-                      <Tooltip />
+                      <YAxis axisLine={false} tickLine={false} tick={{fill: BRAND.slate, fontSize: 11}} tickFormatter={(v) => `R$${v}`} />
+                      {/* ✅ O HOVER EM DINHEIRO: */}
+                      <Tooltip formatter={(value) => [formatarMoeda(value), "Total"]} />
                       <Area type="monotone" dataKey="total" name="Vendas" fill="url(#gradSecondary)" stroke={BRAND.secondary} strokeWidth={4} />
                     </AreaChart>
                 </ChartCard>
@@ -291,10 +286,12 @@ export default function RelatoriosDashboard() {
                            isLoading={loading} onDownload={() => exportarExcel("Pagamentos", dadosBase.porPagamento)}
                            insight="Altas taxas de Crédito prejudicam o fluxo de caixa imediato. Estimule descontos no PIX.">
                     <PieChart>
-                      <Pie data={dadosBase.porPagamento || []} innerRadius={60} outerRadius={80} dataKey="valorTotal" nameKey="formaPagamento">
+                      <Pie data={dadosBase.porPagamento || []} innerRadius={60} outerRadius={80} dataKey="valorTotal" nameKey="formaPagamento" label={renderLabelEmPorcentagem}>
                         {(dadosBase.porPagamento || []).map((e, i) => <Cell key={i} fill={BRAND_PALETTE[i % BRAND_PALETTE.length]} />)}
                       </Pie>
-                      <Tooltip /><Legend verticalAlign="bottom" iconType="circle" />
+                      {/* ✅ O HOVER EM DINHEIRO: */}
+                      <Tooltip formatter={(value) => formatarMoeda(value)} />
+                      <Legend verticalAlign="bottom" iconType="circle" />
                     </PieChart>
                 </ChartCard>
                 <ChartCard title="Distribuição de Ticket"
@@ -345,10 +342,12 @@ export default function RelatoriosDashboard() {
                            isLoading={loading} onDownload={() => exportarExcel("Aging", dadosBase.aging)}
                            insight="Fatias acima de 90 dias representam dinheiro a perder valor. Sugerido fazer promoção desses itens.">
                   <PieChart>
-                    <Pie data={dadosBase.aging || []} innerRadius={60} outerRadius={80} dataKey="value">
+                    <Pie data={dadosBase.aging || []} innerRadius={60} outerRadius={80} dataKey="value" label={renderLabelEmPorcentagem}>
                       {(dadosBase.aging || []).map((e, i) => <Cell key={i} fill={BRAND_PALETTE[i % BRAND_PALETTE.length]} />)}
                     </Pie>
-                    <Tooltip /><Legend verticalAlign="bottom" iconType="circle" />
+                    {/* ✅ O HOVER EM DINHEIRO (caso os valores do backend sejam monetários, se forem qtd, ignore o formatarMoeda) */}
+                    <Tooltip formatter={(value) => formatarMoeda(value)} />
+                    <Legend verticalAlign="bottom" iconType="circle" />
                   </PieChart>
                 </ChartCard>
              </div>
@@ -378,41 +377,13 @@ export default function RelatoriosDashboard() {
                       <CartesianGrid vertical={false} stroke={BRAND.grid}/>
                       <XAxis dataKey="name" axisLine={false} tick={{fill: BRAND.slate, fontWeight: 600}} />
                       <YAxis hide />
-                      <Tooltip />
+                      <Tooltip formatter={(value) => [formatarMoeda(value), "Valor"]}/>
                       <Bar dataKey="valor" radius={[8,8,8,8]}>
                         {(dadosBase.dre || []).map((e, i) => <Cell key={i} fill={BRAND_PALETTE[i % BRAND_PALETTE.length]} />)}
                       </Bar>
                     </BarChart>
                   </ChartCard>
                </div>
-           </div>
-        )}
-
-        {/* ======================= ABA: FISCAL ======================= */}
-        {categoriaAtiva === "fiscal" && dadosBase && (
-           <div className="rel-fade-in">
-             <div className="rel-kpi-grid">
-                <KpiCard title="Recuperação DAS" value={formatarMoeda(dadosBase.recuperacao)} subtext="Economia gerada" icon={PiggyBank} trend="up"
-                         infoText="Tributos não pagos licitamente através de venda de itens Monofásicos." />
-                <KpiCard title="Alíquota Média" value={`${dadosBase.aliquota || 0}%`} subtext="Simples Nacional" icon={Scale} trend="down"
-                         infoText="Faixa de imposto baseada no acumulado do faturamento." />
-                <KpiCard title="Audit Erros" value={dadosBase.erros || 0} subtext="NCM/CEST vazios" icon={ShieldAlert} trend="neutral"
-                         infoText="Produtos cadastrados incorretamente, que podem gerar multas ou barrar notas." />
-             </div>
-             <SectionHeader icon={ShieldAlert} title="Conformidade Tributária" />
-             <div className="rel-chart-grid">
-                <ChartCard title="Receita Segregada"
-                           infoText="Divisão de produtos tributados vs Monofásicos."
-                           isLoading={loading} onDownload={() => exportarExcel("Segregacao", dadosBase.segregacao)}
-                           insight="Tudo que é vendido na categoria Monofásica deduz do pagamento final de imposto. Foque as campanhas neles.">
-                   <PieChart>
-                     <Pie data={dadosBase.segregacao || []} innerRadius={60} outerRadius={80} dataKey="value">
-                       {(dadosBase.segregacao || []).map((e, i) => <Cell key={i} fill={BRAND_PALETTE[i % BRAND_PALETTE.length]} />)}
-                     </Pie>
-                     <Tooltip /><Legend verticalAlign="bottom" iconType="circle" />
-                   </PieChart>
-                </ChartCard>
-             </div>
            </div>
         )}
       </div>

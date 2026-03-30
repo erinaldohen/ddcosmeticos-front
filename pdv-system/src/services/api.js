@@ -1,93 +1,117 @@
-import axios from 'axios';
-import { toast } from 'react-toastify';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
-let isRedirecting = false;
+// Layout (Menu Lateral + Topo)
+import MainLayout from './components/Layout/MainLayout';
 
-const api = axios.create({
-  baseURL: '/api/v1',
-  timeout: 15000,
-  // A MÁGICA DA SEGURANÇA: Obriga o navegador a enviar o Cookie HttpOnly
-  withCredentials: true
-});
+// --- PÁGINAS ---
+import Login from './pages/Login/Login';
+import PDV from './pages/PDV/PDV';
+import Dashboard from './pages/Dashboard/Dashboard';
+import Relatorios from './pages/Relatorios/Relatorios';
+import RelatorioComissoes from './pages/Relatorios/RelatorioComissoes';
+import CRM from './pages/CRM/CRM';
+import Configuracoes from './pages/Configuracoes/Configuracoes';
+import ProdutoList from './pages/Produtos/ProdutoList';
+import ProdutoForm from './pages/Produtos/ProdutoForm';
+import HistoricoProduto from './pages/Produtos/HistoricoProduto';
+import EntradaEstoque from './pages/Estoque/EntradaEstoque';
+import Inventario from './pages/Inventario/Inventario';
+import FornecedorList from './pages/Fornecedores/FornecedorList';
+import FornecedorForm from './pages/Fornecedores/FornecedorForm';
+import GerenciamentoCaixa from './pages/Caixa/GerenciamentoCaixa';
+import HistoricoCaixa from './pages/Caixa/HistoricoCaixa';
+import HistoricoVendas from './pages/Vendas/Historico/HistoricoVendas';
+// A importação do RelatorioImpostos foi removida daqui!
+import Auditoria from './pages/Auditoria/Auditoria';
+import ContasReceber from './pages/Financeiro/ContasReceber';
+import ContasPagar from './pages/Financeiro/ContasPagar';
 
-api.interceptors.request.use(
-  (config) => config,
-  (error) => Promise.reject(error)
-);
-
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.code === 'ECONNABORTED' || !error.response) {
-      if (!isRedirecting) {
-          toast.error("Servidor DD Cosméticos indisponível.", { toastId: 'network-error' });
-      }
-      return Promise.reject(error);
-    }
-
-    const status = error.response.status;
-    const originalRequest = error.config;
-    const url = originalRequest.url || '';
-
-    // Verifica se é tentativa de login
-    const isLoginRequest = url.includes('login');
-    const isReportRequest = url.includes('/relatorios');
-
-    let backendMessage = "Operação inválida.";
-    if (error.response.data instanceof Blob) {
-       backendMessage = "Erro ao processar o arquivo solicitado.";
-    } else {
-       backendMessage = error.response.data?.mensagem || error.response.data?.message || "Operação inválida.";
-    }
-
-    if (status === 428) return Promise.reject(error);
-
-    // 401 ou 403 - Tratamento robusto de Sessão
-    if (status === 401 || status === 403) {
-      // Se deu 401 na tela de login, é só senha errada. Não redireciona!
-      if (isLoginRequest) {
-          toast.error("E-mail ou senha incorretos.", { toastId: 'bad-credentials' });
-          return Promise.reject(error);
-      }
-
-      // Se deu 401 navegando no sistema, o cookie expirou. Limpa e expulsa.
-      if (!isRedirecting) {
-        isRedirecting = true;
-        localStorage.removeItem('user');
-
-        if (status === 401) {
-            toast.error("Sessão expirada por segurança. Identifique-se novamente.", { toastId: 'session-expired' });
-        } else {
-            toast.error("O seu perfil não tem permissão para esta área.", { toastId: 'forbidden-error' });
-        }
-
-        setTimeout(() => {
-          window.location.href = '/login';
-          isRedirecting = false;
-        }, 1500);
-      }
-      return Promise.reject(error);
-    }
-
-    // 400 - Erros de Validação (Ex: Estoque insuficiente)
-    if (status === 400 && !isLoginRequest) {
-      if (isReportRequest) {
-        console.warn("[BI] Erro 400 na rota de relatórios.");
-        return Promise.reject(error);
-      }
-      toast.warning(backendMessage, { toastId: `bad-request-${status}` });
-    }
-
-    // 500 - Erro Crítico no Backend (Agora expõe o erro real no console)
-    if (status === 500) {
-      console.error(`[ERRO 500 NO JAVA] Rota: ${url} | Detalhes:`, error.response.data);
-      if (!isReportRequest) {
-        toast.error("Erro interno. Verifique o console do navegador para detalhes.", { toastId: `server-error-${url}` });
-      }
-    }
-
-    return Promise.reject(error);
+// --- HELPERS DE SEGURANÇA ---
+const getUser = () => {
+  try {
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
+  } catch (e) {
+    return null;
   }
-);
+};
 
-export default api;
+const PrivateRoute = ({ children }) => {
+  const user = getUser();
+  return user ? children : <Navigate to="/login" replace />;
+};
+
+const AdminRoute = ({ children }) => {
+  const user = getUser();
+  if (!user) return <Navigate to="/login" replace />;
+
+  const rawRole = String(user.perfilDoUsuario || user.perfil || user.role || 'USUARIO').toUpperCase();
+  const roleClean = rawRole.replace('ROLE_', '');
+
+  const allowed = ['ADMIN', 'GERENTE', 'ESTOQUISTA', 'FINANCEIRO'];
+
+  if (!allowed.includes(roleClean)) {
+    return <Navigate to="/pdv" replace />;
+  }
+
+  return children;
+};
+
+// --- APLICAÇÃO PRINCIPAL ---
+export default function App() {
+  return (
+    <BrowserRouter>
+      {/* Previne múltiplas mensagens idênticas saltando na tela */}
+      <ToastContainer position="top-right" autoClose={3000} theme="colored" limit={1} />
+
+      <Routes>
+        <Route path="/login" element={<Login />} />
+
+        {/* ROTA OPERACIONAL (TELA CHEIA) */}
+        <Route path="/pdv" element={<PrivateRoute><PDV /></PrivateRoute>} />
+
+        {/* ROTAS ADMINISTRATIVAS */}
+        <Route element={<MainLayout />}>
+            <Route path="/dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
+
+            {/* ROTAS DE RELATÓRIOS */}
+            <Route path="/relatorios" element={<AdminRoute><Relatorios /></AdminRoute>} />
+            <Route path="/relatorios/comissoes" element={<AdminRoute><RelatorioComissoes /></AdminRoute>} />
+
+            <Route path="/crm" element={<AdminRoute><CRM /></AdminRoute>} />
+
+            <Route path="/caixa" element={<PrivateRoute><GerenciamentoCaixa /></PrivateRoute>} />
+            <Route path="/historico-caixa" element={<AdminRoute><HistoricoCaixa /></AdminRoute>} />
+            <Route path="/vendas/historico" element={<AdminRoute><HistoricoVendas /></AdminRoute>} />
+
+            <Route path="/produtos" element={<AdminRoute><ProdutoList /></AdminRoute>} />
+            <Route path="/produtos/novo" element={<AdminRoute><ProdutoForm /></AdminRoute>} />
+            <Route path="/produtos/editar/:id" element={<AdminRoute><ProdutoForm /></AdminRoute>} />
+
+            <Route path="/produtos/historico/:id" element={<AdminRoute><HistoricoProduto /></AdminRoute>} />
+
+            <Route path="/estoque" element={<AdminRoute><ProdutoList /></AdminRoute>} />
+            <Route path="/estoque/entrada" element={<AdminRoute><EntradaEstoque /></AdminRoute>} />
+            <Route path="/inventario" element={<AdminRoute><Inventario /></AdminRoute>} />
+
+            <Route path="/financeiro/contas-pagar" element={<AdminRoute><ContasPagar /></AdminRoute>} />
+            <Route path="/financeiro/contas-receber" element={<AdminRoute><ContasReceber /></AdminRoute>} />
+
+            <Route path="/fornecedores" element={<AdminRoute><FornecedorList /></AdminRoute>} />
+            <Route path="/fornecedores/novo" element={<AdminRoute><FornecedorForm /></AdminRoute>} />
+            <Route path="/fornecedores/editar/:id" element={<AdminRoute><FornecedorForm /></AdminRoute>} />
+
+            {/* A Rota do /fiscal foi removida daqui! */}
+            <Route path="/configuracoes" element={<AdminRoute><Configuracoes /></AdminRoute>} />
+            <Route path="/auditoria" element={<AdminRoute><Auditoria /></AdminRoute>} />
+        </Route>
+
+        <Route path="/" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
