@@ -22,7 +22,6 @@ const InfoTooltip = ({ text }) => (
   </div>
 );
 
-// Componente de IA injetado em vários pontos do Dashboard
 const NanoInsightIA = ({ insight, tipo = 'info', icon = Sparkles }) => {
   const Icon = icon;
   return (
@@ -56,7 +55,6 @@ const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, per
 const Dashboard = () => {
   const navigate = useNavigate();
 
-  // 🚨 TODOS OS HOOKS NO TOPO (CORREÇÃO DO ERRO DO REACT)
   const [data, setData] = useState(null);
   const [analiseMensal, setAnaliseMensal] = useState(null);
   const [qtdPendentes, setQtdPendentes] = useState(0);
@@ -72,7 +70,6 @@ const Dashboard = () => {
   const [filtroPeriodo, setFiltroPeriodo] = useState('hoje');
   const [user, setUser] = useState(null);
 
-  // Carrega o usuário local
   useEffect(() => {
       try {
           const u = localStorage.getItem('user');
@@ -127,10 +124,12 @@ const Dashboard = () => {
 
   const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
 
-  // 🚨 SÓ DEPOIS DE DECLARAR TODOS OS HOOKS É QUE PODEMOS TER UM EARLY RETURN
   if (loading && !data) return <DashboardSkeleton />;
 
-  const payload = data?.data || data?.body || data || {};
+  // 🚨 CORREÇÃO: Desempacotamento alinhado com o DashboardDTO do backend
+  const payload = data || {};
+
+  // No seu Backend, o MAP principal retornava "financeiro", "inventario", "topProdutos", etc.
   const fin = payload.financeiro || {};
   const inv = payload.inventario || {};
   const ia = payload.inteligencia || {};
@@ -190,13 +189,7 @@ const Dashboard = () => {
     return { ...p, fill: color };
   }) : [{ name: 'Sem Vendas', value: 1, fill: '#e2e8f0' }];
 
-  // =========================================================================
-  // 🛡️ MAPEAMENTO SEGURO DA CURVA ABC
-  // =========================================================================
-  const topProdutosBruto = Array.isArray(payload.topProdutos) ? payload.topProdutos
-                         : Array.isArray(payload.produtosMaisVendidos) ? payload.produtosMaisVendidos
-                         : Array.isArray(inv.topProdutos) ? inv.topProdutos
-                         : [];
+  const topProdutosBruto = Array.isArray(payload.topProdutos) ? payload.topProdutos : [];
 
   const topProdutosMapeados = topProdutosBruto.map(p => ({
       nome: p.nome || p.descricao || p.name || p.produto || 'Produto Desconhecido',
@@ -266,149 +259,45 @@ const Dashboard = () => {
         </div>
       </header>
 
-      {/* COMPONENTE DE INTELIGÊNCIA IA DA FASE 2 */}
       <InsightsPanel />
-
       <AlertasAuditoria />
 
-      {/* 🚨 BANNER DE ALERTA CRÍTICO: HEMORRAGIA DE DESCONTOS */}
       {percentualDesconto > 8 && (
-          <div
-              className="fade-in"
-              style={{
-                  background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
-                  border: '1px solid #ef4444',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  marginBottom: '24px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  boxShadow: '0 4px 15px -3px rgba(239, 68, 68, 0.15)',
-                  flexWrap: 'wrap',
-                  gap: '15px'
-              }}
-          >
+          <div className="fade-in" style={{background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)', border: '1px solid #ef4444', borderRadius: '12px', padding: '20px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 15px -3px rgba(239, 68, 68, 0.15)', flexWrap: 'wrap', gap: '15px'}}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{
-                      background: '#ef4444', color: 'white', padding: '12px',
-                      borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      boxShadow: '0 4px 10px rgba(239, 68, 68, 0.3)'
-                  }}>
+                  <div style={{background: '#ef4444', color: 'white', padding: '12px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(239, 68, 68, 0.3)'}}>
                       <TrendingDown size={28} />
                   </div>
                   <div>
-                      <h3 style={{ margin: '0 0 4px', color: '#991b1b', fontSize: '1.2rem', fontWeight: '800' }}>
-                          Hemorragia de Margem (Descontos Excessivos)
-                      </h3>
-                      <p style={{ margin: 0, color: '#b91c1c', fontSize: '1rem', fontWeight: '500' }}>
-                          Atenção! O volume de descontos concedidos atingiu <strong>{percentualDesconto.toFixed(1)}%</strong> do faturamento ({formatCurrency(descontosHoje)}). Isso está a corroer diretamente o lucro da operação.
-                      </p>
+                      <h3 style={{ margin: '0 0 4px', color: '#991b1b', fontSize: '1.2rem', fontWeight: '800' }}>Hemorragia de Margem (Descontos Excessivos)</h3>
+                      <p style={{ margin: 0, color: '#b91c1c', fontSize: '1rem', fontWeight: '500' }}>Atenção! O volume de descontos concedidos atingiu <strong>{percentualDesconto.toFixed(1)}%</strong> do faturamento ({formatCurrency(descontosHoje)}).</p>
                   </div>
               </div>
           </div>
       )}
 
       {qtdPendentes > 0 && (
-          <div
-              className="fade-in"
-              style={{
-                  background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
-                  border: '1px solid #f59e0b',
-                  borderRadius: '12px',
-                  padding: '20px',
-                  marginBottom: '24px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  boxShadow: '0 4px 15px -3px rgba(245, 158, 11, 0.15)',
-                  flexWrap: 'wrap',
-                  gap: '15px'
-              }}
-          >
+          <div className="fade-in" style={{background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)', border: '1px solid #f59e0b', borderRadius: '12px', padding: '20px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 15px -3px rgba(245, 158, 11, 0.15)', flexWrap: 'wrap', gap: '15px'}}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{
-                      background: '#f59e0b', color: 'white', padding: '12px',
-                      borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      boxShadow: '0 4px 10px rgba(245, 158, 11, 0.3)'
-                  }}>
+                  <div style={{background: '#f59e0b', color: 'white', padding: '12px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(245, 158, 11, 0.3)'}}>
                       <AlertTriangle size={28} />
                   </div>
                   <div>
-                      <h3 style={{ margin: '0 0 4px', color: '#92400e', fontSize: '1.2rem', fontWeight: '800' }}>
-                          Ação Requerida
-                      </h3>
-                      <p style={{ margin: 0, color: '#b45309', fontSize: '1rem', fontWeight: '500' }}>
-                          Existem <strong>{qtdPendentes} novos produtos</strong> cadastrados no caixa aguardando revisão de preços e NCM.
-                      </p>
+                      <h3 style={{ margin: '0 0 4px', color: '#92400e', fontSize: '1.2rem', fontWeight: '800' }}>Ação Requerida</h3>
+                      <p style={{ margin: 0, color: '#b45309', fontSize: '1rem', fontWeight: '500' }}>Existem <strong>{qtdPendentes} novos produtos</strong> aguardando revisão.</p>
                   </div>
               </div>
-              <button
-                  onClick={() => navigate('/produtos', { state: { filtrarPendentes: true } })}
-                  style={{
-                      background: '#92400e', color: 'white', border: 'none', padding: '12px 24px',
-                      borderRadius: '8px', fontWeight: 'bold', fontSize: '1rem', display: 'flex',
-                      alignItems: 'center', gap: '8px', cursor: 'pointer', transition: '0.2s', whiteSpace: 'nowrap'
-                  }}
-              >
-                  Revisar Agora <ArrowRight size={20} />
-              </button>
+              <button onClick={() => navigate('/produtos', { state: { filtrarPendentes: true } })} style={{background: '#92400e', color: 'white', border: 'none', padding: '12px 24px', borderRadius: '8px', fontWeight: 'bold', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: '0.2s', whiteSpace: 'nowrap'}}>Revisar Agora <ArrowRight size={20} /></button>
           </div>
       )}
 
-      {/* 🚨 BLOCO ATUALIZADO: MELHORIA DE LEITURA DO COPILOTO */}
-      <div
-        className="ai-insight-box"
-        style={{
-            background: 'linear-gradient(135deg, #fffcf0 0%, #fef9e6 100%)', /* Creme/Sépia Suave */
-            border: '1px solid #f1e4b8', /* Borda combinando */
-            borderRadius: '12px',
-            padding: '20px',
-            marginBottom: '24px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '18px',
-            boxShadow: '0 4px 15px -3px rgba(184, 134, 11, 0.1)', /* Sombra dourada suave */
-        }}
-      >
-        <div
-            className="ai-icon-glow"
-            style={{
-                background: '#4b3621', /* Castanho Escuro/Chocolate */
-                color: 'white',
-                padding: '12px',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 4px 10px rgba(75, 54, 33, 0.3)',
-                flexShrink: 0 /* Garante que o ícone não amasse */
-            }}
-        >
+      <div className="ai-insight-box" style={{background: 'linear-gradient(135deg, #fffcf0 0%, #fef9e6 100%)', border: '1px solid #f1e4b8', borderRadius: '12px', padding: '20px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '18px', boxShadow: '0 4px 15px -3px rgba(184, 134, 11, 0.1)'}}>
+        <div className="ai-icon-glow" style={{background: '#4b3621', color: 'white', padding: '12px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(75, 54, 33, 0.3)', flexShrink: 0}}>
             <Zap size={26} color="white" />
         </div>
         <div className="ai-content">
-          <h4
-            style={{
-                margin: '0 0 5px',
-                color: '#4b3621', /* Chocolate */
-                fontSize: '1.15rem',
-                fontWeight: '800'
-            }}
-          >
-            Copiloto IA DD Cosméticos ({labelPeriodo})
-          </h4>
-          <p
-            style={{
-                margin: 0,
-                color: '#5c4033', /* Castanho levemente mais claro para o texto */
-                fontSize: '1rem',
-                fontWeight: '600',
-                lineHeight: '1.5'
-            }}
-          >
-            {gerarDiagnosticoPrincipal()}
-          </p>
+          <h4 style={{margin: '0 0 5px', color: '#4b3621', fontSize: '1.15rem', fontWeight: '800'}}>Copiloto IA DD Cosméticos ({labelPeriodo})</h4>
+          <p style={{margin: 0, color: '#5c4033', fontSize: '1rem', fontWeight: '600', lineHeight: '1.5'}}>{gerarDiagnosticoPrincipal()}</p>
         </div>
       </div>
 
@@ -431,9 +320,7 @@ const Dashboard = () => {
                 </div>
                 <div className="progress-bar-container"><div className={`progress-bar-fill ${progressoMetaMensal >= 100 ? 'bg-success-grad' : 'bg-purple-grad'}`} style={{ width: `${progressoMetaMensal}%` }}></div></div>
                 <div className="widget-footer"><span>Alcançado: <b>{formatCurrency(faturamentoCalculoMeta)}</b></span><span>{progressoMetaMensal.toFixed(1)}%</span></div>
-                {filtroPeriodo === 'este_mes' && (
-                    <NanoInsightIA insight={`Projeção de Fecho (Run Rate): ${formatCurrency(runRate)}`} tipo={runRate >= META_MENSAL ? "success" : "warning"} />
-                )}
+                {filtroPeriodo === 'este_mes' && (<NanoInsightIA insight={`Projeção de Fecho (Run Rate): ${formatCurrency(runRate)}`} tipo={runRate >= META_MENSAL ? "success" : "warning"} />)}
               </div>
 
               <div className="break-even-widget">
@@ -466,10 +353,7 @@ const Dashboard = () => {
             <div className="dash-kpi-grid">
               <div className="kpi-card hover-effect kpi-pink">
                 <div className="kpi-info">
-                  <div className="kpi-info-header">
-                    <span className="kpi-label flex-center-gap">Faturamento <InfoTooltip text="Total faturado no período selecionado."/></span>
-                    <div className={`mom-badge ${isCrescimentoPositivo ? 'mom-up' : 'mom-down'}`} title="Crescimento sobre o mesmo período anterior">{isCrescimentoPositivo ? <TrendingUp size={12}/> : <TrendingDown size={12}/>}{Math.abs(crescimentoMoM).toFixed(1)}%</div>
-                  </div>
+                  <div className="kpi-info-header"><span className="kpi-label flex-center-gap">Faturamento <InfoTooltip text="Total faturado no período selecionado."/></span><div className={`mom-badge ${isCrescimentoPositivo ? 'mom-up' : 'mom-down'}`} title="Crescimento sobre o mesmo período anterior">{isCrescimentoPositivo ? <TrendingUp size={12}/> : <TrendingDown size={12}/>}{Math.abs(crescimentoMoM).toFixed(1)}%</div></div>
                   <h2 className="kpi-value">{formatCurrency(faturamento)}</h2>
                 </div>
                 <NanoInsightIA insight={isCrescimentoPositivo ? "Ritmo superior ao médio." : "Tráfego em queda. Sugerida promoção."} tipo={isCrescimentoPositivo ? "success" : "warning"} />
@@ -477,10 +361,7 @@ const Dashboard = () => {
 
               <div className="kpi-card hover-effect kpi-indigo">
                 <div className="kpi-info">
-                  <div className="kpi-info-header">
-                    <span className="kpi-label flex-center-gap">CMV Total <InfoTooltip text="Custo da mercadoria vendida."/></span>
-                    <RefreshCcw size={18} className="kpi-icon"/>
-                  </div>
+                  <div className="kpi-info-header"><span className="kpi-label flex-center-gap">CMV Total <InfoTooltip text="Custo da mercadoria vendida."/></span><RefreshCcw size={18} className="kpi-icon"/></div>
                   <h2 className="kpi-value">{formatCurrency(valorReposicao)}</h2>
                 </div>
                 <NanoInsightIA insight={faturamento > 0 && (valorReposicao / faturamento) > 0.60 ? "Custo muito elevado." : "Custo controlado."} tipo={faturamento > 0 && (valorReposicao / faturamento) > 0.60 ? "danger" : "success"} />
@@ -488,10 +369,7 @@ const Dashboard = () => {
 
               <div className="kpi-card hover-effect kpi-green">
                 <div className="kpi-info">
-                  <div className="kpi-info-header">
-                    <span className="kpi-label flex-center-gap">Lucro Bruto <InfoTooltip text="Faturamento menos o CMV."/></span>
-                    <TrendingDown size={18} className="kpi-icon"/>
-                  </div>
+                  <div className="kpi-info-header"><span className="kpi-label flex-center-gap">Lucro Bruto <InfoTooltip text="Faturamento menos o CMV."/></span><TrendingDown size={18} className="kpi-icon"/></div>
                   <h2 className="kpi-value">{formatCurrency(lucroBruto)}</h2>
                 </div>
                 <NanoInsightIA insight={`Margem Bruta de ${faturamento > 0 ? ((lucroBruto / faturamento) * 100).toFixed(1) : 0}%.`} tipo="info" />
@@ -499,10 +377,7 @@ const Dashboard = () => {
 
               <div className="kpi-card hover-effect kpi-blue">
                 <div className="kpi-info">
-                  <div className="kpi-info-header">
-                    <span className="kpi-label flex-center-gap">Total de Vendas <InfoTooltip text="Número de cupons emitidos."/></span>
-                    <ShoppingBag size={18} className="kpi-icon"/>
-                  </div>
+                  <div className="kpi-info-header"><span className="kpi-label flex-center-gap">Total de Vendas <InfoTooltip text="Número de cupons emitidos."/></span><ShoppingBag size={18} className="kpi-icon"/></div>
                   <h2 className="kpi-value">{vendasQtd} <span className="text-small">recibos</span></h2>
                 </div>
                 <NanoInsightIA insight={vendasQtd < 5 && filtroPeriodo === 'hoje' ? "Fluxo muito lento." : "Volume normalizado."} tipo={vendasQtd < 5 && filtroPeriodo === 'hoje' ? "warning" : "info"} />
@@ -510,10 +385,7 @@ const Dashboard = () => {
 
               <div className="kpi-card hover-effect kpi-purple">
                 <div className="kpi-info">
-                  <div className="kpi-info-header">
-                    <span className="kpi-label flex-center-gap">Ticket Médio <InfoTooltip text="Gasto médio por cliente."/></span>
-                    <CreditCard size={18} className="kpi-icon"/>
-                  </div>
+                  <div className="kpi-info-header"><span className="kpi-label flex-center-gap">Ticket Médio <InfoTooltip text="Gasto médio por cliente."/></span><CreditCard size={18} className="kpi-icon"/></div>
                   <h2 className="kpi-value">{formatCurrency(ticketMedio)}</h2>
                 </div>
                 <NanoInsightIA insight={ticketMedio < 40 && faturamento > 0 ? "Oportunidade de Cross-sell." : "Valor saudável."} tipo={ticketMedio < 40 && faturamento > 0 ? "warning" : "success"} />
@@ -521,10 +393,7 @@ const Dashboard = () => {
 
               <div className="kpi-card hover-effect kpi-orange">
                 <div className="kpi-info">
-                  <div className="kpi-info-header">
-                    <span className="kpi-label flex-center-gap">Itens por Cesta <InfoTooltip text="Média de itens por cupom."/></span>
-                    <Package size={18} className="kpi-icon"/>
-                  </div>
+                  <div className="kpi-info-header"><span className="kpi-label flex-center-gap">Itens por Cesta <InfoTooltip text="Média de itens por cupom."/></span><Package size={18} className="kpi-icon"/></div>
                   <h2 className="kpi-value">{produtosDistintos} <span className="text-small">un</span></h2>
                 </div>
                 <NanoInsightIA insight={produtosDistintos <= 1.2 && vendasQtd > 0 ? "Maioria leva só 1 item." : "Venda casada OK."} tipo={produtosDistintos <= 1.2 && vendasQtd > 0 ? "warning" : "success"} />
@@ -532,10 +401,7 @@ const Dashboard = () => {
 
               <div className="kpi-card hover-effect kpi-red">
                 <div className="kpi-info">
-                  <div className="kpi-info-header">
-                    <span className="kpi-label flex-center-gap">Descontos <InfoTooltip text="Soma de abatimentos."/></span>
-                    <Tag size={18} className="kpi-icon"/>
-                  </div>
+                  <div className="kpi-info-header"><span className="kpi-label flex-center-gap">Descontos <InfoTooltip text="Soma de abatimentos."/></span><Tag size={18} className="kpi-icon"/></div>
                   <h2 className={`kpi-value ${percentualDesconto > 8 ? 'text-danger' : 'text-main'}`}>{formatCurrency(descontosHoje)}</h2>
                 </div>
                 <NanoInsightIA insight={percentualDesconto > 8 ? `Cedeu ${percentualDesconto.toFixed(1)}%. Risco.` : "Descontos normais."} tipo={percentualDesconto > 8 ? "danger" : "success"} />
@@ -543,10 +409,7 @@ const Dashboard = () => {
 
               <div className="kpi-card hover-effect kpi-rose">
                 <div className="kpi-info">
-                  <div className="kpi-info-header">
-                    <span className="kpi-label flex-center-gap">Retenção <InfoTooltip text="Clientes que retornaram."/></span>
-                    <HeartHandshake size={18} className="kpi-icon"/>
-                  </div>
+                  <div className="kpi-info-header"><span className="kpi-label flex-center-gap">Retenção <InfoTooltip text="Clientes que retornaram."/></span><HeartHandshake size={18} className="kpi-icon"/></div>
                   <h2 className="kpi-value">{taxaRecorrencia.toFixed(1)}<span className="text-small">%</span></h2>
                 </div>
                 <NanoInsightIA insight={taxaRecorrencia < 15 && vendasQtd > 0 ? "Pouca fidelização." : "Boa base de retorno."} tipo={taxaRecorrencia < 15 && vendasQtd > 0 ? "warning" : "success"} />

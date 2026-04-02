@@ -105,12 +105,18 @@ export const ComprovanteNfce = React.forwardRef(({ venda, loja }, ref) => {
               <p>Data de Autorização: {dataEmissao}</p>
             </div>
 
-            {/* QR CODE */}
+            {/* QR CODE - Corrigido com validação condicional */}
             <div className="qr-code-box">
-               <img
-                 src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(venda.urlQrCode || "")}`}
-                 alt="QR Code NFC-e"
-               />
+               {venda.urlQrCode ? (
+                 <img
+                   src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(venda.urlQrCode)}`}
+                   alt="QR Code NFC-e"
+                 />
+               ) : (
+                 <p style={{ fontSize: '10px', textAlign: 'center', marginTop: '10px' }}>
+                   Aguardando validação QR Code...
+                 </p>
+               )}
             </div>
           </>
         ) : (

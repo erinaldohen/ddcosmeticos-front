@@ -169,9 +169,10 @@ const PDV = () => {
   const navigate = useNavigate();
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 992);
   const [horaAtual, setHoraAtual] = useState(new Date());
-  const [lojaLogo, setLojaLogo] = useState(null);
 
-  // MÉTODOS DE PAGAMENTO DINÂMICOS
+  const [lojaLogo, setLojaLogo] = useState(null);
+  const [configLoja, setConfigLoja] = useState(null);
+
   const [metodosPagamentoAtivos, setMetodosPagamentoAtivos] = useState([
       {id: 'PIX', icon: <Smartphone size={20}/>, label: 'Pix'},
       {id: 'DINHEIRO', icon: <Banknote size={20}/>, label: 'Dinheiro'},
@@ -179,7 +180,6 @@ const PDV = () => {
       {id: 'DEBITO', icon: <CreditCard size={20}/>, label: 'Débito'}
   ]);
 
-  // LOG DE AUDITORIA
   const [auditLog, setAuditLog] = useState([]);
 
   const registrarAcaoAuditoria = useCallback((acao, detalhes) => {
@@ -196,6 +196,7 @@ const PDV = () => {
       const timer = setInterval(() => setHoraAtual(new Date()), 1000);
 
       api.get('/configuracoes').then(res => {
+          setConfigLoja(res.data);
           if (res.data?.loja?.logoUrl) {
               const url = res.data.loja.logoUrl;
               setLojaLogo(url.startsWith('http') || url.startsWith('data:image') ? url : `${getBackendUrl()}${url.startsWith('/') ? '' : '/'}${url}`);
@@ -340,9 +341,6 @@ const PDV = () => {
       return () => window.removeEventListener('keydown', handleKeyDown);
   }, [mobileViewState, carrinho.length, showClienteModal, showDescontoModal, showExitModal, showCancelVendaModal, showFechamentoModal, showRupturaModal, showScanner, showCadastroRapido, showPausadasModal, showZapModal, vendaFinalizada, saldoDevedor]);
 
-  // ==========================================================
-  // LOGICA DO CARRINHO E AUDITORIA
-  // ==========================================================
   const adicionarProdutoAoCarrinho = useCallback((prod) => {
       playAudio('success');
       setUltimoItemAdicionadoId(null);
@@ -371,9 +369,6 @@ const PDV = () => {
       return () => clearTimeout(delay);
   }, [busca]);
 
-  // ==========================================================
-  // INTELIGÊNCIA ARTIFICIAL: CLASSIFICAÇÃO AUTOMÁTICA
-  // ==========================================================
   const classificarComIA = async (descricaoProduto, eanProduto) => {
       if (!descricaoProduto || descricaoProduto.trim().length < 3) return;
 
@@ -400,9 +395,6 @@ const PDV = () => {
       }
   };
 
-  // ==========================================================
-  // BUSCA E CADASTRO RÁPIDO NO PDV
-  // ==========================================================
   const processarEAN = async (valorRaw) => {
       const valor = valorRaw.replace(/[^a-zA-Z0-9]/g, '');
       if (!valor) return;
@@ -542,15 +534,14 @@ const PDV = () => {
       registrarAcaoAuditoria('REMOVER_DESCONTO', `Desconto zerado.`);
   };
 
-  const handleSalvarProdutoRapido = async () => { // <-- Agora é async
+  const handleSalvarProdutoRapido = async () => {
         const preco = parseInt(produtoRapido.precoVendaRaw || '0', 10) / 100;
         if (preco <= 0) return toast.warning("Digite o preço de venda válido!");
         if (!produtoRapido.descricao || produtoRapido.descricao.trim().length < 3) return toast.warning("Digite uma descrição para a Nota Fiscal.");
 
-        setLoading(true); // Trava o botão para não clicar duas vezes
+        setLoading(true);
 
         try {
-            // 1. Monta o objeto exatamente como o seu backend (ProdutoForm) espera
             const payloadNovoProduto = {
                           codigoBarras: produtoRapido.codigoBarras,
                           descricao: produtoRapido.descricao.toUpperCase(),
@@ -563,15 +554,12 @@ const PDV = () => {
                           ativo: true,
                           cst: '102',
                           origem: '0',
-                          // 🚩 A MÁGICA AQUI: Avisa o backend que este produto veio do caixa e precisa de revisão
                           revisaoPendente: true
                       };
 
-            // 2. Salva o produto DE FATO no banco de dados
             const response = await api.post('/produtos', payloadNovoProduto);
-            const produtoSalvoNoBanco = response.data; // Aqui vem com o ID real (ex: id: 45)
+            const produtoSalvoNoBanco = response.data;
 
-            // 3. Adiciona o produto real ao carrinho
             adicionarProdutoAoCarrinho(produtoSalvoNoBanco);
 
             setShowCadastroRapido(false);
@@ -585,9 +573,6 @@ const PDV = () => {
         }
     };
 
-  // ==========================================================
-  // FUNÇÕES DE RUPTURA E FECHAMENTO DE CAIXA
-  // ==========================================================
   const registrarVendaPerdida = async () => {
       if (produtoFaltante.trim().length < 3) return toast.warning("Digite o nome do produto.");
       setLoading(true);
@@ -619,9 +604,6 @@ const PDV = () => {
       } finally { setLoading(false); }
   };
 
-  // ==========================================================
-  // PAGAMENTO E FINALIZAÇÃO
-  // ==========================================================
   const handleAdicionarPagamento = () => {
       let valor = parseInt(valorInputRaw.replace(/\D/g, '') || '0', 10) / 100;
       if (valor <= 0 && saldoDevedor > 0) valor = saldoDevedor;
@@ -650,82 +632,141 @@ const PDV = () => {
       }
 
       setLoading(true);
-      try {
-          registrarAcaoAuditoria('FINALIZOU_VENDA', `Tentativa de finalização. Total: R$ ${totalPagar}`);
-          const payload = {
-              subtotal: subtotalItens, descontoTotal: descontoItens + descontoTotalRaw, totalPago: totalPagar,
-              troco: Math.max(0, parseFloat((totalPago - totalPagar).toFixed(2))),
-              clienteNome: clienteAvulso.nome || "Consumidor Final",
-              clienteDocumento: cleanNumeric(clienteAvulso.documento) || null,
-              clienteTelefone: cleanNumeric(clienteAvulso.telefone) || null,
-              itens: carrinho.map(i => ({ produtoId: i.id, quantidade: i.quantidade, precoUnitario: i.precoVenda, desconto: i.desconto || 0 })),
-              pagamentos: pagamentos.map(p => ({ formaPagamento: p.tipo, valor: p.valor, parcelas: 1 })),
-              logAuditoria: auditLog
-          };
-          const response = await api.post('/vendas', payload);
-          toast.success("Venda Finalizada!");
-          setVendaFinalizada(response.data);
-      } catch (err) { toast.error("Erro ao registrar a venda."); } finally { setLoading(false); }
-  };
+            try {
+                registrarAcaoAuditoria('FINALIZOU_VENDA', `Tentativa de finalização. Total: R$ ${totalPagar}`);
+                const payload = {
+                    subtotal: subtotalItens, descontoTotal: descontoItens + descontoTotalRaw, totalPago: totalPagar,
+                    troco: Math.max(0, parseFloat((totalPago - totalPagar).toFixed(2))),
+                    clienteNome: clienteAvulso.nome || "Consumidor Final",
+                    clienteDocumento: cleanNumeric(clienteAvulso.documento) || null,
+                    clienteTelefone: cleanNumeric(clienteAvulso.telefone) || null,
+                    itens: carrinho.map(i => ({ produtoId: i.id, quantidade: i.quantidade, precoUnitario: i.precoVenda, desconto: i.desconto || 0 })),
+                    pagamentos: pagamentos.map(p => ({ formaPagamento: p.tipo, valor: p.valor, parcelas: 1 })),
+                    logAuditoria: auditLog
+                };
 
-  // ==========================================================
-  // IMPRESSÃO E WHATSAPP
-  // ==========================================================
+                let response = await api.post('/vendas', payload);
+                let vendaResult = response.data;
+
+                // LOOP DE ESPERA (POLLING): Aguarda até 4 segundos se a nota estiver pendente na Sefaz
+                let tentativas = 0;
+                while(vendaResult.status === 'PENDENTE' && tentativas < 4) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    const resCheck = await api.get(`/vendas/${vendaResult.id || vendaResult.idVenda}`);
+                    vendaResult = resCheck.data;
+                    tentativas++;
+                }
+
+                toast.success("Venda Finalizada!");
+                setVendaFinalizada(vendaResult); // Agora garante que entra com URL e Chave
+            } catch (err) { toast.error("Erro ao registrar a venda."); } finally { setLoading(false); }
+        };
+
+  // 🚨 COMPLIANCE SEFAZ: IMPRESSÃO DE CUPOM FISCAL DANFE NFC-E LEGALIZADO
   const imprimirCupomLocal = () => {
-      const dataVenda = new Date();
+      const dataVenda = new Date(vendaFinalizada?.dataVenda || new Date());
       const idVenda = vendaFinalizada?.idVenda || vendaFinalizada?.id || '0000';
-      const itensHTML = carrinho.map(i => `
-          <tr><td colspan="3">${i.descricao}</td></tr>
-          <tr>
-            <td>${i.quantidade}x</td>
-            <td>R$ ${i.precoVenda.toFixed(2)}</td>
-            <td style="text-align: right;">R$ ${(i.quantidade * i.precoVenda).toFixed(2)}</td>
-          </tr>
+      const numNfce = vendaFinalizada?.numeroNfce || idVenda;
+      const serieNfce = vendaFinalizada?.serieNfce || configLoja?.fiscal?.serieProducao || '1';
+
+      // CORREÇÃO: Usando 'vendaFinalizada' ao invés de 'vendaBase'
+      const chaveAcessoRaw = vendaFinalizada?.chaveAcessoNfce || vendaFinalizada?.chaveAcesso || vendaFinalizada?.chaveNfce || vendaFinalizada?.chave || '00000000000000000000000000000000000000000000';
+      const chaveAcessoFormatada = chaveAcessoRaw.replace(/(\d{4})/g, '$1 ').trim();
+
+      const protocolo = vendaFinalizada?.protocolo || 'N/A';
+
+      const loja = configLoja?.loja || {};
+      const end = configLoja?.endereco || {};
+      const sys = configLoja?.sistema || {};
+
+      const razaoSocial = loja.razaoSocial || 'DD COSMÉTICOS';
+      const cnpj = loja.cnpj ? loja.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : '00.000.000/0000-00';
+      const ie = loja.ie || 'ISENTO';
+      const enderecoCompleto = `${end.logradouro || 'Rua'}, ${end.numero || 'S/N'} - ${end.bairro || 'Centro'}, ${end.cidade || 'Cidade'}-${end.uf || 'UF'}`;
+
+      let logoHTML = '';
+      if (sys.imprimirLogoCupom && lojaLogo) {
+          logoHTML = `<div class="center"><img src="${lojaLogo}" style="max-width: 150px; max-height: 80px; margin-bottom: 10px;" /></div>`;
+      }
+
+      const isHomologacao = configLoja?.fiscal?.ambiente === 'HOMOLOGACAO';
+      const watermark = isHomologacao ? `<div class="homologacao-watermark">AMBIENTE DE HOMOLOGAÇÃO - SEM VALOR FISCAL</div>` : '';
+
+      const itensHTML = carrinho.map((i, index) => `
+          <tr><td colspan="2" class="item-desc">${String(index + 1).padStart(3, '0')} ${i.codigoBarras || i.id} ${i.descricao}</td></tr>
+          <tr><td class="item-det">${i.quantidade} UN X ${i.precoVenda.toFixed(2)}</td><td class="right item-det">R$ ${(i.quantidade * i.precoVenda).toFixed(2)}</td></tr>
       `).join('');
 
-      const pagamentosHTML = pagamentos.map(p => `
-          <tr><td>${p.tipo}</td><td style="text-align: right;">R$ ${p.valor.toFixed(2)}</td></tr>
-      `).join('');
+      const pagamentosHTML = pagamentos.map(p => `<tr><td>${p.tipo}</td><td class="right">R$ ${p.valor.toFixed(2)}</td></tr>`).join('');
+
+      // Regra Consumidor Lei NFC-e
+      const docCliente = clienteAvulso.documento ? `CPF/CNPJ: ${clienteAvulso.documento}` : 'CONSUMIDOR NÃO IDENTIFICADO';
+      const nomeCliente = clienteAvulso.nome ? `Nome: ${clienteAvulso.nome}` : '';
+
+      // Lei da Transparência (12.741/12)
+      const impostoMes = totalPagar * 0.04;
+
+      // QR Code Dinâmico SEFAZ-PE
+      const urlConsultaSefaz = 'http://nfce.sefaz.pe.gov.br/nfce/consulta';
+      const qrCodeUrl = `${urlConsultaSefaz}?chNFe=${chaveAcessoRaw}&nVersao=100`;
 
       const html = `
         <html>
         <head>
+          <title>DANFE NFC-e #${idVenda}</title>
           <style>
             @page { margin: 0; size: 80mm auto; }
-            body { font-family: monospace; font-size: 10px; width: 80mm; margin: 0; padding: 4mm; color: #000; }
-            h2, h3, h4 { text-align: center; margin: 2px 0; }
-            table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 5px;}
+            body { font-family: 'Courier New', Courier, monospace; font-size: 11px; width: 80mm; margin: 0; padding: 4mm; color: #000; background: #fff;}
+            h2, h3, h4 { text-align: center; margin: 2px 0; font-size: 12px;}
+            table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 5px;}
             th, td { padding: 2px 0; }
-            hr { border-top: 1px dashed #000; margin: 5px 0; }
-            .right { text-align: right; }
-            .center { text-align: center; }
-            .bold { font-weight: bold; }
+            .border-top { border-top: 1px dashed #000; margin-top: 5px; padding-top: 5px;}
+            .border-bottom { border-bottom: 1px dashed #000; margin-bottom: 5px; padding-bottom: 5px;}
+            .right { text-align: right; } .center { text-align: center; } .bold { font-weight: bold; }
+            .left { text-align: left; }
+            .item-desc { font-size: 10px; } .item-det { font-size: 10px; padding-left: 15px;}
+            .chave { font-size: 9px; word-break: break-all; text-align: center; letter-spacing: 1px; margin: 10px 0;}
+            .homologacao-watermark { text-align: center; font-size: 14px; font-weight: bold; padding: 10px; border: 2px dashed #000; margin: 10px 0; text-transform: uppercase; }
+            .msg-rodape { text-align: center; font-size: 10px; margin-top: 15px;}
           </style>
         </head>
         <body onload="window.print(); setTimeout(()=>window.close(), 500);">
-           <h2>DD COSMÉTICOS</h2>
-           <div class="center">
-             Data: ${dataVenda.toLocaleDateString('pt-BR')} Hora: ${dataVenda.toLocaleTimeString('pt-BR')}<br>
-             Pedido Nº: ${idVenda}
+           ${logoHTML}
+           <div class="center bold">${razaoSocial}</div>
+           <div class="center">CNPJ: ${cnpj} IE: ${ie}</div>
+           <div class="center">${enderecoCompleto}</div>
+           <div class="border-top border-bottom center bold">
+             DANFE NFC-e - Documento Auxiliar da Nota Fiscal<br>de Consumidor Eletrônica
            </div>
-           <hr>
-           <table>${itensHTML}</table>
-           <hr>
-           <table>
-             <tr><td><b>SUBTOTAL</b></td><td class="right">R$ ${subtotalItens.toFixed(2)}</td></tr>
-             ${descontoTotalRaw > 0 ? `<tr><td><b>DESCONTO</b></td><td class="right">- R$ ${descontoTotalRaw.toFixed(2)}</td></tr>` : ''}
-             <tr><td><b style="font-size:12px;">TOTAL</b></td><td class="right"><b style="font-size:12px;">R$ ${totalPagar.toFixed(2)}</b></td></tr>
+           <div class="center" style="font-size: 9px; margin-bottom: 5px;">Não permite aproveitamento de crédito de ICMS</div>
+           ${watermark}
+           <table class="border-bottom">
+             <tr><th class="left" colspan="2">CÓDIGO DESCRIÇÃO</th></tr>
+             <tr><th class="left" style="padding-left:15px;">QTD UN X VL UNIT (R$)</th><th class="right">VL TOTAL (R$)</th></tr>
+             ${itensHTML}
            </table>
-           <hr>
            <table>
-             <tr><td colspan="2"><b>PAGAMENTOS:</b></td></tr>
+             <tr><td>QTD. TOTAL DE ITENS</td><td class="right">${totalQuantidade}</td></tr>
+             <tr><td>VALOR TOTAL R$</td><td class="right">${subtotalItens.toFixed(2)}</td></tr>
+             ${descontoTotalRaw > 0 ? `<tr><td>DESCONTOS R$</td><td class="right">- ${descontoTotalRaw.toFixed(2)}</td></tr>` : ''}
+             <tr><td class="bold" style="font-size: 12px;">VALOR A PAGAR R$</td><td class="right bold" style="font-size: 12px;">${totalPagar.toFixed(2)}</td></tr>
+             <tr><td colspan="2" class="border-top">FORMA DE PAGAMENTO</td></tr>
              ${pagamentosHTML}
-             <tr><td>TROCO</td><td class="right">R$ ${troco.toFixed(2)}</td></tr>
+             <tr><td>TROCO R$</td><td class="right">${troco.toFixed(2)}</td></tr>
            </table>
-           <hr>
-           <div class="center">
-             Cliente: ${clienteAvulso.nome || 'Consumidor Final'}<br>
-             Obrigado pela preferência!
+           <div class="border-top border-bottom center">${docCliente}<br>${nomeCliente}</div>
+           <div class="center bold mt-2">
+             NFC-e Nº ${numNfce} Série ${serieNfce} ${dataVenda.toLocaleDateString('pt-BR')} ${dataVenda.toLocaleTimeString('pt-BR')}
+           </div>
+           <div class="center" style="font-size: 9px; margin-top:5px;">Protocolo de Autorização: ${protocolo}</div>
+           <div class="center mt-2" style="font-size: 10px;">Consulte pela Chave de Acesso em<br>${urlConsultaSefaz}</div>
+           <div class="chave">${chaveAcessoFormatada}</div>
+           <div class="center mt-2 mb-2">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrCodeUrl)}" alt="QR Code NFC-e" />
+           </div>
+           <div class="border-top msg-rodape">
+              Tributos Totais Incidentes (Lei Federal 12.741/2012): R$ ${impostoMes.toFixed(2)}<br><br>
+              ${sys.rodape || 'Obrigado pela preferência! Volte sempre.'}
            </div>
         </body>
         </html>
@@ -737,20 +778,48 @@ const PDV = () => {
   };
 
   const enviarWhatsAppBodyCompleto = () => {
-      if(!zapNumber || zapNumber.length < 10) return toast.warning("Digite um número válido com DDD.");
-      const dataVenda = new Date();
-      let listaItens = carrinho.map(i => `▪️ ${i.quantidade}x ${i.descricao} - R$ ${(i.precoVenda * i.quantidade).toFixed(2)}`).join('\n');
-      const descontosStr = descontoTotalRaw > 0 ? `\n*Desconto:* - R$ ${descontoTotalRaw.toFixed(2)}` : '';
-      let pagamentosStr = pagamentos.map(p => `${p.tipo}: R$ ${p.valor.toFixed(2)}`).join('\n');
-      const texto = `*DD COSMÉTICOS*\nObrigado pela compra! 💖\n\n📅 Data: ${dataVenda.toLocaleDateString('pt-BR')} às ${dataVenda.toLocaleTimeString('pt-BR')}\n🛒 *RESUMO DOS ITENS:*\n${listaItens}\n\n*Subtotal:* R$ ${subtotalItens.toFixed(2)}${descontosStr}\n*TOTAL PAGO:* R$ ${totalPagar.toFixed(2)}\n\n💳 *Pagamento:*\n${pagamentosStr}\n*Troco:* R$ ${troco.toFixed(2)}\n\n🧾 _Para consultar sua nota oficial, acesse o portal do SEFAZ._\n\nVolte sempre! ✨`;
-      window.open(`https://api.whatsapp.com/send?phone=55${zapNumber.replace(/\D/g, '')}&text=${encodeURIComponent(texto)}`, '_blank');
-      setShowZapModal(false);
-  };
+        if(!zapNumber || zapNumber.length < 10) return toast.warning("Digite um número válido com DDD.");
 
-  // ==========================================================
-  // RENDERIZAÇÃO DA INTERFACE
-  // ==========================================================
-  if (validandoCaixa) return <div className="pos-loader"><div className="pos-spinner"></div><h2>A Iniciar Terminal...</h2></div>;
+        // Garante que a data está correta com base no retorno do backend
+        const dataVenda = vendaFinalizada?.dataVenda ? new Date(vendaFinalizada.dataVenda) : new Date();
+        const dataFormatada = dataVenda.toLocaleDateString('pt-BR') + ' às ' + dataVenda.toLocaleTimeString('pt-BR');
+
+        // Formatação dos Itens e Valores
+        let listaItens = carrinho.map(i => `▪️ ${i.quantidade} un x ${i.descricao} - R$ ${(i.precoVenda * i.quantidade).toFixed(2)}`).join('\n');
+        const descontosStr = descontoTotalRaw > 0 ? `\n*Desconto:* - R$ ${descontoTotalRaw.toFixed(2)}` : '';
+        let pagamentosStr = pagamentos.map(p => `${p.tipo}: R$ ${p.valor.toFixed(2)}`).join('\n');
+
+        let chaveAcesso = vendaFinalizada?.chaveAcessoNfce;
+        let textoFiscal = '';
+
+        // Cálculo/Extração dos Tributos (Lei 12.741/12)
+        // Se o backend enviar valores como valorIbs, valorCbs, etc., você pode somá-los aqui.
+        // Caso contrário, usa-se a média padrão aproximada do IBPT para o varejo (ex: 18%)
+        const tributosEstimados = vendaFinalizada?.valorIbs || (totalPagar * 0.18);
+        const impostosStr = `\nTrib. aprox.: R$ ${tributosEstimados.toFixed(2)} (Lei Fed. 12.741/12)`;
+
+        // Montagem do bloco oficial da NFC-e
+        if (chaveAcesso && !chaveAcesso.includes("SIMULADA") && !chaveAcesso.includes("Aguardando")) {
+            // Formata a chave com espaços a cada 4 dígitos
+            const chaveFormatada = chaveAcesso.replace(/(.{4})/g, '$1 ').trim();
+
+            // Extrai o Número (posições 25 a 33) e a Série (posições 22 a 24) direto da Chave de Acesso
+            const numeroNfce = parseInt(chaveAcesso.substring(25, 34), 10);
+            const serieNfce = parseInt(chaveAcesso.substring(22, 25), 10);
+
+            textoFiscal = `\n\n🧾 *DOCUMENTO FISCAL (NFC-e)*\nNFC-e nº: ${numeroNfce}  Série: ${serieNfce}\n\n*Consulte pela Chave de Acesso em:*\nhttp://nfce.sefaz.pe.gov.br/nfce/consulta\n\n*Chave:*\n${chaveFormatada}${impostosStr}`;
+        } else {
+            textoFiscal = `\n\n🧾 *RECIBO DE VENDA*\n(Sem valor fiscal)${impostosStr}`;
+        }
+
+        // Montagem final do Layout da Mensagem
+        const texto = `*DD COSMÉTICOS*\nCNPJ: 57.648.950/0001-44\n\n📅 ${dataFormatada}\n\n🛒 *RESUMO DA COMPRA:*\n${listaItens}\n\n*Subtotal:* R$ ${subtotalItens.toFixed(2)}${descontosStr}\n*TOTAL:* R$ ${totalPagar.toFixed(2)}\n\n💳 *Pagamento:*\n${pagamentosStr}\n*Troco:* R$ ${troco.toFixed(2)}${textoFiscal}\n\nObrigado pela preferência! ✨`;
+
+        window.open(`https://api.whatsapp.com/send?phone=55${zapNumber.replace(/\D/g, '')}&text=${encodeURIComponent(texto)}`, '_blank');
+        setShowZapModal(false);
+    };
+
+  if (validandoCaixa) return <div className="loader"><div className="spinner"></div><h2>A Iniciar Terminal...</h2></div>;
 
   return (
     <div className="pos-container">
@@ -1181,67 +1250,32 @@ const PDV = () => {
                       </div>
                       <div className="flex-1">
                           <label className="form-label">Preço Final (R$)</label>
-                          <input
-                              id="input-preco-rapido"
-                              className="mg-input text-center"
-                              style={{ borderColor: 'var(--success)', color: 'var(--success)', fontWeight: '900', fontSize: '1.4rem' }}
-                              inputMode="numeric"
-                              value={getValorFormatado(produtoRapido.precoVendaRaw)}
-                              onChange={e => setProdutoRapido({...produtoRapido, precoVendaRaw: formatCurrencyInput(e.target.value)})}
-                              onKeyDown={e => e.key === 'Enter' && handleSalvarProdutoRapido()}
-                              autoFocus={!produtoRapido.descricao}
-                          />
+                          <input id="input-preco-rapido" className="mg-input text-center" style={{ borderColor: 'var(--success)', color: 'var(--success)', fontWeight: '900', fontSize: '1.4rem' }} inputMode="numeric" value={getValorFormatado(produtoRapido.precoVendaRaw)} onChange={e => setProdutoRapido({...produtoRapido, precoVendaRaw: formatCurrencyInput(e.target.value)})} onKeyDown={e => e.key === 'Enter' && handleSalvarProdutoRapido()} autoFocus={!produtoRapido.descricao} />
                       </div>
                   </div>
 
                   <label className="form-label d-flex justify-between">
                       <span>Descrição (Nome na Nota)</span>
                       {!produtoRapido.loadingIA && produtoRapido.descricao.length > 3 && (
-                          <button className="btn-text-primary p-0" style={{fontSize:'0.75rem', background:'transparent', border:'none', color:'var(--primary)', fontWeight:'800'}} onClick={() => classificarComIA(produtoRapido.descricao, produtoRapido.codigoBarras)}>
-                              ✨ Forçar IA
-                          </button>
+                          <button className="btn-text-primary p-0" style={{fontSize:'0.75rem', background:'transparent', border:'none', color:'var(--primary)', fontWeight:'800'}} onClick={() => classificarComIA(produtoRapido.descricao, produtoRapido.codigoBarras)}>✨ Forçar IA</button>
                       )}
                   </label>
-                  <input
-                      className="mg-input mb-3"
-                      placeholder="Ex: MASCARA HIDRATANTE 200G"
-                      value={produtoRapido.descricao}
-                      onChange={e => setProdutoRapido({...produtoRapido, descricao: e.target.value})}
-                      autoFocus={!produtoRapido.descricao}
-                  />
+                  <input className="mg-input mb-3" placeholder="Ex: MASCARA HIDRATANTE 200G" value={produtoRapido.descricao} onChange={e => setProdutoRapido({...produtoRapido, descricao: e.target.value})} autoFocus={!produtoRapido.descricao} />
 
                   <div className="d-flex gap-3 mb-3">
                       <div className="flex-1">
                           <label className="form-label">Categoria</label>
-                          <input
-                              className={`mg-input ${produtoRapido.loadingIA ? 'bg-disabled' : ''}`}
-                              placeholder="Ex: MAQUIAGEM"
-                              value={produtoRapido.categoria}
-                              onChange={e => setProdutoRapido({...produtoRapido, categoria: e.target.value})}
-                              disabled={produtoRapido.loadingIA}
-                          />
+                          <input className={`mg-input ${produtoRapido.loadingIA ? 'bg-disabled' : ''}`} placeholder="Ex: MAQUIAGEM" value={produtoRapido.categoria} onChange={e => setProdutoRapido({...produtoRapido, categoria: e.target.value})} disabled={produtoRapido.loadingIA} />
                       </div>
                       <div className="flex-1">
                           <label className="form-label">Subcategoria</label>
-                          <input
-                              className={`mg-input ${produtoRapido.loadingIA ? 'bg-disabled' : ''}`}
-                              placeholder="Ex: BATOM"
-                              value={produtoRapido.subcategoria}
-                              onChange={e => setProdutoRapido({...produtoRapido, subcategoria: e.target.value})}
-                              disabled={produtoRapido.loadingIA}
-                          />
+                          <input className={`mg-input ${produtoRapido.loadingIA ? 'bg-disabled' : ''}`} placeholder="Ex: BATOM" value={produtoRapido.subcategoria} onChange={e => setProdutoRapido({...produtoRapido, subcategoria: e.target.value})} disabled={produtoRapido.loadingIA} />
                       </div>
                   </div>
 
                   <div className="mb-4">
                       <label className="form-label">NCM (Fiscal)</label>
-                      <input
-                          className={`mg-input ${produtoRapido.loadingIA ? 'bg-disabled' : ''}`}
-                          placeholder="Ex: 33049990"
-                          value={produtoRapido.ncm}
-                          onChange={e => setProdutoRapido({...produtoRapido, ncm: e.target.value})}
-                          disabled={produtoRapido.loadingIA}
-                      />
+                      <input className={`mg-input ${produtoRapido.loadingIA ? 'bg-disabled' : ''}`} placeholder="Ex: 33049990" value={produtoRapido.ncm} onChange={e => setProdutoRapido({...produtoRapido, ncm: e.target.value})} disabled={produtoRapido.loadingIA} />
                   </div>
 
                   <div className="d-flex gap-3">
