@@ -158,8 +158,16 @@ const Dashboard = () => {
   const faltaParaPagar = Math.max(0, custoFixoMes - margemAcumulada);
   const lucroLiquidoRealMes = Math.max(0, margemAcumulada - custoFixoMes);
 
-  const META_MENSAL = payload.metaMensal ? Number(payload.metaMensal) : 50000;
-  const progressoMetaMensal = META_MENSAL > 0 ? Math.min(100, (faturamentoCalculoMeta / META_MENSAL) * 100) : 0;
+  // Agora só usa o que vem do banco de dados, assumindo 0 se não configurado
+  const META_MENSAL = payload.metaMensal ? Number(payload.metaMensal) : 0;
+
+  const META_ALVO = filtroPeriodo === 'hoje'
+      ? (payload.metaDiaria ? Number(payload.metaDiaria) : 0)
+      : META_MENSAL;
+
+  // A validação > 0 impede erros matemáticos (como dividir por zero) caso a meta ainda não tenha sido definida
+  const progressoMetaMensal = META_ALVO > 0 ? Math.min(100, (faturamentoCalculoMeta / META_ALVO) * 100) : 0;
+
   const runRate = Number(fin.runRate || 0);
 
   const crescimentoMoM = Number(fin.crescimentoMoM || 0);
@@ -314,9 +322,9 @@ const Dashboard = () => {
                 <div className="widget-header">
                     <div><h3 className="flex-center-gap"><Flag size={20} className="icon-purple"/> Meta de {labelPeriodo} <InfoTooltip text="Progresso da meta estipulada."/></h3></div>
                     <div className="widget-status">
-                      <span>META BÁSICA</span>
-                      <h4 className={progressoMetaMensal >= 100 ? 'text-success' : 'text-purple'}>{progressoMetaMensal >= 100 ? `BATIDA!` : `${formatCurrency(Math.max(0, META_MENSAL - faturamentoCalculoMeta))}`}</h4>
-                    </div>
+                                      <span>META BÁSICA</span>
+                                      <h4 className={progressoMetaMensal >= 100 ? 'text-success' : 'text-purple'}>{progressoMetaMensal >= 100 ? `BATIDA!` : `${formatCurrency(Math.max(0, META_ALVO - faturamentoCalculoMeta))}`}</h4>
+                                    </div>
                 </div>
                 <div className="progress-bar-container"><div className={`progress-bar-fill ${progressoMetaMensal >= 100 ? 'bg-success-grad' : 'bg-purple-grad'}`} style={{ width: `${progressoMetaMensal}%` }}></div></div>
                 <div className="widget-footer"><span>Alcançado: <b>{formatCurrency(faturamentoCalculoMeta)}</b></span><span>{progressoMetaMensal.toFixed(1)}%</span></div>

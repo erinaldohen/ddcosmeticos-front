@@ -59,9 +59,36 @@
   background: #f8fafc; padding: 10px 16px; border-radius: 99px;
   border: 1px solid var(--border-color); font-weight: 600; font-size: 0.9rem;
   color: var(--text-muted); cursor: help;
+  transition: all 0.2s ease;
 }
 .stat-pill:hover { background: white; border-color: var(--primary); color: var(--text-main); }
 .text-info { color: #3b82f6; } .text-warning { color: #f59e0b; } .text-danger { color: #ef4444; }
+
+/* EFEITOS CLICÁVEIS DOS QUICK FILTERS */
+.stat-pill.clickable {
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+.stat-pill.clickable:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+}
+.stat-pill.active-info {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.08);
+    color: #1e293b;
+}
+.stat-pill.active-warning {
+    border-color: #f59e0b;
+    background: rgba(245, 158, 11, 0.08);
+    color: #1e293b;
+}
+.stat-pill.active-danger {
+    border-color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+    color: #1e293b;
+}
+
 
 /* --- 2. TOOLBAR (Filtros) --- */
 .audit-toolbar-wrapper {
@@ -161,8 +188,22 @@
 
 .card-btm { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; border-top: 1px solid #f8fafc; padding-top: 12px; }
 .user-chip { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text-muted); font-weight: 600; background: #f8fafc; padding: 4px 10px; border-radius: 6px;}
-.action-icon { cursor: pointer; color: #cbd5e1; transition: 0.2s; }
-.action-icon:hover { color: var(--primary); }
+
+.action-icon { color: #cbd5e1; transition: 0.2s; }
+.btn-inspect {
+    background: none;
+    border: none;
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+.btn-inspect:hover { background: #f1f5f9; }
+.btn-inspect:hover .action-icon { color: #3b82f6; }
+
 
 /* --- 5. TRASH GRID FLUIDO --- */
 .trash-full-grid {
@@ -193,6 +234,11 @@
 }
 .btn-restore-full:hover { background: #10b981; color: white; border-color: #10b981; }
 
+/* MODAIS */
+.modal-glass { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 20px;}
+.modal-glass-card { background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); max-height: 90vh; display: flex; flex-direction: column;}
+.fade-in { animation: fadeIn 0.3s ease forwards; }
+
 /* --- TOOLTIP CSS --- */
 [data-tooltip] { position: relative; }
 [data-tooltip]:hover::after {
@@ -209,7 +255,7 @@
    UI/UX MOBILE BLINDADA (Foco em toque e limites de tela)
    ========================================================================= */
 @media (max-width: 768px) {
-  .audit-full-container { padding: 16px; overflow-x: hidden; } /* Bloqueio extra contra scroll fantasma */
+  .audit-full-container { padding: 16px; overflow-x: hidden; }
 
   /* Hero quebra para coluna */
   .audit-header-hero { flex-direction: column; align-items: flex-start; gap: 20px; padding: 20px; }
@@ -244,20 +290,19 @@
     width: 100%;
     margin-left: 0;
     margin-right: 0;
-    gap: 0; /* Removemos o espaço entre as abas */
+    gap: 0;
     justify-content: space-between;
-    overflow: hidden; /* Trava qualquer vazamento de margem */
+    overflow: hidden;
   }
 
   .audit-nav-tabs button {
-    flex: 1; /* Cada aba ocupa matematicamente 50% da tela */
-    justify-content: center; /* Centraliza o ícone e o texto */
-    padding: 12px 4px; /* Diminui o respiro lateral */
-    font-size: 0.85rem; /* Reduz a fonte para não estourar botões pequenos */
+    flex: 1;
+    justify-content: center;
+    padding: 12px 4px;
+    font-size: 0.85rem;
     gap: 6px;
   }
 
-  /* Em ecrãs extremamente pequenos (Ex: Galaxy Fold dobrado), esconde a palavra "de Eventos" */
   @media (max-width: 380px) {
     .audit-nav-tabs button { font-size: 0.75rem; }
   }

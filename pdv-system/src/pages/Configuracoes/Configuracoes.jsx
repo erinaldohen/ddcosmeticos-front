@@ -107,17 +107,34 @@ const DangerModal = ({ isOpen, onClose, onConfirm, keyword }) => {
         <div className="cfg-modal-overlay">
             <div className="cfg-modal-content border-red">
                 <header className="cfg-modal-header cfg-text-red">
-                    <AlertTriangle size={24}/> <h2>Zona de Risco</h2>
+                    <AlertTriangle size={24}/> <h2>Atenção: Ação Irreversível!</h2>
                     <button onClick={onClose} className="cfg-btn-close"><X size={20}/></button>
                 </header>
                 <div className="cfg-modal-body">
-                    <p>Esta ação apagará as configurações do sistema e <strong>não pode ser desfeita</strong>.</p>
-                    <p>Digite <strong className="cfg-highlight">{keyword}</strong> para confirmar:</p>
-                    <input type="text" className="cfg-danger-input" value={input} onChange={(e) => setInput(e.target.value.toUpperCase())} placeholder={keyword} autoFocus/>
+                    <p>Você está prestes a <strong>Zerar o Sistema</strong>.</p>
+                    <p>Isso apagará permanentemente todas as Vendas, Produtos, Caixas e Logs de Auditoria. <strong>Apenas as configurações da loja e os usuários serão mantidos.</strong></p>
+
+                    <div className="cfg-highlight-box border-red cfg-mt-4">
+                        <p>Para confirmar, digite a palavra <strong className="cfg-text-red">{keyword}</strong> abaixo:</p>
+                        <input
+                            type="text"
+                            className="cfg-danger-input"
+                            value={input}
+                            onChange={(e) => setInput(e.target.value.toUpperCase())}
+                            placeholder={`Digite ${keyword}`}
+                            autoFocus
+                        />
+                    </div>
                 </div>
                 <footer className="cfg-modal-footer">
-                    <button className="cfg-btn-cancel" onClick={onClose}>Cancelar</button>
-                    <button className="cfg-btn-danger-confirm" disabled={input !== keyword} onClick={() => { onConfirm(); setInput(''); }}>Executar Formatação</button>
+                    <button className="cfg-btn-cancel" onClick={onClose}>Cancelar Ação</button>
+                    <button
+                        className="cfg-btn-danger-confirm"
+                        disabled={input !== keyword}
+                        onClick={() => { onConfirm(); setInput(''); }}
+                    >
+                        <Trash2 size={18} /> Executar Formatação
+                    </button>
                 </footer>
             </div>
         </div>
@@ -145,9 +162,8 @@ const Configuracoes = () => {
   const lastCnpjRef = useRef('');
 
   const baseForm = {
-    id: null,
-    metaFaturamentoMensal: 0,
-    loja: {
+      id: null,
+      loja: {
       razaoSocial: '', nomeFantasia: '', cnpj: '', ie: '', im: '', cnae: '', email: '',
       telefone: '', whatsapp: '', site: '', instagram: '', slogan: '', corDestaque: '#ec4899',
       isMatriz: true, horarioAbre: '', horarioFecha: '', toleranciaMinutos: 0,
@@ -184,50 +200,56 @@ const Configuracoes = () => {
   const [initialFormState, setInitialFormState] = useState(null);
 
   useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        const { data } = await api.get('/configuracoes');
-        if (data) {
-          const dadosLimpos = sanitizarDados(data);
-          const formMontado = {
-              ...baseForm, ...dadosLimpos,
-              metaFaturamentoMensal: dadosLimpos.metaFaturamentoMensal || 0,
-              loja: { ...baseForm.loja, ...(dadosLimpos.loja || {}) },
-              endereco: { ...baseForm.endereco, ...(dadosLimpos.endereco || {}) },
-              fiscal: { ...baseForm.fiscal, ...(dadosLimpos.fiscal || {}), senhaCert: '' },
-              financeiro: { ...baseForm.financeiro, ...(dadosLimpos.financeiro || {}) },
-              vendas: { ...baseForm.vendas, ...(dadosLimpos.vendas || {}) },
-              sistema: { ...baseForm.sistema, ...(dadosLimpos.sistema || {}) },
-              comissoes: { ...baseForm.comissoes, ...(dadosLimpos.comissoes || {}) }
-          };
-          setForm(formMontado);
-          setInitialFormState(JSON.parse(JSON.stringify(formMontado)));
+      const loadConfig = async () => {
+        try {
+          const { data } = await api.get('/configuracoes');
+          if (data) {
+            const dadosLimpos = sanitizarDados(data);
 
-          if (data.loja?.logoUrl) {
-              const url = data.loja.logoUrl;
-              if (url.startsWith('data:image') || url.startsWith('http')) {
-                  setLogoPreview(url);
-              } else {
-                  const separator = url.startsWith('/') ? '' : '/';
-                  setLogoPreview(`${getBackendUrl()}${separator}${url}`);
-              }
+            const formMontado = {
+                ...baseForm,
+                ...dadosLimpos,
+                loja: { ...baseForm.loja, ...(dadosLimpos.loja || {}) },
+                endereco: { ...baseForm.endereco, ...(dadosLimpos.endereco || {}) },
+                fiscal: { ...baseForm.fiscal, ...(dadosLimpos.fiscal || {}), senhaCert: '' },
+                financeiro: { ...baseForm.financeiro, ...(dadosLimpos.financeiro || {}) },
+                vendas: { ...baseForm.vendas, ...(dadosLimpos.vendas || {}) },
+                sistema: { ...baseForm.sistema, ...(dadosLimpos.sistema || {}) },
+                comissoes: { ...baseForm.comissoes, ...(dadosLimpos.comissoes || {}) }
+            };
+
+            setForm(formMontado);
+            setInitialFormState(JSON.parse(JSON.stringify(formMontado)));
+
+            if (dadosLimpos.loja?.logoUrl) {
+                const url = dadosLimpos.loja.logoUrl;
+                if (url.startsWith('data:image') || url.startsWith('http')) {
+                    setLogoPreview(url);
+                } else {
+                    const separator = url.startsWith('/') ? '' : '/';
+                    setLogoPreview(`${getBackendUrl()}${separator}${url}`);
+                }
+            }
+
+            if (dadosLimpos.fiscal?.caminhoCertificado) {
+                setCertData({
+                    validade: dadosLimpos.fiscal.validadeCertificado || "Ativo",
+                    diasRestantes: dadosLimpos.fiscal.diasRestantes || null
+                });
+            }
+
+            const draft = localStorage.getItem('@dd:config_draft');
+            if (draft) setHasDraft(true);
           }
-
-          if (data.fiscal?.caminhoCertificado) {
-              setCertData({
-                  validade: data.fiscal.validadeCertificado || "Ativo",
-                  diasRestantes: data.fiscal.diasRestantes || null
-              });
-          }
-
-          const draft = localStorage.getItem('@dd:config_draft');
-          if (draft) setHasDraft(true);
+        } catch (error) {
+            console.error("Erro invisível capturado:", error);
+            toast.error("Falha ao carregar configurações do banco.");
         }
-      } catch (error) { toast.error("Falha ao carregar configurações do banco."); }
-      finally { setIsLoading(false); }
-    };
-    loadConfig();
-  }, []);
+        finally { setIsLoading(false); }
+      };
+
+      loadConfig();
+    }, []);
 
   useEffect(() => {
     if (isDirty && !isLoading) localStorage.setItem('@dd:config_draft', JSON.stringify(form));
@@ -379,9 +401,13 @@ const Configuracoes = () => {
 
       const formAtualizado = {
           ...form, ...dadosLimpos,
-          metaFaturamentoMensal: dadosLimpos.metaFaturamentoMensal || 0,
           loja: { ...form.loja, ...(dadosLimpos.loja || {}) },
-          fiscal: { ...form.fiscal, ...(dadosLimpos.fiscal || {}), senhaCert: '' }
+          endereco: { ...form.endereco, ...(dadosLimpos.endereco || {}) },
+          fiscal: { ...form.fiscal, ...(dadosLimpos.fiscal || {}), senhaCert: '' },
+          financeiro: { ...form.financeiro, ...(dadosLimpos.financeiro || {}) },
+          vendas: { ...form.vendas, ...(dadosLimpos.vendas || {}) },
+          sistema: { ...form.sistema, ...(dadosLimpos.sistema || {}) },
+          comissoes: { ...form.comissoes, ...(dadosLimpos.comissoes || {}) }
       };
 
       setForm(formAtualizado);
@@ -444,7 +470,7 @@ const Configuracoes = () => {
 
   return (
     <div className="cfg-page-container cfg-animate-fade">
-      <DangerModal isOpen={showResetModal} onClose={() => setShowResetModal(false)} onConfirm={executeFactoryReset} keyword="CONFIRMAR" />
+      <DangerModal isOpen={showResetModal} onClose={() => setShowResetModal(false)} onConfirm={executeFactoryReset} keyword="FORMATAR" />
 
       {hasDraft && (
           <div className="cfg-draft-banner cfg-slide-down">
@@ -793,8 +819,8 @@ const Configuracoes = () => {
                                   <Field
                                       label="Meta de Faturamento Mensal"
                                       prefix="R$"
-                                      value={formatMoney(form.metaFaturamentoMensal)}
-                                      onChange={e => updateMoney('raiz', 'metaFaturamentoMensal', e.target.value)}
+                                      value={formatMoney(form.vendas?.metaMensal || 0)}
+                                      onChange={e => updateMoney('vendas', 'metaMensal', e.target.value)}
                                       placeholder="Ex: 50.000,00"
                                   />
                                   <div className="cfg-info-msg cfg-m-0-mobile">

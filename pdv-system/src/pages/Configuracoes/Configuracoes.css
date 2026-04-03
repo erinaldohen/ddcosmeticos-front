@@ -43,7 +43,7 @@
 .cfg-nav-item.has-error { border-left: 3px solid #ef4444; color: #ef4444; background: #fef2f2; }
 .cfg-content-area { flex: 1; overflow-y: auto; padding-right: 1rem; padding-bottom: 2rem; }
 
-/* 🚨 CORREÇÃO: Esconde o dropdown mobile na versão Desktop */
+/* Esconde o dropdown mobile na versão Desktop */
 .cfg-mobile-tab-selector { display: none; }
 
 /* CARDS E PAINÉIS */
@@ -145,13 +145,23 @@ input:checked + .cfg-slider:before { transform: translateX(24px); }
 .cfg-btn-action span span { font-size: 0.85rem; color: #64748b; font-weight: normal; }
 
 /* MODAL DE PERIGO E ANIMAÇÕES */
-.cfg-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-.cfg-modal-content { background: white; border-radius: 12px; width: 90%; max-width: 450px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-.cfg-modal-header { padding: 1.25rem 1.5rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f1f5f9; background: #fef2f2; }
-.cfg-btn-close { background: none; border: none; cursor: pointer; color: #94a3b8; }
-.cfg-danger-input { width: 100%; padding: 0.8rem; border: 2px dashed #fca5a5; border-radius: 8px; margin-top: 1rem; text-align: center; font-weight: bold; font-size: 1.1rem; outline: none;}
-.cfg-modal-footer { padding: 1rem 1.5rem; background: #f8fafc; border-top: 1px solid #f1f5f9; display: flex; justify-content: flex-end; gap: 1rem; }
-.cfg-btn-danger-confirm { background: #ef4444; color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 6px; font-weight: 600; cursor: pointer; }
+.cfg-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+.cfg-modal-content { background: white; border-radius: 16px; width: 95%; max-width: 480px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); border: 2px solid #ef4444; }
+.cfg-modal-header { padding: 1.5rem; display: flex; justify-content: space-between; align-items: center; background: #fef2f2; border-bottom: 1px solid #fecaca; }
+.cfg-modal-header h2 { margin: 0; font-size: 1.3rem; font-weight: 800; display: flex; align-items: center; gap: 0.8rem; }
+.cfg-btn-close { background: none; border: none; cursor: pointer; color: #ef4444; padding: 0.5rem; border-radius: 8px; transition: background 0.2s; display: flex; align-items: center; justify-content: center;}
+.cfg-btn-close:hover { background: #fee2e2; }
+.cfg-modal-body { padding: 2rem 1.5rem; text-align: center; }
+.cfg-modal-body p { margin-bottom: 1rem; color: #334155; line-height: 1.5; font-size: 1.05rem; }
+.cfg-danger-input { width: 100%; padding: 1rem; border: 2px dashed #fca5a5; border-radius: 8px; margin-top: 1rem; text-align: center; font-weight: 900; font-size: 1.25rem; outline: none; background: #fff5f5; color: #b91c1c; transition: all 0.2s;}
+.cfg-danger-input:focus { border-color: #ef4444; background: #fef2f2; box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1); }
+.cfg-danger-input::placeholder { color: #fca5a5; font-weight: 600; }
+.cfg-modal-footer { padding: 1.25rem 1.5rem; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 1rem; }
+.cfg-btn-cancel { background: white; color: #475569; border: 1px solid #cbd5e1; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;}
+.cfg-btn-cancel:hover { background: #f1f5f9; color: #1e293b; }
+.cfg-btn-danger-confirm { background: #ef4444; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; transition: all 0.2s; box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.3);}
+.cfg-btn-danger-confirm:hover:not(:disabled) { background: #dc2626; transform: translateY(-2px); box-shadow: 0 6px 8px -1px rgba(239, 68, 68, 0.4);}
+.cfg-btn-danger-confirm:disabled { background: #fca5a5; cursor: not-allowed; box-shadow: none; transform: none;}
 
 .cfg-info-msg { display: flex; align-items: flex-start; gap: 0.5rem; color: var(--text-muted, #64748b); font-size: 0.85rem; line-height: 1.4; }
 .cfg-loader { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; color: var(--primary-color); }
@@ -177,7 +187,7 @@ input:checked + .cfg-slider:before { transform: translateX(24px); }
 @media (max-width: 900px) {
     .cfg-layout { flex-direction: column; }
     .cfg-sidebar { display: none; }
-    
+
     /* Revela e formata o dropdown apenas no mobile */
     .cfg-mobile-tab-selector { display: flex; flex-direction: column; margin-bottom: 1.5rem; background: var(--bg-card, #ffffff); padding: 1.25rem; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
     .cfg-mobile-tab-selector label { font-size: 0.85rem; font-weight: 700; color: #64748b; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -185,11 +195,10 @@ input:checked + .cfg-slider:before { transform: translateX(24px); }
     .cfg-mobile-select-icon { position: absolute; left: 12px; color: var(--primary-color); pointer-events: none; }
     .cfg-mobile-select-wrapper select { width: 100%; padding: 14px 14px 14px 44px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 1.05rem; font-weight: 700; color: #1e293b; appearance: none; background: #f8fafc; outline: none; transition: 0.2s;}
     .cfg-mobile-select-wrapper select:focus { border-color: var(--primary-color); background: white; box-shadow: 0 0 0 3px rgba(236,72,153,0.1); }
-    
+
     .cfg-grid-col-2, .cfg-grid-col-3, .cfg-grid-col-4 { grid-template-columns: 1fr !important; gap: 1rem !important; }
     .cfg-hide-mobile { display: none !important; }
     .cfg-flex-wrap { flex-wrap: wrap; }
-    .cfg-modal-content { width: 95%; margin: 0 auto; }
     .cfg-mt-2-mobile { margin-top: 1rem !important; width: 100%; }
     .cfg-m-0-mobile { margin-top: 0.5rem !important; }
 }
