@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import Sidebar from '../Sidebar/Sidebar';
@@ -19,21 +19,41 @@ const MainLayout = () => {
     if (isMobileOpen) {
       document.body.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = ''; // String vazia é mais segura que 'unset' cross-browser
     }
 
     // Limpeza de segurança caso o componente seja desmontado
     return () => {
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = '';
     };
   }, [isMobileOpen]);
+
+  // ACESSIBILIDADE: Permite fechar o menu mobile com a tecla ESC
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape' && isMobileOpen) {
+        setIsMobileOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isMobileOpen]);
+
+  // PERFORMANCE: Memoriza as funções para evitar re-renders desnecessários do componente Sidebar
+  const toggleCollapse = useCallback(() => {
+    setIsSidebarCollapsed(prev => !prev);
+  }, []);
+
+  const toggleMobile = useCallback(() => {
+    setIsMobileOpen(prev => !prev);
+  }, []);
 
   return (
     <div className="layout-wrapper">
       {/* Overlay para fechar o menu mobile ao clicar fora */}
       {isMobileOpen && (
         <div
-          className="sidebar-overlay"
+          className="sidebar-overlay fade-in"
           onClick={() => setIsMobileOpen(false)}
           aria-hidden="true"
         />
@@ -43,14 +63,14 @@ const MainLayout = () => {
       <Sidebar
         isCollapsed={isSidebarCollapsed}
         isMobileOpen={isMobileOpen}
-        toggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        toggleMobile={() => setIsMobileOpen(!isMobileOpen)}
+        toggleCollapse={toggleCollapse}
+        toggleMobile={toggleMobile}
       />
 
       {/* Botão Menu Flutuante (Mobile Only) */}
       {!isMobileOpen && (
         <button
-          className="mobile-menu-btn"
+          className="mobile-menu-btn bounce-in"
           onClick={() => setIsMobileOpen(true)}
           aria-label="Abrir Menu"
         >

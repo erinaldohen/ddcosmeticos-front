@@ -2,14 +2,13 @@ import React from 'react';
 import {
   CheckCircle, AlertCircle, AlertTriangle,
   ArrowDownRight, ArrowUpRight, Banknote,
-  CreditCard, Smartphone, Calculator, User
+  CreditCard, Smartphone, Calculator, User, FileText
 } from 'lucide-react';
 
-// IMPORTAÇÃO DO SEU CSS AQUI 👇
 import './ResumoFechamento.css';
 
 const ResumoFechamento = ({ dados }) => {
-  // Proteção contra renderização prematura (Null Safety)
+  // Proteção contra renderização prematura
   if (!dados) return <div className="text-center p-3 text-secondary">Carregando resumo do caixa...</div>;
 
   const format = (val) => (val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -40,7 +39,7 @@ const ResumoFechamento = ({ dados }) => {
         <strong>{isExato ? 'FECHAMENTO CONFERIDO E EXATO' : 'FECHAMENTO COM DIVERGÊNCIA'}</strong>
       </div>
 
-      {/* 2. COMPARAÇÃO DIRETA DO DINHEIRO FÍSICO (Destaque Principal) */}
+      {/* 2. COMPARAÇÃO DIRETA DO DINHEIRO FÍSICO */}
       <div className="conferencia-cards mb-4">
         <div className="conf-card system-calc">
           <div className="conf-header"><Calculator size={16}/> Sistema Esperava</div>
@@ -77,13 +76,17 @@ const ResumoFechamento = ({ dados }) => {
         </div>
 
         <div className="detalhe-section">
-          <h4 className="section-title">Outros Meios (Digitais)</h4>
+          <h4 className="section-title">Digitais & A Prazo</h4>
           <div className="detalhe-row"><span className="flex items-center gap-2"><Smartphone size={14}/> PIX:</span> <span>{format(dados.totalVendasPix)}</span></div>
-          <div className="detalhe-row"><span className="flex items-center gap-2"><CreditCard size={14}/> Cartões:</span> <span>{format(dados.totalVendasCartao)}</span></div>
+          {/* SEPARAÇÃO DE CRÉDITO E DÉBITO AQUI */}
+          <div className="detalhe-row"><span className="flex items-center gap-2"><CreditCard size={14}/> Cartão de Crédito:</span> <span>{format(dados.totalVendasCredito)}</span></div>
+          <div className="detalhe-row"><span className="flex items-center gap-2"><CreditCard size={14}/> Cartão de Débito:</span> <span>{format(dados.totalVendasDebito)}</span></div>
+
+          <div className="detalhe-row"><span className="flex items-center gap-2 text-warning"><FileText size={14}/> Fiado (Crediário):</span> <span className="text-warning">{format(dados.totalVendasCrediario)}</span></div>
 
           <div className="total-digital-box mt-3">
-             <span>Total Faturado (Digital):</span>
-             <strong>{format((dados.totalVendasPix || 0) + (dados.totalVendasCartao || 0))}</strong>
+             <span>Faturamento Extra-Caixa:</span>
+             <strong>{format((dados.totalVendasPix || 0) + (dados.totalVendasCredito || 0) + (dados.totalVendasDebito || 0) + (dados.totalVendasCrediario || 0))}</strong>
           </div>
         </div>
       </div>

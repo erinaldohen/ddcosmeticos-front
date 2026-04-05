@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   DollarSign, Lock, Unlock, TrendingUp, TrendingDown,
   CreditCard, Smartphone, Banknote, Wallet, AlertCircle,
-  PlusCircle, MinusCircle, CheckCircle2
+  PlusCircle, MinusCircle, CheckCircle2, FileText
 } from 'lucide-react';
 import caixaService from '../../services/caixaService';
 import { toast } from 'react-toastify';
@@ -12,7 +12,6 @@ const GerenciamentoCaixa = () => {
   const [caixa, setCaixa] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Estados de Modais e Inputs
   const [modalAbertura, setModalAbertura] = useState(false);
   const [modalFechamento, setModalFechamento] = useState(false);
   const [modalSangria, setModalSangria] = useState(false);
@@ -21,7 +20,6 @@ const GerenciamentoCaixa = () => {
   const [valorInput, setValorInput] = useState('');
   const [observacaoInput, setObservacaoInput] = useState('');
 
-  // --- ESTADOS PARA A IA (Justificativa) ---
   const [justificativaFechamento, setJustificativaFechamento] = useState('');
   const [requerJustificativa, setRequerJustificativa] = useState(false);
 
@@ -47,7 +45,6 @@ const GerenciamentoCaixa = () => {
   const handleValorChange = (e) => {
     const onlyNums = e.target.value.replace(/\D/g, "");
     setValorInput(onlyNums);
-    // Se ele mudar o valor numérico, esconde a justificativa para tentar fechar normalmente
     if (requerJustificativa) setRequerJustificativa(false);
   };
 
@@ -72,7 +69,6 @@ const GerenciamentoCaixa = () => {
          return toast.warning("Informe um valor válido.");
     }
 
-    // Validação da Justificativa antes de enviar pro Java
     if (tipo === 'FECHAR' && requerJustificativa && justificativaFechamento.trim().length < 10) {
       return toast.warning("Por favor, digite uma justificativa detalhada (mín. 10 caracteres).");
     }
@@ -86,14 +82,11 @@ const GerenciamentoCaixa = () => {
         toast.success("Caixa aberto! Boas vendas. 🚀");
         carregarDados();
       } else if (tipo === 'FECHAR') {
-        // Envia o fechamento com a justificativa
         await caixaService.fechar(valorDecimal, justificativaFechamento.trim() !== '' ? justificativaFechamento : null);
         setModalFechamento(false);
         toast.success("Caixa fechado com sucesso.");
-
-        // A MÁGICA: Força a interface voltar para o "Cadeado Fechado" instantaneamente!
         setCaixa(null);
-        carregarDados(); // Sincroniza em background
+        carregarDados();
       } else if (tipo === 'SANGRIA') {
         await caixaService.sangria({ valor: valorDecimal, observacao: observacaoInput });
         setModalSangria(false);
@@ -107,7 +100,6 @@ const GerenciamentoCaixa = () => {
       }
       limparInputs();
     } catch (error) {
-      // --- CAPTURA DA TRAVA DE SEGURANÇA 428 (IA) ---
       if (tipo === 'FECHAR' && (error.response?.status === 428 || error.response?.data?.mensagem?.includes("justificativa"))) {
          setRequerJustificativa(true);
          toast.warning("Houve divergência no caixa. É necessário justificar o motivo.");
@@ -122,7 +114,6 @@ const GerenciamentoCaixa = () => {
   return (
     <div className={`caixa-container fade-in ${!caixa ? 'layout-fechado' : ''}`}>
 
-      {/* HEADER: SÓ APARECE SE O CAIXA ESTIVER ABERTO */}
       {caixa && (
         <header className="caixa-header-modern">
           <div>
@@ -131,13 +122,12 @@ const GerenciamentoCaixa = () => {
           </div>
           <div className="status-pill active">
             <div className="pulsing-dot"></div>
-            CAIXA ABERTO #{caixa.id}
+            CAIXA #{caixa.id}
           </div>
         </header>
       )}
 
       {!caixa ? (
-        // --- ESTADO FECHADO (MENSAGEM SUSPENSA) ---
         <div className="empty-state-modern">
           <div className="icon-wrapper-large">
             <Lock size={56} strokeWidth={1.5} />
@@ -149,95 +139,114 @@ const GerenciamentoCaixa = () => {
           </button>
         </div>
       ) : (
-        // --- ESTADO ABERTO (DASHBOARD) ---
-        <div className="dashboard-grid">
+        <>
+          <div className="dashboard-grid">
 
-          {/* COLUNA 1: RESUMO GERAL */}
-          <section className="main-balance-card">
-            <div className="balance-header">
-              <span><Wallet size={18}/> Dinheiro em Gaveta</span>
-              <small>Saldo Físico Estimado</small>
-            </div>
-            <div className="balance-value">
-              R$ {(caixa.saldoAtual ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-            </div>
-
-            <div className="quick-actions-row">
-              <button className="btn-icon-action success" onClick={() => {limparInputs(); setModalSuprimento(true)}} title="Adicionar Dinheiro">
-                <PlusCircle size={20}/> Suprimento
-              </button>
-              <button className="btn-icon-action danger" onClick={() => {limparInputs(); setModalSangria(true)}} title="Retirar Dinheiro">
-                <MinusCircle size={20}/> Sangria
-              </button>
-            </div>
-
-            <div className="mini-stats-row">
-              <div className="mini-stat">
-                <span className="label">Saldo Inicial</span>
-                <span className="value">R$ {(caixa.saldoInicial ?? 0).toFixed(2)}</span>
+            {/* COLUNA 1: FÍSICO E AÇÕES */}
+            <section className="main-balance-card">
+              <div className="balance-header">
+                <span><Wallet size={18}/> Dinheiro em Gaveta</span>
               </div>
-              <div className="mini-stat text-green">
-                <span className="label">Entradas</span>
-                <span className="value">+ R$ {((caixa.totalEntradas ?? 0) + (caixa.totalVendasDinheiro ?? 0)).toFixed(2)}</span>
+              <div className="balance-value">
+                R$ {(caixa.saldoAtual ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
               </div>
-              <div className="mini-stat text-red">
-                <span className="label">Saídas</span>
-                <span className="value">- R$ {(caixa.totalSaidas ?? 0).toFixed(2)}</span>
+
+              <div className="quick-actions-row">
+                <button className="btn-icon-action success" onClick={() => {limparInputs(); setModalSuprimento(true)}}>
+                  <PlusCircle size={20}/> Suprimento
+                </button>
+                <button className="btn-icon-action danger" onClick={() => {limparInputs(); setModalSangria(true)}}>
+                  <MinusCircle size={20}/> Sangria
+                </button>
               </div>
-            </div>
-          </section>
 
-          {/* COLUNA 2: VENDAS DIGITAIS */}
-          <section className="digital-sales-panel">
-            <h3><TrendingUp size={20}/> Faturamento Digital</h3>
-
-            <div className="method-card pix">
-              <div className="method-icon"><Smartphone size={20}/></div>
-              <div className="method-info">
-                <span>PIX</span>
-                <div className="progress-bg"><div className="progress-fill" style={{width: '100%'}}></div></div>
+              <div className="mini-stats-row">
+                <div className="mini-stat">
+                  <span className="label">Inicial</span>
+                  <span className="value">R$ {(caixa.saldoInicial ?? 0).toFixed(2)}</span>
+                </div>
+                <div className="mini-stat text-green">
+                  <span className="label">Entradas</span>
+                  <span className="value">+ R$ {((caixa.totalEntradas ?? 0) + (caixa.totalVendasDinheiro ?? 0)).toFixed(2)}</span>
+                </div>
+                <div className="mini-stat text-red">
+                  <span className="label">Saídas</span>
+                  <span className="value">- R$ {(caixa.totalSaidas ?? 0).toFixed(2)}</span>
+                </div>
               </div>
-              <strong>R$ {(caixa.totalVendasPix ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
-            </div>
+            </section>
 
-            <div className="method-card credit">
-              <div className="method-icon"><CreditCard size={20}/></div>
-              <div className="method-info">
-                <span>Crédito</span>
-                <small>Cartão</small>
+            {/* COLUNA 2: DIGITAL E PRAZO (GRID 2x2) */}
+            <section className="digital-sales-panel">
+              <h3><TrendingUp size={20}/> Digital & Prazo</h3>
+
+              <div className="digital-cards-grid">
+                  <div className="method-card">
+                    <div className="top-row">
+                        <div>
+                            <span style={{ display: 'block', lineHeight: '1.2' }}>PIX</span>
+                            <small style={{ fontSize: '0.75rem', color: '#64748b' }}>Transferência</small>
+                        </div>
+                        <div className="method-icon"><Smartphone size={16}/></div>
+                    </div>
+                    <strong>R$ {(caixa.totalVendasPix ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
+                  </div>
+
+                  <div className="method-card">
+                    <div className="top-row">
+                        <div>
+                            <span style={{ display: 'block', lineHeight: '1.2' }}>Crédito</span>
+                            <small style={{ fontSize: '0.75rem', color: '#64748b' }}>Cartão</small>
+                        </div>
+                        <div className="method-icon"><CreditCard size={16}/></div>
+                    </div>
+                    <strong>R$ {(caixa.totalVendasCredito ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
+                  </div>
+
+                  <div className="method-card">
+                    <div className="top-row">
+                        <div>
+                            <span style={{ display: 'block', lineHeight: '1.2' }}>Débito</span>
+                            <small style={{ fontSize: '0.75rem', color: '#64748b' }}>Cartão</small>
+                        </div>
+                        <div className="method-icon"><CreditCard size={16}/></div>
+                    </div>
+                    <strong>R$ {(caixa.totalVendasDebito ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
+                  </div>
+
+                  <div className="method-card crediario" style={{ borderLeft: '4px solid #f59e0b', backgroundColor: '#fffbeb' }}>
+                    <div className="top-row">
+                        <div>
+                            <span style={{ display: 'block', lineHeight: '1.2', color: '#b45309' }}>Fiado</span>
+                            <small style={{ fontSize: '0.75rem', color: '#d97706' }}>Vendas a receber</small>
+                        </div>
+                        <div className="method-icon" style={{ color: '#d97706', backgroundColor: '#fde68a' }}><FileText size={16}/></div>
+                    </div>
+                    <strong style={{ color: '#92400e' }}>R$ {(caixa.totalVendasCrediario ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
+                  </div>
               </div>
-              <strong>R$ {(caixa.totalVendasCredito ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
-            </div>
 
-            <div className="method-card debit">
-              <div className="method-icon"><CreditCard size={20}/></div>
-              <div className="method-info">
-                <span>Débito</span>
-                <small>Cartão</small>
+              <div className="total-digital-row">
+                <span>Total Extra-Caixa</span>
+                <span>R$ {((caixa.totalVendasPix??0) + (caixa.totalVendasCredito??0) + (caixa.totalVendasDebito??0) + (caixa.totalVendasCrediario??0)).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
               </div>
-              <strong>R$ {(caixa.totalVendasDebito ?? 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
-            </div>
+            </section>
 
-            <div className="total-digital-row">
-              <span>Total Digital</span>
-              <span>R$ {((caixa.totalVendasPix??0) + (caixa.totalVendasCredito??0) + (caixa.totalVendasDebito??0)).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-            </div>
-          </section>
+          </div>
 
-          {/* BOTÃO FECHAR (Rodapé) */}
+          {/* RODAPÉ E BOTÃO DE FECHAMENTO FORA DO GRID PARA TRAVAR O LAYOUT */}
           <div className="dashboard-footer">
              <div className="audit-info">
-                <CheckCircle2 size={16} color="#10b981"/> Sistema Operacional
+                <CheckCircle2 size={16} color="#10b981"/> Operacional & Sincronizado
              </div>
              <button className="btn-close-register" onClick={() => { limparInputs(); setModalFechamento(true); }}>
                Fechar Caixa
              </button>
           </div>
-
-        </div>
+        </>
       )}
 
-      {/* --- MODAL GENÉRICO DE INPUT (INCLUINDO IA) --- */}
+      {/* MODAIS INTACTOS... */}
       {(modalAbertura || modalFechamento || modalSangria || modalSuprimento) && (
         <div className="modal-overlay-modern fade-in">
           <div className="modal-card-modern fade-in-up" style={{ transition: 'all 0.3s', borderColor: requerJustificativa ? '#f59e0b' : 'transparent' }}>
@@ -269,7 +278,6 @@ const GerenciamentoCaixa = () => {
                 />
               </div>
 
-              {/* BLOCO IA: JUSTIFICATIVA DE FECHAMENTO */}
               {requerJustificativa && (
                  <div className="fade-in" style={{ marginTop: '15px' }}>
                     <label style={{ color: '#d97706', fontWeight: 'bold' }}>Justificativa Obrigatória</label>
