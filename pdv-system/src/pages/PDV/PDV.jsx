@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import {
   Search, Trash2, Plus, Minus, ArrowLeft, X, UserCheck, ArrowRight, Banknote, Smartphone,
   CreditCard, Tag, ShoppingBag, CheckCircle2, LogOut, TrendingDown,
-  Camera, Printer, MessageCircle, AlertTriangle, ChevronUp, PauseCircle, PlayCircle, Clock, FileText, Zap, Building2, MapPin, WifiOff, Wifi, Mail
+  Camera, Printer, MessageCircle, AlertTriangle, PauseCircle, PlayCircle, Clock, FileText, Zap, Building2, MapPin, WifiOff, Wifi, Mail
 } from 'lucide-react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { toast } from 'react-toastify';
@@ -21,7 +21,6 @@ const cleanNumeric = (v) => (v ? String(v).replace(/\D/g, '') : '');
 const formatCurrencyInput = (v) => String(v).replace(/\D/g, "");
 const getValorFormatado = (r) => r ? (parseInt(r, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : "";
 
-// Validação Matemática Real
 const validarCPF = (cpf) => {
     cpf = cpf.replace(/[^\d]+/g, '');
     if (cpf.length !== 11 || /^(\d)\1+$/.test(cpf)) return false;
@@ -46,53 +45,7 @@ const validarCNPJ = (cnpj) => {
     return true;
 };
 
-const getBackendUrl = () => api.defaults.baseURL ? api.defaults.baseURL.split('/api')[0] : "";
 const playAudio = (type = 'success') => { try { const audioCtx = new (window.AudioContext || window.webkitAudioContext)(); const osc = audioCtx.createOscillator(); osc.type = type === 'success' ? 'sine' : 'sawtooth'; osc.frequency.setValueAtTime(type === 'success' ? 850 : 150, audioCtx.currentTime); osc.connect(audioCtx.destination); osc.start(); setTimeout(() => osc.stop(), type === 'success' ? 120 : 300); } catch (e) {} };
-
-// ==========================================================
-// CÂMERA MOBILE
-// ==========================================================
-const ScannerModal = ({ onProcessScan, onClose }) => {
-    const [hasFlashlight, setHasFlashlight] = useState(false);
-    const [isFlashlightOn, setIsFlashlightOn] = useState(false);
-    const [manualEan, setManualEan] = useState('');
-    const html5QrCodeRef = useRef(null);
-
-    useEffect(() => {
-        let wasScanned = false;
-        let scanner = new Html5Qrcode("reader-core");
-        html5QrCodeRef.current = scanner;
-        const config = { fps: 15, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0, formatsToSupport: [ Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8, Html5QrcodeSupportedFormats.QR_CODE ] };
-        scanner.start({ facingMode: "environment" }, config, (decodedText) => { if (wasScanned) return; const valorLimpo = decodedText.replace(/[^a-zA-Z0-9]/g, ''); if (valorLimpo) { wasScanned = true; try { scanner.pause(true); } catch (e) {} onProcessScan(valorLimpo); } }, () => {}).then(() => { try { const track = scanner.getRunningTrackCameraCapabilities(); if (track && track.torchFeature().isSupported) setHasFlashlight(true); } catch (e) {} }).catch(() => toast.error("Falha ao acessar a câmera."));
-        return () => { wasScanned = true; if (scanner) { try { if (scanner.isScanning || scanner.getState() === 2) { scanner.stop().then(() => { scanner.clear(); scanner = null; }).catch(() => { scanner.clear(); scanner = null; }); } else { scanner.clear(); scanner = null; } } catch (error) { scanner = null; } } };
-    }, [onProcessScan]);
-
-    const handleManualSubmit = (e) => { e.preventDefault(); if (manualEan.trim().length >= 3) onProcessScan(manualEan.trim()); };
-    const toggleFlashlight = async () => { if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) { const newState = !isFlashlightOn; try { await html5QrCodeRef.current.applyVideoConstraints({ advanced: [{ torch: newState }] }); setIsFlashlightOn(newState); } catch (e) { toast.warn("Lanterna não suportada."); } } };
-
-    return (
-        <div className="modal-glass z-max">
-            <div className="modal-glass-card sm text-center fade-in bg-dark-glass" style={{ padding: '24px' }}>
-                <div className="d-flex justify-between align-center mb-4">
-                    <h3 className="title-main text-white m-0 text-left">Escaneie o Código</h3>
-                    {hasFlashlight && <button className={`btn-torch ${isFlashlightOn ? 'active' : ''}`} onClick={toggleFlashlight} title="Lanterna"><Zap size={22} /></button>}
-                </div>
-                <div className="scanner-viewport" style={{ aspectRatio: '1/1', marginBottom: '20px' }}>
-                    <div id="reader-core" className="reader-core" style={{ minHeight: '250px' }}></div>
-                    <div className="scanner-overlay"></div><div className="scanner-laser"></div>
-                </div>
-                <div className="fallback-manual" style={{ background: 'rgba(255,255,255,0.1)', padding: '12px', borderRadius: '12px' }}>
-                    <p className="text-white mb-2" style={{ fontSize: '0.85rem', fontWeight: '600' }}>Plástico refletindo? Digite o código:</p>
-                    <form onSubmit={handleManualSubmit} className="d-flex gap-2">
-                        <input type="number" className="mg-input" style={{ padding: '10px', fontSize: '1.2rem', textAlign: 'center' }} placeholder="Ex: 78910..." value={manualEan} onChange={(e) => setManualEan(e.target.value)} autoFocus />
-                        <button type="submit" className="btn-action-success" style={{ width: 'auto', padding: '0 20px' }}>OK</button>
-                    </form>
-                </div>
-                <button className="btn-cancel-dark mt-4" onClick={onClose}>Fechar Câmera</button>
-            </div>
-        </div>
-    );
-};
 
 // ==========================================================
 // COMPONENTE PRINCIPAL: PDV
@@ -114,7 +67,6 @@ const PDV = () => {
 
   const [auditLog, setAuditLog] = useState([]);
   const [alertaCrediario, setAlertaCrediario] = useState(null);
-  const [senhaGerenteCrediario, setSenhaGerenteCrediario] = useState('');
 
   const registrarAcaoAuditoria = useCallback((acao, detalhes) => {
       const hora = new Date();
@@ -133,7 +85,12 @@ const PDV = () => {
   const [loading, setLoading] = useState(false);
 
   const [vendaFinalizada, setVendaFinalizada] = useState(null);
-  const [emailEnvio, setEmailEnvio] = useState(''); // Estado para o E-mail pós-venda
+
+  // MODAIS PÓS-VENDA
+  const [showZapModal, setShowZapModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [zapNumber, setZapNumber] = useState('');
+  const [emailEnvio, setEmailEnvio] = useState('');
 
   const [vendasPausadas, setVendasPausadas] = useState(() => { try { return JSON.parse(localStorage.getItem('@dd:pausadas')) || []; } catch { return []; } });
   const [showPausadasModal, setShowPausadasModal] = useState(false);
@@ -141,7 +98,6 @@ const PDV = () => {
   const [carrinho, setCarrinho] = useState(() => { try { return JSON.parse(localStorage.getItem('@dd:carrinho')) || []; } catch { return []; } });
   const [pagamentos, setPagamentos] = useState([]);
 
-  // CLIENTE AVULSO AMPLIADO (E-mail incluído)
   const [clienteAvulso, setClienteAvulso] = useState({
       nome: '', telefone: '', documento: '', email: '',
       isPj: false, ie: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: ''
@@ -162,15 +118,8 @@ const PDV = () => {
   const [showExitModal, setShowExitModal] = useState(false);
   const [showCancelVendaModal, setShowCancelVendaModal] = useState(false);
   const [showRupturaModal, setShowRupturaModal] = useState(false);
-  const [produtoFaltante, setProdutoFaltante] = useState('');
 
   const [showFechamentoModal, setShowFechamentoModal] = useState(false);
-  const [valorFechamentoRaw, setValorFechamentoRaw] = useState('');
-  const [justificativa, setJustificativa] = useState('');
-  const [requerJustificativa, setRequerJustificativa] = useState(false);
-
-  const [showZapModal, setShowZapModal] = useState(false);
-  const [zapNumber, setZapNumber] = useState('');
 
   const subtotalItens = useMemo(() => carrinho.reduce((acc, item) => acc + (item.precoVenda * item.quantidade), 0), [carrinho]);
   const descontoItens = useMemo(() => carrinho.reduce((acc, item) => acc + (item.desconto || 0), 0), [carrinho]);
@@ -182,17 +131,6 @@ const PDV = () => {
 
   const [metodoAtual, setMetodoAtual] = useState('PIX');
   const [valorInputRaw, setValorInputRaw] = useState('');
-
-  const pdvChannel = useMemo(() => new BroadcastChannel('pdv_channel'), []);
-
-  useEffect(() => {
-      pdvChannel.postMessage({ type: 'PDV_UPDATE', payload: { carrinho, totalPagar, totalPago, troco, cliente: clienteAvulso.nome, metodoAtual, status: mobileViewState === 'PAYMENT' ? 'PAGAMENTO' : 'LIVRE' } });
-  }, [carrinho, totalPagar, totalPago, troco, clienteAvulso.nome, metodoAtual, mobileViewState, pdvChannel]);
-
-  // Sincroniza e-mail ao finalizar a venda
-  useEffect(() => {
-      if (vendaFinalizada) setEmailEnvio(clienteAvulso.email || '');
-  }, [vendaFinalizada, clienteAvulso.email]);
 
   // =======================================================================
   // INICIALIZAÇÃO
@@ -249,8 +187,16 @@ const PDV = () => {
   useEffect(() => { localStorage.setItem('@dd:pausadas', JSON.stringify(vendasPausadas)); }, [vendasPausadas]);
   useEffect(() => { localStorage.setItem('@dd:offline_vendas', JSON.stringify(filaOffline)); }, [filaOffline]);
 
+  // Sincroniza e-mail e telefone ao finalizar a venda para auto-preencher os modais
+  useEffect(() => {
+      if (vendaFinalizada) {
+          setEmailEnvio(clienteAvulso.email || '');
+          setZapNumber(clienteAvulso.telefone || '');
+      }
+  }, [vendaFinalizada, clienteAvulso.email, clienteAvulso.telefone]);
+
   // =======================================================================
-  // TECLADO E BUSCA (BLINDADOS)
+  // TECLADO E BUSCA
   // =======================================================================
   useEffect(() => {
       if (busca.trim().length < 3) { setSugestoesProdutos([]); setSelectedIndex(-1); return; }
@@ -263,12 +209,13 @@ const PDV = () => {
 
   useEffect(() => {
       const handleKeyDown = (e) => {
-          const isModalOpen = showExitModal || showCancelVendaModal || showClienteModal || showDescontoModal || showRupturaModal || showPausadasModal || showZapModal || vendaFinalizada || alertaCrediario || showFechamentoModal || showScanner;
+          const isModalOpen = showExitModal || showCancelVendaModal || showClienteModal || showDescontoModal || showRupturaModal || showPausadasModal || showZapModal || showEmailModal || vendaFinalizada || alertaCrediario || showFechamentoModal || showScanner;
 
           if (e.key === 'Escape') {
               e.preventDefault();
-              if (alertaCrediario) { setAlertaCrediario(null); setSenhaGerenteCrediario(''); return; }
+              if (alertaCrediario) { setAlertaCrediario(null); return; }
               if (showZapModal) { setShowZapModal(false); return; }
+              if (showEmailModal) { setShowEmailModal(false); return; }
               if (vendaFinalizada) { setVendaFinalizada(null); limparEstadoVenda(); return; }
               if (showClienteModal) { setShowClienteModal(false); return; }
               if (showDescontoModal) { setShowDescontoModal(false); return; }
@@ -283,7 +230,6 @@ const PDV = () => {
 
           if (isModalOpen) return;
 
-          // Atalhos MOUSE ZERO no Pagamento
           if (mobileViewState === 'PAYMENT') {
               if (e.target.tagName !== 'INPUT' || e.target.type === 'text') {
                   const k = e.key.toUpperCase();
@@ -301,7 +247,6 @@ const PDV = () => {
               return;
           }
 
-          // ATALHOS GERAIS
           if (e.key === 'F2') { e.preventDefault(); setMobileView('SCAN'); }
           if (e.key === 'F3') { e.preventDefault(); setShowClienteModal(true); }
           if (e.key === 'F4') { e.preventDefault(); handleShowDesconto(); }
@@ -314,17 +259,17 @@ const PDV = () => {
       };
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mobileViewState, carrinho.length, showClienteModal, showDescontoModal, showExitModal, showCancelVendaModal, showRupturaModal, showPausadasModal, showZapModal, showFechamentoModal, showScanner, vendaFinalizada, alertaCrediario, saldoDevedor, metodoAtual, loading]);
+  }, [mobileViewState, carrinho.length, showClienteModal, showDescontoModal, showExitModal, showCancelVendaModal, showRupturaModal, showPausadasModal, showZapModal, showEmailModal, showFechamentoModal, showScanner, vendaFinalizada, alertaCrediario, saldoDevedor, metodoAtual, loading]);
 
   // =======================================================================
-  // AÇÕES BLINDADAS E VALIDADAS
+  // AÇÕES DO CARRINHO
   // =======================================================================
   const handleShowDesconto = () => { if (carrinho.length === 0) return toast.warn("Adicione produtos antes de dar desconto."); setShowDescontoModal(true); };
   const handleIrParaPagamento = () => { if (carrinho.length === 0) return toast.warn("O carrinho está vazio."); setMobileView('PAYMENT'); setValorInputRaw(Math.round(saldoDevedor * 100).toString()); setTimeout(()=> inputValorRef.current?.focus(), 100); };
   const handleCancelarVenda = () => { if (carrinho.length === 0) return toast.warn("Não há nada para cancelar."); setShowCancelVendaModal(true); };
 
   const handlePausarVenda = () => {
-      if (carrinho.length === 0) return toast.warning("Adicione produtos antes de pausar a venda.");
+      if (carrinho.length === 0) return toast.warning("Adicione produtos antes de pausar.");
       const novaPausa = { id: Date.now(), data: new Date().toLocaleTimeString(), carrinho, clienteAvulso, descontoTotalRaw, totalPagar, auditLog };
       setVendasPausadas([...vendasPausadas, novaPausa]);
       limparEstadoVenda();
@@ -332,7 +277,7 @@ const PDV = () => {
   };
 
   const handleShowPausadas = () => {
-      if (vendasPausadas.length === 0) return toast.info("Nenhuma venda em espera no momento.");
+      if (vendasPausadas.length === 0) return toast.info("Nenhuma venda em espera.");
       setShowPausadasModal(true);
   };
 
@@ -341,17 +286,16 @@ const PDV = () => {
       if (carrinho.length > 0) return toast.warning("Cancele a venda atual antes de restaurar.");
       setCarrinho(venda.carrinho); setClienteAvulso(venda.clienteAvulso); setDescontoTotalRaw(venda.descontoTotalRaw); setAuditLog(venda.auditLog || []);
       setVendasPausadas(vendasPausadas.filter(v => v.id !== id)); setShowPausadasModal(false);
-      toast.success("Venda restaurada com sucesso!");
+      toast.success("Venda restaurada!");
   };
 
-  const confirmarCancelamentoVenda = () => { limparEstadoVenda(); setShowCancelVendaModal(false); toast.info("Venda atual cancelada."); };
+  const confirmarCancelamentoVenda = () => { limparEstadoVenda(); setShowCancelVendaModal(false); toast.info("Venda cancelada."); };
 
   const limparEstadoVenda = () => { setCarrinho([]); setPagamentos([]); setClienteAvulso({ nome: '', telefone: '', documento: '', email: '', isPj: false, ie: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '' }); setDescontoTotalRaw(0); setMobileView('SCAN'); setBusca(''); setAuditLog([]); };
   const handleSairPdv = () => { if(carrinho.length > 0) setShowExitModal(true); else navigate('/dashboard'); };
-  const confirmarSaidaPdv = () => { limparEstadoVenda(); setShowExitModal(false); navigate('/dashboard'); };
 
   // =======================================================================
-  // LOGICA B2B E VALIDAÇÃO VISUAL (SEM TOASTS INVASIVOS)
+  // LOGICA B2B E VALIDAÇÃO VISUAL
   // =======================================================================
   const statusDocumento = useMemo(() => {
       const clean = cleanNumeric(clienteAvulso.documento);
@@ -371,9 +315,9 @@ const PDV = () => {
                   const ativa = est.inscricoes_estaduais.find(i => i.ativa); ieEncontrada = ativa ? ativa.inscricao_estadual : est.inscricoes_estaduais[0].inscricao_estadual;
               }
               setClienteAvulso(prev => ({ ...prev, nome: data.razao_social, telefone: (est.ddd1 && est.telefone1) ? `${est.ddd1}${est.telefone1}` : prev.telefone, cep: est.cep || '', logradouro: est.logradouro || '', numero: est.numero || '', bairro: est.bairro || '', cidade: est.cidade?.nome || '', uf: est.estado?.sigla || '', ie: ieEncontrada, isPj: true }));
-              toast.success("Empresa e IE identificadas! NF-e habilitada."); playAudio('success'); setLoadingCnpj(false); return;
+              toast.success("Empresa identificada! NF-e habilitada."); playAudio('success'); setLoadingCnpj(false); return;
           }
-      } catch(e) { console.warn("CNPJ WS indisponível."); }
+      } catch(e) {}
 
       try {
           const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
@@ -389,20 +333,16 @@ const PDV = () => {
       const val = mascaraDocumento(e.target.value);
       const clean = cleanNumeric(val);
       setClienteAvulso(prev => ({...prev, documento: val, isPj: clean.length > 11}));
-
-      // Busca silenciosa se bater 14 dígitos e for válido
-      if (clean.length === 14 && validarCNPJ(clean)) {
-          buscarCnpj(clean);
-      }
+      if (clean.length === 14 && validarCNPJ(clean)) buscarCnpj(clean);
   };
 
   const confirmarClienteModal = () => {
       const clean = cleanNumeric(clienteAvulso.documento);
       if (clean.length > 0) {
-          if (clean.length < 11) return toast.warning("Documento incompleto. Digite 11 ou 14 números.");
-          if (clean.length === 11 && !validarCPF(clean)) return toast.error("O CPF digitado é inválido.");
+          if (clean.length < 11) return toast.warning("Documento incompleto.");
+          if (clean.length === 11 && !validarCPF(clean)) return toast.error("O CPF é inválido.");
           if (clean.length > 11 && clean.length < 14) return toast.warning("CNPJ incompleto.");
-          if (clean.length === 14 && !validarCNPJ(clean)) return toast.error("O CNPJ digitado é inválido.");
+          if (clean.length === 14 && !validarCNPJ(clean)) return toast.error("O CNPJ é inválido.");
       }
       toast.success("Dados confirmados.");
       setShowClienteModal(false);
@@ -410,7 +350,7 @@ const PDV = () => {
   };
 
   // =======================================================================
-  // PRODUTOS E PREÇOS
+  // PRODUTOS, PREÇOS E PAGAMENTO
   // =======================================================================
   const adicionarProdutoAoCarrinho = useCallback((prod) => {
       playAudio('success'); setUltimoItemAdicionadoId(null); setTimeout(() => setUltimoItemAdicionadoId(prod.id), 10); setTimeout(() => setUltimoItemAdicionadoId(null), 800);
@@ -424,12 +364,12 @@ const PDV = () => {
 
   const processarEAN = async (valorRaw) => {
       const valor = valorRaw.replace(/[^a-zA-Z0-9]/g, ''); if (!valor) return;
-      if (!isOnline) return toast.warning("Modo offline: Não é possível buscar novos códigos na nuvem.");
+      if (!isOnline) return toast.warning("Modo offline ativo.");
       try {
           const { data } = await api.get(`/produtos/ean/${valor}`);
           let produto = Array.isArray(data) ? data[0] : data;
           if (produto && (produto.id || produto.codigoBarras)) { adicionarProdutoAoCarrinho(produto); } else { throw new Error("Não encontrado"); }
-      } catch (err) { playAudio('error'); toast.warning("Produto não cadastrado na base!"); setBusca(''); if (inputBuscaRef.current) inputBuscaRef.current.value = ''; }
+      } catch (err) { playAudio('error'); toast.warning("Produto não encontrado!"); setBusca(''); if (inputBuscaRef.current) inputBuscaRef.current.value = ''; }
   };
 
   const handleSearchKeyDown = (e) => {
@@ -449,43 +389,29 @@ const PDV = () => {
       const valorBase = parseInt(descontoInputRaw || '0', 10) / 100; let valorReal = 0;
       if (valorBase > 0) {
           valorReal = (tipoDesconto === '%') ? subtotalItens * (valorBase / 100) : valorBase;
-          if (tipoDesconto === '%' && valorBase > 100) return toast.error("O desconto não pode ser maior que 100%");
-          if (tipoDesconto === 'R$' && valorBase > subtotalItens) return toast.error("O desconto não pode ser maior que o subtotal da venda");
-          setDescontoTotalRaw(valorReal); toast.success("Desconto aplicado com sucesso!");
+          if (tipoDesconto === '%' && valorBase > 100) return toast.error("Máximo 100%");
+          if (tipoDesconto === 'R$' && valorBase > subtotalItens) return toast.error("Acima do subtotal");
+          setDescontoTotalRaw(valorReal); toast.success("Desconto aplicado!");
       }
       setDescontoInputRaw(''); setShowDescontoModal(false);
   };
-  const removerDescontoGlobal = () => { setDescontoTotalRaw(0); setDescontoInputRaw(''); setShowDescontoModal(false); toast.info("Desconto removido da venda."); };
-
-  const handleSolicitarFechamento = () => { if (carrinho.length > 0) return toast.warning("Cancele a venda atual antes de fechar o caixa."); setShowFechamentoModal(true); setRequerJustificativa(false); setJustificativa(''); setValorFechamentoRaw(''); };
-  const confirmarFechamentoCaixa = async () => {
-      if (requerJustificativa && justificativa.trim().length < 10) return toast.warning("Sua justificativa é muito curta. Detalhe o motivo.");
-      setLoading(true);
-      try {
-          const valorInformado = parseInt(valorFechamentoRaw.replace(/\D/g, '') || '0', 10) / 100;
-          await api.post('/caixas/fechar', { valorFisicoInformado: valorInformado, justificativaDiferenca: justificativa.trim() !== '' ? justificativa : null });
-          toast.success("O caixa foi fechado com sucesso."); setShowFechamentoModal(false); limparEstadoVenda(); navigate('/caixa');
-      } catch (error) {
-          if (error.response?.status === 428 || error.response?.data?.message?.toLowerCase().includes("justificativa")) { setRequerJustificativa(true); toast.warning("Divergência detectada. Justifique os valores."); }
-          else { toast.error("Falha ao encerrar o caixa."); }
-      } finally { setLoading(false); }
-  };
+  const removerDescontoGlobal = () => { setDescontoTotalRaw(0); setDescontoInputRaw(''); setShowDescontoModal(false); toast.info("Desconto removido."); };
 
   const handleAdicionarPagamento = async () => {
       let valor = parseInt(valorInputRaw.replace(/\D/g, '') || '0', 10) / 100;
       if (valor <= 0 && saldoDevedor > 0) valor = saldoDevedor; if (valor <= 0) return;
 
       if (metodoAtual === 'CREDIARIO') {
-          if (!isOnline) return toast.warning("Modo Offline: Vendas no crediário requerem internet para consulta do SPC.");
+          if (!isOnline) return toast.warning("Offline: Crediário exige internet.");
           const docClean = cleanNumeric(clienteAvulso.documento);
-          if (!docClean || docClean.length < 11 || !clienteAvulso.nome || clienteAvulso.nome.trim() === '') { setShowClienteModal(true); return toast.warning("Identifique o cliente na nota para autorizar o Fiado."); }
+          if (!docClean || docClean.length < 11 || !clienteAvulso.nome) { setShowClienteModal(true); return toast.warning("Identifique o cliente para o Fiado."); }
           setLoading(true);
           try {
               const { data: statusCliente } = await api.get(`/clientes/analise-credito/${docClean}`);
               if (statusCliente.bloqueado || statusCliente.debitosAtraso > 0) { setLoading(false); setAlertaCrediario(statusCliente); return; }
           } catch (err) {
-              if (err.response?.status === 404) { try { await api.post('/clientes', { nome: clienteAvulso.nome.toUpperCase(), documento: docClean, telefone: cleanNumeric(clienteAvulso.telefone) || "", ativo: true, limiteCredito: 0 }); } catch (erroCadastro) { setLoading(false); return toast.error("Falha ao registrar cliente novo."); } }
-              else { setLoading(false); return toast.warning("Serviço de análise de crédito indisponível."); }
+              if (err.response?.status === 404) { try { await api.post('/clientes', { nome: clienteAvulso.nome.toUpperCase(), documento: docClean, telefone: cleanNumeric(clienteAvulso.telefone) || "", ativo: true, limiteCredito: 0 }); } catch (erroCadastro) { setLoading(false); return toast.error("Falha ao registrar cliente."); } }
+              else { setLoading(false); return toast.warning("Serviço indisponível."); }
           }
           setLoading(false);
       }
@@ -503,7 +429,7 @@ const PDV = () => {
   };
 
   // =======================================================================
-  // FINALIZAÇÃO COM INTERCEPTADOR OFFLINE
+  // FINALIZAÇÃO E ENVIO PARA SEFAZ
   // =======================================================================
   const finalizarVendaReal = async () => {
       if (saldoDevedor > 0.01) return toast.error(`Ainda falta pagar R$ ${saldoDevedor.toFixed(2)}`);
@@ -515,6 +441,7 @@ const PDV = () => {
           clienteNome: clienteAvulso.nome || "Consumidor Final",
           clienteDocumento: cleanNumeric(clienteAvulso.documento) || null,
           clienteTelefone: cleanNumeric(clienteAvulso.telefone) || null,
+
           clienteCep: clienteAvulso.isPj ? clienteAvulso.cep : null,
           clienteLogradouro: clienteAvulso.isPj ? clienteAvulso.logradouro : null,
           clienteNumero: clienteAvulso.isPj ? clienteAvulso.numero : null,
@@ -522,6 +449,7 @@ const PDV = () => {
           clienteCidade: clienteAvulso.isPj ? clienteAvulso.cidade : null,
           clienteUf: clienteAvulso.isPj ? clienteAvulso.uf : null,
           clienteIe: clienteAvulso.ie || null,
+
           tipoNota: clienteAvulso.isPj ? 'NFE' : 'NFCE',
           itens: carrinho.map(i => ({ produtoId: i.id, quantidade: i.quantidade, precoUnitario: i.precoVenda, desconto: i.desconto || 0 })),
           pagamentos: pagamentos.map(p => ({ formaPagamento: p.tipo, valor: p.valor, parcelas: 1 })),
@@ -530,8 +458,8 @@ const PDV = () => {
 
       if (!isOnline) {
           setFilaOffline([...filaOffline, payload]);
-          toast.success("A internet falhou, mas a venda foi gravada em segurança no Modo Offline!");
-          setVendaFinalizada({ idVenda: payload.idOffline, status: 'OFFLINE', offline: true, dataVenda: new Date(), ...payload, tipoNota: payload.tipoNota });
+          toast.success("Modo Offline: Venda gravada localmente!");
+          setVendaFinalizada({ id: payload.idOffline, status: 'OFFLINE', offline: true, dataVenda: new Date(), ...payload, tipoNota: payload.tipoNota });
           return;
       }
 
@@ -540,120 +468,386 @@ const PDV = () => {
           let response = await api.post('/vendas', payload);
           let vendaResult = response.data;
 
-          if (vendaResult.statusNfce === 'REJEITADA') throw new Error("A SEFAZ rejeitou o documento. Verifique os dados fiscais.");
+          if (vendaResult.status === 'REJEITADA') throw new Error("A SEFAZ rejeitou o documento. Verifique os dados fiscais.");
 
-          toast.success(clienteAvulso.isPj ? "NF-e Emitida com Sucesso!" : "Cupom Finalizado com Sucesso!");
+          toast.success(clienteAvulso.isPj ? "NF-e (B2B) Emitida!" : "Cupom (NFC-e) Autorizado!");
           setVendaFinalizada({...vendaResult, tipoNota: payload.tipoNota});
       } catch (err) {
-          toast.error(err.message || "Houve uma falha de comunicação com o servidor.");
+          toast.error(err.response?.data?.message || err.message || "Falha de comunicação com o servidor.");
       } finally {
           setLoading(false);
       }
   };
 
   // =======================================================================
-  // AÇÕES PÓS-VENDA (IMPRESSÃO INTELIGENTE E E-MAIL SOB DEMANDA)
+  // AÇÕES PÓS-VENDA (WHATSAPP, E-MAIL E IMPRESSÃO CORRIGIDOS)
   // =======================================================================
-  const imprimirCupomLocal = () => {
-      const isNfe = vendaFinalizada?.tipoNota === 'NFE';
-      const razaoSocial = configLoja?.loja?.razaoSocial || "DD Cosméticos";
-      const cnpjL = configLoja?.loja?.cnpj || "57.648.950/0001-44";
-      const numDoc = vendaFinalizada?.numeroNfce || vendaFinalizada?.idVenda || "000000";
-      const serieDoc = vendaFinalizada?.serieNfce || "1";
-      const chaveAcesso = vendaFinalizada?.chaveAcessoNfce || "00000000000000000000000000000000000000000000";
 
-      // ROTEAMENTO DE IMPRESSÃO: A4 (NF-e) vs BOBINA (NFC-e)
-      if (isNfe) {
-          toast.info("Gerando DANFE A4 (Nota Grande)...");
-          const printWindow = window.open('', '_blank', 'width=900,height=800');
-          printWindow.document.write(`
-              <html>
-              <head><title>DANFE NF-e - ${razaoSocial}</title></head>
-              <body style="font-family: Arial, sans-serif; padding: 20px; color: #333;" onload="window.print(); setTimeout(()=>window.close(), 500);">
-                  <div style="border: 2px solid #000; padding: 20px; border-radius: 8px; max-width: 800px; margin: auto;">
-                      <div style="display: flex; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 20px;">
-                          <div>
-                              <h2 style="margin: 0 0 10px 0;">${razaoSocial}</h2>
-                              <p style="margin: 0; font-size: 12px;">CNPJ: ${cnpjL}</p>
-                              <p style="margin: 0; font-size: 12px;">Recife - PE</p>
-                          </div>
-                          <div style="text-align: center; border-left: 2px solid #000; padding-left: 20px;">
-                              <h3 style="margin: 0 0 5px 0;">DANFE</h3>
-                              <p style="margin: 0; font-size: 10px;">Documento Auxiliar da Nota Fiscal Eletrônica</p>
-                              <p style="font-weight: bold; margin-top: 10px;">Nº ${numDoc} - Série ${serieDoc}</p>
-                          </div>
-                      </div>
-                      <div style="margin-bottom: 20px;">
-                          <h4 style="background: #f1f5f9; padding: 5px; margin: 0 0 10px 0; border: 1px solid #ccc;">DADOS DO DESTINATÁRIO</h4>
-                          <p style="margin: 0; font-size: 12px;"><strong>Razão Social:</strong> ${clienteAvulso.nome}</p>
-                          <p style="margin: 0; font-size: 12px;"><strong>CNPJ:</strong> ${clienteAvulso.documento} &nbsp;&nbsp; <strong>IE:</strong> ${clienteAvulso.ie || 'ISENTO'}</p>
-                          <p style="margin: 0; font-size: 12px;"><strong>Endereço:</strong> ${clienteAvulso.logradouro}, ${clienteAvulso.numero} - ${clienteAvulso.bairro}, ${clienteAvulso.cidade}-${clienteAvulso.uf}</p>
-                      </div>
-                      <div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #ccc;">
-                          <p style="font-size: 10px; margin: 0;">Chave de Acesso</p>
-                          <p style="font-weight: bold; font-size: 14px; letter-spacing: 2px;">${chaveAcesso.replace(/(\d{4})/g, '$1 ').trim()}</p>
-                      </div>
-                  </div>
-              </body>
-              </html>
-          `);
-          printWindow.document.close();
-          return;
-      }
+  const enviarPorWhatsApp = () => {
+        const numeroLimpo = zapNumber.replace(/\D/g, '');
+        if (numeroLimpo.length < 10) return toast.warning("Digite um número de WhatsApp válido.");
 
-      // IMPRESSORA TÉRMICA 80MM (CUPOM NFC-e)
-      const qrCodeUrl = vendaFinalizada?.urlQrCode || `http://nfce.sefaz.pe.gov.br/nfce/consulta?chNFe=${chaveAcesso}`;
-      let itensHTML = carrinho.map(i => `<tr><td style="text-align:left; font-size:11px;">${i.quantidade}x ${i.descricao}</td><td style="text-align:right; font-size:11px;">R$ ${(i.quantidade * i.precoVenda).toFixed(2)}</td></tr>`).join('');
+        const urlNota = vendaFinalizada?.urlQrCode || `http://nfce.sefaz.pe.gov.br/nfce/consulta?chNFe=${vendaFinalizada?.chaveAcessoNfce}`;
+        const nomeCliente = clienteAvulso.nome ? ` ${clienteAvulso.nome.split(' ')[0]}` : '';
+        const valorTotalFormatado = vendaFinalizada?.valorTotal?.toFixed(2) || totalPagar.toFixed(2);
+        const chaveFormatada = vendaFinalizada?.chaveAcessoNfce ? vendaFinalizada.chaveAcessoNfce.replace(/(\d{4})/g, '$1 ').trim() : 'N/A';
+        const dataVendaStr = vendaFinalizada?.dataVenda ? new Date(vendaFinalizada.dataVenda).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR');
 
-      let printHtml = `
-          <html>
-          <head>
-              <title>DANFE NFC-e</title>
-              <style>
-                  body { font-family: monospace; font-size: 12px; width: 80mm; margin: 0; padding: 10px; color: #000; }
-                  .center { text-align: center; } .bold { font-weight: bold; }
-                  .line { border-bottom: 1px dashed #000; margin: 10px 0; }
-                  table { width: 100%; border-collapse: collapse; }
-              </style>
-          </head>
-          <body onload="window.print(); setTimeout(()=>window.close(), 500);">
-              <div class="center bold" style="font-size:14px;">${razaoSocial}</div>
-              <div class="center">CNPJ: ${cnpjL}</div>
-              <div class="line"></div>
-              <div class="center bold">DANFE NFC-e - Consumidor Final</div>
-              <div class="line"></div>
-              <table>${itensHTML}</table>
-              <div class="line"></div>
-              <div style="display:flex; justify-content:space-between;" class="bold"><span>TOTAL:</span><span>R$ ${totalPagar.toFixed(2)}</span></div>
-              <div class="line"></div>
-              <div class="center">Nº ${numDoc} - Série ${serieDoc}</div>
-              <div class="center" style="font-size:10px; margin-top:10px;">Chave de Acesso:</div>
-              <div class="center bold" style="font-size:9px; word-break:break-all;">${chaveAcesso.replace(/(\d{4})/g, '$1 ').trim()}</div>
-              <div class="center" style="margin-top:15px;">
-                  <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrCodeUrl)}" alt="QR Code" />
-              </div>
-          </body>
-          </html>
-      `;
+        // Monta a lista de produtos formatada
+        const listaProdutos = carrinho.map(item => `▪️ ${item.quantidade}x ${item.descricao} - R$ ${(item.quantidade * item.precoVenda).toFixed(2)}`).join('\n');
 
-      const printWindow = window.open('', '_blank', 'width=400,height=600');
-      printWindow.document.write(printHtml);
-      printWindow.document.close();
-      toast.info("Impressão enviada para a máquina térmica.");
-  };
+        // Formata os pagamentos
+        const listaPagamentos = pagamentos.map(p => `• ${p.tipo}: R$ ${p.valor.toFixed(2)}`).join('\n');
+
+        // Mensagem Rica e Completa (Baseada no Cupom Físico)
+        const mensagem = `Olá${nomeCliente}! 🛍️ Agradecemos sua compra na *${configLoja?.loja?.razaoSocial || 'DD Cosméticos'}*.\n\n` +
+                         `📅 *Data/Hora:* ${dataVendaStr}\n` +
+                         `🎫 *Cód. Venda:* #${vendaFinalizada?.id || vendaFinalizada?.idOffline || '0000'}\n\n` +
+                         `🛒 *ITENS COMPRADOS:*\n${listaProdutos}\n\n` +
+                         `💳 *PAGAMENTO:*\n${listaPagamentos}\n` +
+                         `*Total Pago:* R$ ${valorTotalFormatado}\n\n` +
+                         `📄 *DANFE ${vendaFinalizada?.tipoNota === 'NFE' ? 'NF-e' : 'NFC-e'}*\n` +
+                         `• Chave: ${chaveFormatada}\n` +
+                         `• Protocolo: ${vendaFinalizada?.protocolo || 'Aguardando Sefaz'}\n\n` +
+                         `*Acesse o link abaixo para visualizar ou baixar o seu documento fiscal oficial:*\n${urlNota}\n\n` +
+                         `Volte sempre e aproveite seus produtos! ✨`;
+
+        const linkWhatsApp = `https://api.whatsapp.com/send?phone=55${numeroLimpo}&text=${encodeURIComponent(mensagem)}`;
+        window.open(linkWhatsApp, '_blank');
+        setShowZapModal(false);
+        toast.success("Redirecionando para o WhatsApp...");
+    };
 
   const enviarPorEmail = async () => {
-      if (!emailEnvio || !emailEnvio.includes('@')) {
-          return toast.warning("Digite um e-mail válido no campo acima para enviar os arquivos.");
+        if (!emailEnvio || !emailEnvio.includes('@')) return toast.warning("Digite um e-mail válido.");
+        setLoading(true);
+        try {
+            const vendaIdCorreto = vendaFinalizada.id || vendaFinalizada.idOffline;
+
+            // Toast Promise avisa ao operador que estamos aguardando a SEFAZ
+            await toast.promise(
+                api.post(`/vendas/${vendaIdCorreto}/email`, { email: emailEnvio }),
+                {
+                    pending: 'Aguardando o XML da SEFAZ e enviando e-mail...',
+                    success: `Documento fiscal enviado para ${emailEnvio}!`,
+                    error: {
+                        render({data}){
+                            return data.response?.data?.message || "Falha ao enviar e-mail. Verifique as configurações.";
+                        }
+                    }
+                }
+            );
+
+            setShowEmailModal(false);
+        } catch (err) {
+            // O erro já é tratado pelo toast.promise
+        } finally {
+            setLoading(false);
+        }
+    };
+
+  const imprimirCupomLocal = () => {
+      const isNfe = vendaFinalizada?.tipoNota === 'NFE';
+      const loja = configLoja?.loja || {};
+      const fiscal = configLoja?.fiscal || {};
+
+      const razaoSocial = loja.razaoSocial || "DD COSMÉTICOS LTDA";
+      const cnpj = loja.cnpj || "57.648.950/0001-44";
+      const endereco = loja.logradouro ? `${loja.logradouro}, ${loja.numero} - ${loja.bairro}` : "Rua Arquiteto Luiz Nunes, 63 - Imbiribeira";
+      const cidadeUF = loja.cidade ? `${loja.cidade} - ${loja.uf}` : "Recife - PE";
+      const telefone = loja.telefone || "(81) 99999-9999";
+
+      const numDoc = vendaFinalizada?.numeroNfce || vendaFinalizada?.id || "000000";
+      const serieDoc = vendaFinalizada?.serieNfce || "1";
+      const chaveAcesso = vendaFinalizada?.chaveAcessoNfce || "00000000000000000000000000000000000000000000";
+      const chaveFormatada = chaveAcesso.replace(/(\d{4})/g, '$1 ').trim();
+      const dataVendaStr = vendaFinalizada?.dataVenda ? new Date(vendaFinalizada.dataVenda).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR');
+      const qrCodeUrl = vendaFinalizada?.urlQrCode || `http://nfce.sefaz.pe.gov.br/nfce/consulta?chNFe=${chaveAcesso}`;
+
+      let printHtml = '';
+
+      if (isNfe) {
+                toast.info("Preparando DANFE A4 (Nota Grande)...");
+                // 🚨 LAYOUT DANFE OFICIAL A4 PAISAGEM (100% DA LARGURA)
+                printHtml = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <title>DANFE NF-e - ${razaoSocial}</title>
+                        <style>
+                            @page { size: A4 landscape; margin: 5mm; }
+                            body { font-family: Arial, sans-serif; font-size: 10px; margin: 0; padding: 0; width: 100%; }
+                            .danfe-container { width: 100%; border: 1px solid #000; padding: 5px; box-sizing: border-box;}
+                            table { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
+                            td, th { border: 1px solid #000; padding: 4px; vertical-align: top; }
+                            .label { display: block; font-size: 8px; text-transform: uppercase; color: #333; margin-bottom: 2px;}
+                            .val { font-size: 12px; font-weight: bold; }
+                            .center { text-align: center; } .right { text-align: right; }
+                            .title-box { font-size: 12px; font-weight: bold; margin: 10px 0 5px 0; text-transform: uppercase;}
+                            .barcode { letter-spacing: 2px; font-size: 14px; text-align: center; margin-top: 10px;}
+                        </style>
+                    </head>
+                    <body>
+                        <table>
+                            <tr>
+                                <td style="width: 80%;"><span class="label">RECEBEMOS DE ${razaoSocial} OS PRODUTOS CONSTANTES DA NOTA FISCAL INDICADA AO LADO</span><span class="val">&nbsp;</span></td>
+                                <td rowspan="2" class="center" style="width: 20%;"><span class="label">NF-e</span><span class="val" style="font-size:16px;">Nº ${numDoc}</span><br><span class="val">Série ${serieDoc}</span></td>
+                            </tr>
+                            <tr>
+                                <td>
+                                   <div style="display: flex; justify-content: space-between;">
+                                      <div style="width: 30%; border-right: 1px solid #000; padding-right: 5px;"><span class="label">DATA DE RECEBIMENTO</span><span class="val">&nbsp;</span></div>
+                                      <div style="width: 70%; padding-left: 5px;"><span class="label">IDENTIFICAÇÃO E ASSINATURA DO RECEBEDOR</span><span class="val">&nbsp;</span></div>
+                                   </div>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <div style="border-bottom: 1px dashed #000; margin: 15px 0;"></div>
+
+                        <div class="danfe-container">
+                            <table>
+                                <tr>
+                                    <td style="width: 40%; text-align: center; vertical-align: middle;">
+                                        <h3 style="margin:5px 0; font-size: 16px;">${razaoSocial}</h3>
+                                        <p style="margin:0; font-size: 11px;">${endereco}<br>${cidadeUF}<br>Fone: ${telefone}</p>
+                                    </td>
+                                    <td style="width: 20%; text-align: center; vertical-align: middle;">
+                                        <h2 style="margin:0; font-size: 20px;">DANFE</h2>
+                                        <p style="margin:0; font-size: 9px;">Documento Auxiliar da Nota Fiscal Eletrônica</p>
+                                        <p style="margin:10px 0 0 0; font-size: 12px;">0 - ENTRADA<br>1 - SAÍDA <strong>[ 1 ]</strong></p>
+                                        <h3 style="margin:5px 0; font-size: 16px;">Nº ${numDoc}</h3>
+                                        <p style="margin:0; font-size: 12px;">SÉRIE: ${serieDoc}</p>
+                                    </td>
+                                    <td style="width: 40%; vertical-align: middle;">
+                                        <div class="barcode">|| |||| || ||||| ||||| ||| ||</div>
+                                        <div class="center" style="margin-top: 5px;">
+                                            <span class="label">CHAVE DE ACESSO</span>
+                                            <span class="val" style="font-size: 14px;">${chaveFormatada}</span>
+                                        </div>
+                                        <div class="center" style="margin-top: 15px;">
+                                            <span class="label">Consulta de autenticidade no portal nacional da NF-e</span>
+                                            <span style="font-size:10px;">www.nfe.fazenda.gov.br/portal</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <table>
+                                <tr>
+                                    <td style="width: 60%;"><span class="label">NATUREZA DA OPERAÇÃO</span><span class="val">VENDA DE MERCADORIAS</span></td>
+                                    <td style="width: 40%;"><span class="label">PROTOCOLO DE AUTORIZAÇÃO DE USO</span><span class="val">${vendaFinalizada?.protocolo || 'N/A'} - ${dataVendaStr}</span></td>
+                                </tr>
+                            </table>
+                            <table>
+                                <tr>
+                                    <td style="width: 33%;"><span class="label">INSCRIÇÃO ESTADUAL</span><span class="val">${fiscal.inscricaoEstadual || 'ISENTO'}</span></td>
+                                    <td style="width: 33%;"><span class="label">INSC. ESTADUAL DO SUBST. TRIB.</span><span class="val"></span></td>
+                                    <td style="width: 34%;"><span class="label">CNPJ</span><span class="val">${cnpj}</span></td>
+                                </tr>
+                            </table>
+
+                            <div class="title-box">DESTINATÁRIO / REMETENTE</div>
+                            <table>
+                                <tr>
+                                    <td style="width: 60%;"><span class="label">NOME / RAZÃO SOCIAL</span><span class="val">${clienteAvulso.nome || 'CONSUMIDOR'}</span></td>
+                                    <td style="width: 25%;"><span class="label">CNPJ / CPF</span><span class="val">${clienteAvulso.documento}</span></td>
+                                    <td style="width: 15%;"><span class="label">DATA DA EMISSÃO</span><span class="val">${dataVendaStr.split(' ')[0]}</span></td>
+                                </tr>
+                            </table>
+                            <table>
+                                <tr>
+                                    <td style="width: 45%;"><span class="label">ENDEREÇO</span><span class="val">${clienteAvulso.logradouro}, ${clienteAvulso.numero}</span></td>
+                                    <td style="width: 25%;"><span class="label">BAIRRO / DISTRITO</span><span class="val">${clienteAvulso.bairro}</span></td>
+                                    <td style="width: 15%;"><span class="label">CEP</span><span class="val">${mascaraCEP(clienteAvulso.cep)}</span></td>
+                                    <td style="width: 15%;"><span class="label">DATA DA SAÍDA</span><span class="val">${dataVendaStr.split(' ')[0]}</span></td>
+                                </tr>
+                            </table>
+                            <table>
+                                <tr>
+                                    <td style="width: 40%;"><span class="label">MUNICÍPIO</span><span class="val">${clienteAvulso.cidade}</span></td>
+                                    <td style="width: 20%;"><span class="label">FONE / FAX</span><span class="val">${clienteAvulso.telefone}</span></td>
+                                    <td style="width: 10%;"><span class="label">UF</span><span class="val">${clienteAvulso.uf}</span></td>
+                                    <td style="width: 30%;"><span class="label">INSCRIÇÃO ESTADUAL</span><span class="val">${clienteAvulso.ie || 'ISENTO'}</span></td>
+                                </tr>
+                            </table>
+
+                            <div class="title-box">CÁLCULO DO IMPOSTO</div>
+                            <table>
+                                <tr>
+                                    <td style="width: 20%;"><span class="label">BASE DE CÁLCULO DO ICMS</span><span class="val right">0,00</span></td>
+                                    <td style="width: 20%;"><span class="label">VALOR DO ICMS</span><span class="val right">0,00</span></td>
+                                    <td style="width: 20%;"><span class="label">BASE CÁLC. ICMS SUBST.</span><span class="val right">0,00</span></td>
+                                    <td style="width: 20%;"><span class="label">VALOR ICMS SUBST.</span><span class="val right">0,00</span></td>
+                                    <td style="width: 20%;"><span class="label">VALOR TOTAL DOS PRODUTOS</span><span class="val right">${subtotalItens.toFixed(2)}</span></td>
+                                </tr>
+                                <tr>
+                                    <td><span class="label">VALOR DO FRETE</span><span class="val right">0,00</span></td>
+                                    <td><span class="label">VALOR DO SEGURO</span><span class="val right">0,00</span></td>
+                                    <td><span class="label">DESCONTO</span><span class="val right">${(descontoTotalRaw + descontoItens).toFixed(2)}</span></td>
+                                    <td><span class="label">OUTRAS DESP. ACESSÓRIAS</span><span class="val right">0,00</span></td>
+                                    <td><span class="label">VALOR TOTAL DA NOTA</span><span class="val right">${totalPagar.toFixed(2)}</span></td>
+                                </tr>
+                            </table>
+
+                            <div class="title-box">DADOS DO PRODUTO / SERVIÇOS</div>
+                            <table>
+                                <tr>
+                                    <th style="width: 8%;">CÓD.</th>
+                                    <th style="width: 44%;">DESCRIÇÃO DO PRODUTO</th>
+                                    <th style="width: 8%;">NCM/SH</th>
+                                    <th style="width: 5%;">CST</th>
+                                    <th style="width: 5%;">CFOP</th>
+                                    <th style="width: 5%;">UN.</th>
+                                    <th style="width: 5%;">QTD.</th>
+                                    <th style="width: 10%;">V. UNIT.</th>
+                                    <th style="width: 10%;">V. TOTAL</th>
+                                </tr>
+                                ${carrinho.map(i => `
+                                <tr>
+                                    <td class="center">${i.id}</td>
+                                    <td>${i.descricao}</td>
+                                    <td class="center">${i.ncm || '00000000'}</td>
+                                    <td class="center">${i.cst || '102'}</td>
+                                    <td class="center">${i.cfop || '5102'}</td>
+                                    <td class="center">UN</td>
+                                    <td class="right">${i.quantidade}</td>
+                                    <td class="right">${i.precoVenda.toFixed(2)}</td>
+                                    <td class="right">${(i.quantidade * i.precoVenda).toFixed(2)}</td>
+                                </tr>
+                                `).join('')}
+                            </table>
+
+                            <div class="title-box">DADOS ADICIONAIS</div>
+                            <table style="height: 60px;">
+                                <tr>
+                                    <td><span class="label">INFORMAÇÕES COMPLEMENTARES</span><span class="val" style="font-size: 10px;">Documento emitido por ME ou EPP optante pelo Simples Nacional.<br>Trib aprox R$ 0,00 Fed e R$ 0,00 Est. Fonte: IBPT.</span></td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <script>
+                            window.onload = function() {
+                                setTimeout(function() {
+                                    window.print();
+                                }, 500);
+                            };
+                        </script>
+                    </body>
+                    </html>
+                `;
+            } else {
+          // 🚨 LAYOUT NFC-e BOBINA (80mm)
+          printHtml = `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                  <meta charset="UTF-8">
+                  <title>CUPOM FISCAL</title>
+                  <style>
+                      @page { margin: 0; size: 80mm auto; }
+                      body { font-family: 'Courier New', Courier, monospace; font-size: 11px; width: 72mm; margin: 0 auto; padding: 4mm 0; color: #000; line-height: 1.2; }
+                      .center { text-align: center; } .left { text-align: left; } .right { text-align: right; }
+                      .bold { font-weight: bold; }
+                      .line { border-bottom: 1px dashed #000; margin: 5px 0; }
+                      .double-line { border-bottom: 2px solid #000; margin: 5px 0; }
+                      table { width: 100%; border-collapse: collapse; font-size: 10px; }
+                      th, td { padding: 2px 0; vertical-align: top; }
+                      .item-desc { display: block; width: 100%; word-wrap: break-word; }
+                      .qr-code { display: block; margin: 10px auto; width: 140px; height: 140px; }
+                      p { margin: 2px 0; }
+                  </style>
+              </head>
+              <body>
+                  <div class="center bold" style="font-size:13px; text-transform:uppercase;">${razaoSocial}</div>
+                  <div class="center">CNPJ: ${cnpj} ${fiscal.inscricaoEstadual ? ' IE: '+fiscal.inscricaoEstadual : ''}</div>
+                  <div class="center" style="font-size:10px;">${endereco}</div>
+                  <div class="center" style="font-size:10px;">${cidadeUF} - Tel: ${telefone}</div>
+                  <div class="double-line"></div>
+
+                  <div class="center bold">DANFE NFC-e - Documento Auxiliar da<br>Nota Fiscal de Consumidor Eletrônica</div>
+                  <div class="center" style="font-size:10px;">Não permite aproveitamento de crédito de ICMS</div>
+                  <div class="double-line"></div>
+
+                  <table style="margin-bottom: 5px;">
+                      <tr style="border-bottom: 1px dashed #000;">
+                          <th class="left" style="width:10%;">CÓD</th>
+                          <th class="left" style="width:45%;">DESCRIÇÃO</th>
+                          <th class="right" style="width:15%;">QTD/UN</th>
+                          <th class="right" style="width:15%;">VL.UN</th>
+                          <th class="right" style="width:15%;">VL.TOT</th>
+                      </tr>
+                      ${carrinho.map((i, index) => `
+                          <tr>
+                              <td class="left">${String(index + 1).padStart(3, '0')}</td>
+                              <td class="left"><span class="item-desc">${i.descricao}</span></td>
+                              <td class="right">${i.quantidade} UN</td>
+                              <td class="right">${i.precoVenda.toFixed(2)}</td>
+                              <td class="right">${(i.quantidade * i.precoVenda).toFixed(2)}</td>
+                          </tr>
+                      `).join('')}
+                  </table>
+
+                  <div class="line"></div>
+                  <div style="display:flex; justify-content:space-between;"><span>Qtd. Total de Itens:</span><span>${totalQuantidade}</span></div>
+                  <div style="display:flex; justify-content:space-between;"><span>Subtotal:</span><span>R$ ${subtotalItens.toFixed(2)}</span></div>
+                  ${descontoTotalRaw > 0 || descontoItens > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Descontos:</span><span>- R$ ${(descontoTotalRaw + descontoItens).toFixed(2)}</span></div>` : ''}
+                  <div style="display:flex; justify-content:space-between; font-size:13px;" class="bold"><span>VALOR TOTAL R$</span><span>${totalPagar.toFixed(2)}</span></div>
+                  <div class="line"></div>
+
+                  <div class="bold" style="margin-bottom: 3px;">FORMA DE PAGAMENTO</div>
+                  <table style="margin-bottom: 5px;">
+                      ${pagamentos.map(p => `
+                          <tr><td class="left">${p.tipo}</td><td class="right">R$ ${p.valor.toFixed(2)}</td></tr>
+                      `).join('')}
+                  </table>
+                  <div style="display:flex; justify-content:space-between;"><span>Troco:</span><span>R$ ${troco.toFixed(2)}</span></div>
+
+                  <div class="line"></div>
+                  <div class="center" style="font-size:10px;">Valores Aprox. Tributos (Lei 12.741/12):<br>Federal R$ 0,00 | Estadual R$ 0,00 | Municipal R$ 0,00</div>
+                  <div class="line"></div>
+
+                  <div class="center bold" style="margin-bottom:2px;">CONSUMIDOR</div>
+                  <div class="center" style="font-size:10px;">
+                      ${clienteAvulso.documento ? `CNPJ/CPF: ${clienteAvulso.documento}<br>` : 'CONSUMIDOR NÃO IDENTIFICADO<br>'}
+                      ${clienteAvulso.nome ? `${clienteAvulso.nome}<br>` : ''}
+                  </div>
+                  <div class="line"></div>
+
+                  <div class="center bold">Emissão: ${dataVendaStr}</div>
+                  <div class="center">NFC-e Nº ${numDoc} - Série ${serieDoc}</div>
+                  <div class="center" style="margin-top:2px;">Protocolo de Autorização: ${vendaFinalizada?.protocolo || 'N/A'}</div>
+                  <div class="center" style="margin-top:8px; font-size:10px;">Consulte pela Chave de Acesso em:</div>
+                  <div class="center" style="font-size:10px; word-break:break-all;">http://nfce.sefaz.pe.gov.br/nfce/consulta</div>
+
+                  <div class="center bold" style="margin-top:10px; font-size:11px; letter-spacing:1px; word-break:break-all;">
+                      ${chaveFormatada}
+                  </div>
+
+                  <img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrCodeUrl)}" alt="QR Code" />
+
+                  <div class="center bold" style="margin-top:10px;">${fiscal.obsPadraoCupom || 'Obrigado e volte sempre!'}</div>
+                  <br><br><br>
+
+                  <script>
+                      // Gatilho automático blindado com tempo extra pro QR Code carregar
+                      window.onload = function() {
+                          setTimeout(function() {
+                              window.print();
+                          }, 800);
+                      };
+                  </script>
+              </body>
+              </html>
+          `;
       }
-      setLoading(true);
-      try {
-          await new Promise(resolve => setTimeout(resolve, 1500));
-          toast.success(`O XML e o PDF da Nota foram enviados para ${emailEnvio}!`);
-      } catch (err) {
-          toast.error("Falha ao enviar o e-mail. Verifique sua conexão.");
-      } finally {
-          setLoading(false);
+
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if (printWindow) {
+          printWindow.document.write(printHtml);
+          printWindow.document.close();
+      } else {
+          toast.error("O bloqueador de Pop-ups do seu navegador impediu a impressão!");
       }
   };
 
@@ -854,7 +1048,7 @@ const PDV = () => {
       )}
 
       {/* ========================================================== */}
-      {/* MODAL DE CLIENTE (VALIDAÇÃO VISUAL SEM POP-UP INVASIVO)    */}
+      {/* MODAL DE CLIENTE (VALIDAÇÃO VISUAL SILENCIOSA)             */}
       {/* ========================================================== */}
       {showClienteModal && (
           <div className="modal-glass z-max">
@@ -958,54 +1152,6 @@ const PDV = () => {
           </div>
       )}
 
-      {/* MODAL DE SUCESSO (COM E-MAIL E IMPRESSÃO INTELIGENTE) */}
-      {vendaFinalizada && (
-        <div className="modal-glass z-max">
-          <div className="modal-glass-card text-center sm fade-in border-top-success">
-            {vendaFinalizada.offline ? <WifiOff size={60} color="#f59e0b" className="mx-auto mb-3" /> : <CheckCircle2 size={60} color="#10b981" className="mx-auto mb-3" />}
-            <h2 className="title-main mb-2">{vendaFinalizada.offline ? 'Venda Salva Localmente' : 'Transação Concluída!'}</h2>
-            <p className="text-sec mb-4">
-                {vendaFinalizada.offline
-                    ? "A internet caiu. O sistema enviará o XML para a SEFAZ automaticamente assim que a rede voltar."
-                    : `A ${vendaFinalizada.tipoNota === 'NFE' ? 'NF-e (Nota Grande)' : 'NFC-e'} foi emitida e autorizada na SEFAZ.`}
-            </p>
-
-            <div className="d-flex-col gap-3 mb-4">
-              <button className="btn-action-primary" onClick={imprimirCupomLocal}>
-                  <Printer size={20} /> {vendaFinalizada.tipoNota === 'NFE' ? 'Imprimir DANFE A4' : 'Imprimir Cupom Térmico'}
-              </button>
-
-              {/* ÁREA DE ENVIO DE E-MAIL SOB DEMANDA */}
-              {!vendaFinalizada.offline && (vendaFinalizada.tipoNota === 'NFE' || clienteAvulso.documento) && (
-                  <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                      <p style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#64748b', marginBottom: '8px', textAlign: 'left', textTransform: 'uppercase' }}>
-                          Enviar XML e PDF
-                      </p>
-                      <div className="d-flex gap-2">
-                          <input
-                              type="email"
-                              className="mg-input compact-input mb-0"
-                              placeholder="E-mail do cliente"
-                              value={emailEnvio}
-                              onChange={(e) => setEmailEnvio(e.target.value)}
-                              style={{ flex: 1 }}
-                          />
-                          <button className="btn-action-success" onClick={enviarPorEmail} disabled={loading} style={{ width: 'auto', padding: '0 16px' }}>
-                              <Mail size={20} />
-                          </button>
-                      </div>
-                  </div>
-              )}
-            </div>
-
-            <button className="btn-action-success" style={{background: '#f8fafc', color: '#1e293b', border: '2px solid #cbd5e1', boxShadow: 'none'}} onClick={() => { setVendaFinalizada(null); limparEstadoVenda(); }}>
-                Iniciar Nova Venda (ESC)
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL DE DESCONTO */}
       {showDescontoModal && (
           <div className="modal-glass z-max">
               <div className="modal-glass-card text-center sm fade-in border-top-primary">
@@ -1027,7 +1173,6 @@ const PDV = () => {
           </div>
       )}
 
-      {/* MODAL CANCELAR VENDA */}
       {showCancelVendaModal && (
           <div className="modal-glass z-max">
               <div className="modal-glass-card text-center sm fade-in border-top-danger">
@@ -1040,6 +1185,89 @@ const PDV = () => {
                   </div>
               </div>
           </div>
+      )}
+
+      {/* ========================================================== */}
+      {/* MODAIS DE ENVIO (WHATSAPP E E-MAIL)                          */}
+      {/* ========================================================== */}
+      {showZapModal && (
+        <div className="modal-glass z-max" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
+            <div className="modal-glass-card text-center sm fade-in border-top-success">
+                <MessageCircle size={50} color="#25D366" className="mx-auto mb-3"/>
+                <h2 className="title-main mb-2">Enviar via WhatsApp</h2>
+                <p className="text-sec mb-4">Digite o número com DDD para enviar o link do Cupom.</p>
+                <input
+                    type="tel"
+                    className="mg-input mb-4 text-center"
+                    placeholder="(81) 99999-9999"
+                    value={mascaraTelefone(zapNumber)}
+                    onChange={e => setZapNumber(e.target.value)}
+                    autoFocus
+                />
+                <div className="d-flex gap-3">
+                    <button className="btn-outline-sec flex-1" onClick={() => setShowZapModal(false)}>Cancelar</button>
+                    <button className="btn-action-success flex-1" style={{ backgroundColor: '#25D366', borderColor: '#25D366' }} onClick={enviarPorWhatsApp}>Enviar</button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {showEmailModal && (
+          <div className="modal-glass z-max" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
+              <div className="modal-glass-card text-center sm fade-in border-top-primary">
+                  <Mail size={50} color="#3b82f6" className="mx-auto mb-3"/>
+                  <h2 className="title-main mb-2">Enviar via E-mail</h2>
+                  <p className="text-sec mb-4">A nota fiscal será enviada em anexo.</p>
+                  <input
+                      type="email"
+                      className="mg-input mb-4 text-center"
+                      placeholder="email@cliente.com"
+                      value={emailEnvio}
+                      onChange={e => setEmailEnvio(e.target.value)}
+                      autoFocus
+                  />
+                  <div className="d-flex gap-3">
+                      <button className="btn-outline-sec flex-1" onClick={() => setShowEmailModal(false)}>Cancelar</button>
+                      <button className="btn-primary-block flex-1" onClick={enviarPorEmail}>
+                          {loading ? <div className="spinner-micro"></div> : 'Enviar Nota'}
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* ========================================================== */}
+      {/* MODAL DE SUCESSO (IMPRESSÃO + COMUNICAÇÃO)                   */}
+      {/* ========================================================== */}
+      {vendaFinalizada && !showZapModal && !showEmailModal && (
+        <div className="modal-glass z-max">
+            <div className="modal-glass-card text-center sm fade-in border-top-success" style={{ padding: '32px 24px' }}>
+                <CheckCircle2 size={60} color="#10b981" className="mx-auto mb-3" />
+                <h2 className="title-main mb-2">Transação Concluída!</h2>
+                <p className="text-sec mb-4">
+                    {vendaFinalizada.offline ? "A internet caiu. A nota está salva e será transmitida assim que o Wi-Fi voltar." : "Documento fiscal emitido e autorizado com sucesso."}
+                </p>
+
+                <div className="d-flex-col gap-3 w-full mb-4">
+                    <button className="btn-action-primary w-full" onClick={imprimirCupomLocal}>
+                        <Printer size={20} /> Imprimir {vendaFinalizada.tipoNota === 'NFE' ? 'DANFE A4' : 'Cupom Fiscal'}
+                    </button>
+
+                    <div className="d-flex gap-2 w-full">
+                        <button className="btn-outline-sec flex-1 d-flex justify-center align-center gap-2" onClick={() => { setZapNumber(clienteAvulso.telefone || ''); setShowZapModal(true); }} style={{ borderColor: '#10b981', color: '#10b981' }}>
+                            <MessageCircle size={20} /> WhatsApp
+                        </button>
+                        <button className="btn-outline-sec flex-1 d-flex justify-center align-center gap-2" onClick={() => { setEmailEnvio(clienteAvulso.email || ''); setShowEmailModal(true); }} style={{ borderColor: '#3b82f6', color: '#3b82f6' }}>
+                            <Mail size={20} /> E-mail
+                        </button>
+                    </div>
+                </div>
+
+                <button className="btn-action-success w-full" style={{background: '#f8fafc', color: '#1e293b', border: '2px solid #cbd5e1', boxShadow: 'none'}} onClick={() => { setVendaFinalizada(null); limparEstadoVenda(); }}>
+                    Nova Venda (ESC)
+                </button>
+            </div>
+        </div>
       )}
 
     </div>

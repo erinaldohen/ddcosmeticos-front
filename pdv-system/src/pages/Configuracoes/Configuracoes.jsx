@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, memo, useRef } from 'react';
 import {
   Store, Save, Upload, Search, Palette, FileText, Server, Download, RefreshCw, Trash2,
   Eye, EyeOff, DollarSign, Printer, FileCheck, CheckCircle2, AlertTriangle, Moon, Sun,
-  X, Info, Database, AlertCircle, QrCode, Check, Menu, TrendingUp, Clock, Settings
+  X, Info, Database, AlertCircle, QrCode, Check, Menu, TrendingUp, Clock, Settings, Mail, Link
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
@@ -161,8 +161,11 @@ const Configuracoes = () => {
   const lastCepRef = useRef('');
   const lastCnpjRef = useRef('');
 
+  // 🚨 BASE ATUALIZADA: TODOS OS CAMPOS NOVOS (E-MAIL E INFINITEPAY) FICAM NA RAIZ
   const baseForm = {
       id: null,
+      smtpHost: '', smtpPort: 587, smtpUsername: '', smtpPassword: '',
+      gatewayPagamento: 'MANUAL', infinitepayClientId: '', infinitepayClientSecret: '', infinitepayWalletId: '',
       loja: {
       razaoSocial: '', nomeFantasia: '', cnpj: '', ie: '', im: '', cnae: '', email: '',
       telefone: '', whatsapp: '', site: '', instagram: '', slogan: '', corDestaque: '#ec4899',
@@ -215,7 +218,9 @@ const Configuracoes = () => {
                 financeiro: { ...baseForm.financeiro, ...(dadosLimpos.financeiro || {}) },
                 vendas: { ...baseForm.vendas, ...(dadosLimpos.vendas || {}) },
                 sistema: { ...baseForm.sistema, ...(dadosLimpos.sistema || {}) },
-                comissoes: { ...baseForm.comissoes, ...(dadosLimpos.comissoes || {}) }
+                comissoes: { ...baseForm.comissoes, ...(dadosLimpos.comissoes || {}) },
+                // Garante que a senha no formulário comece vazia (proteção visual), só envia se o usuário digitar algo.
+                smtpPassword: ''
             };
 
             setForm(formMontado);
@@ -407,7 +412,8 @@ const Configuracoes = () => {
           financeiro: { ...form.financeiro, ...(dadosLimpos.financeiro || {}) },
           vendas: { ...form.vendas, ...(dadosLimpos.vendas || {}) },
           sistema: { ...form.sistema, ...(dadosLimpos.sistema || {}) },
-          comissoes: { ...form.comissoes, ...(dadosLimpos.comissoes || {}) }
+          comissoes: { ...form.comissoes, ...(dadosLimpos.comissoes || {}) },
+          smtpPassword: '' // Mantém o campo limpo após salvar com sucesso
       };
 
       setForm(formAtualizado);
@@ -459,12 +465,15 @@ const Configuracoes = () => {
   const cToken = isProd ? form.fiscal.tokenProducao : form.fiscal.tokenHomologacao;
   const cCscId = isProd ? form.fiscal.cscIdProducao : form.fiscal.cscIdHomologacao;
 
+  // 🚨 O MENU LATERAL AGORA POSSUI A ABA "INTEGRAÇÕES E APIS" E A ABA DE "E-MAIL"
   const tabs = [
       { id: 'loja', icon: <Store size={18}/>, label: 'Identidade e Empresa' },
       { id: 'fiscal', icon: <FileText size={18}/>, label: 'Fiscal e Tributos' },
       { id: 'financeiro', icon: <DollarSign size={18}/>, label: 'Caixa e Financeiro' },
       { id: 'vendas', icon: <Printer size={18}/>, label: 'Operação de Vendas' },
       { id: 'comissoes', icon: <TrendingUp size={18}/>, label: 'Comissões e Metas' },
+      { id: 'email', icon: <Mail size={18}/>, label: 'E-mail (SMTP)' },
+      { id: 'integracoes', icon: <Link size={18}/>, label: 'Integrações e APIs' },
       { id: 'sistema', icon: <Server size={18}/>, label: 'Sistema e Segurança' },
   ];
 
@@ -703,6 +712,7 @@ const Configuracoes = () => {
                   <div className="tab-pane cfg-animate-slide-left">
                       <h2 className="cfg-panel-title">Operação Financeira do Caixa</h2>
                       <div className="cfg-card">
+
                           <h3 className="cfg-card-title cfg-border-bottom cfg-pb-2 cfg-mb-4">Valores de Fundo e Alertas</h3>
                           <div className="cfg-grid-col-3 cfg-mb-5">
                               <Field label="Fundo de Troco Fixo" prefix="R$" value={formatMoney(form.financeiro.fundoTrocoPadrao)} onChange={e => updateMoney('financeiro', 'fundoTrocoPadrao', e.target.value)} placeholder="0,00" />
@@ -710,7 +720,9 @@ const Configuracoes = () => {
                               <Field label="Meta Diária Padrão" prefix="R$" value={formatMoney(form.financeiro.metaDiaria)} onChange={e => updateMoney('financeiro', 'metaDiaria', e.target.value)} placeholder="0,00" />
                           </div>
 
-                          <h3 className="cfg-card-title cfg-border-bottom cfg-pb-2 cfg-mb-4">Taxas e Limites</h3>
+                          <div className="cfg-card-divider cfg-mb-5"></div>
+
+                          <h3 className="cfg-card-title cfg-border-bottom cfg-pb-2 cfg-mb-4">Taxas e Limites (Operação Manual)</h3>
                           <div className="cfg-grid-col-4 cfg-mb-5">
                               <Field label="Taxa Crédito" suffix="%" value={formatMoney(form.financeiro.taxaCredito)} onChange={e => updateMoney('financeiro', 'taxaCredito', e.target.value)} />
                               <Field label="Taxa Débito" suffix="%" value={formatMoney(form.financeiro.taxaDebito)} onChange={e => updateMoney('financeiro', 'taxaDebito', e.target.value)} />
@@ -761,6 +773,49 @@ const Configuracoes = () => {
                                       <Field label="Multa por Atraso" prefix="R$" value={formatMoney(form.financeiro.multaAtraso)} onChange={e => updateMoney('financeiro', 'multaAtraso', e.target.value)} />
                                       <Field label="Dias de Carência" type="number" value={form.financeiro.diasCarencia} onChange={e => update('financeiro', 'diasCarencia', parseInt(e.target.value) || 0)} />
                                   </div>
+                              </div>
+                          )}
+                      </div>
+                  </div>
+              )}
+
+              {/* 🚨 NOVA ABA: INTEGRAÇÕES COM MAQUININHAS 🚨 */}
+              {activeTab === 'integracoes' && (
+                  <div className="tab-pane cfg-animate-slide-left">
+                      <h2 className="cfg-panel-title">Integração Smart POS (Maquininhas)</h2>
+                      <div className="cfg-card">
+                          <p className="text-sec mb-4">Escolha como o sistema deve conversar com as suas maquinetas de cartão. Integrações avançadas evitam que a SEFAZ rejeite as notas por falta de dados da credenciadora.</p>
+
+                          <div className="cfg-grid-col-2 cfg-mb-4">
+                              <Field
+                                  label="Sistema de Captura de Cartão"
+                                  type="select"
+                                  value={form?.gatewayPagamento || "MANUAL"}
+                                  onChange={e => update('raiz', 'gatewayPagamento', e.target.value)}
+                                  options={[
+                                      { value: 'MANUAL', label: 'Manual (Digitar valores na Maquineta)' },
+                                      { value: 'INFINITEPAY', label: 'InfinitePay (API Cloud)' },
+                                      { value: 'MERCADOPAGO', label: 'Mercado Pago (Point / Cloud)' }
+                                  ]}
+                              />
+                          </div>
+
+                          {form?.gatewayPagamento === 'INFINITEPAY' && (
+                              <div className="cfg-highlight-box border-blue cfg-fade-in cfg-mb-5">
+                                  <h4 className="cfg-mb-3 cfg-text-blue">Credenciais de Desenvolvedor InfinitePay</h4>
+                                  <p className="cfg-text-sec cfg-mb-3" style={{ fontSize: '0.85rem' }}>Obtenha essas chaves no painel da InfinitePay. Elas permitirão que o caixa envie o valor direto para a maquineta e receba a confirmação instantânea da venda.</p>
+                                  <div className="cfg-grid-col-2 cfg-mb-3">
+                                      <Field label="Client ID" value={form?.infinitepayClientId || ''} onChange={e => update('raiz', 'infinitepayClientId', e.target.value)} placeholder="Ex: client_..." />
+                                      <Field label="Wallet ID (ID da Carteira)" value={form?.infinitepayWalletId || ''} onChange={e => update('raiz', 'infinitepayWalletId', e.target.value)} placeholder="Ex: wall_..." />
+                                  </div>
+                                  <Field label="Client Secret" type="password" value={form?.infinitepayClientSecret || ''} onChange={e => update('raiz', 'infinitepayClientSecret', e.target.value)} placeholder="••••••••••••••••••••••••" />
+                              </div>
+                          )}
+
+                          {form?.gatewayPagamento === 'MANUAL' && (
+                              <div className="cfg-alert warning cfg-mt-4">
+                                  <AlertTriangle size={24}/>
+                                  <div><strong>Dica:</strong> No modo manual, o caixa pedirá para o operador informar a bandeira do cartão (Visa/Master) ao finalizar a compra para que a SEFAZ não rejeite o XML.</div>
                               </div>
                           )}
                       </div>
@@ -877,6 +932,58 @@ const Configuracoes = () => {
                               checked={form.comissoes?.descontarTaxasCartao}
                               onChange={e => update('comissoes', 'descontarTaxasCartao', e.target.checked)}
                           />
+                      </div>
+                  </div>
+              )}
+
+              {activeTab === 'email' && (
+                  <div className="tab-pane cfg-animate-slide-left">
+                      <div className="cfg-card">
+                          <div className="d-flex align-center gap-2 mb-2">
+                              <h2 className="cfg-panel-title cfg-m-0">Configuração de Servidor de E-mail (SMTP)</h2>
+                          </div>
+                          <p className="text-sec mb-4" style={{ marginBottom: '24px' }}>Configure as credenciais para o envio automático de notas fiscais (XML e PDF) aos clientes.</p>
+
+                          <div className="cfg-grid-col-2 cfg-mb-4">
+                              <Field
+                                  label="Servidor SMTP (Host)"
+                                  placeholder="Ex: smtp.gmail.com"
+                                  value={form?.smtpHost || ''}
+                                  onChange={e => update('raiz', 'smtpHost', e.target.value)}
+                              />
+                              <Field
+                                  label="Porta SMTP"
+                                  type="number"
+                                  placeholder="Ex: 587"
+                                  value={form?.smtpPort || ''}
+                                  onChange={e => update('raiz', 'smtpPort', parseInt(e.target.value) || '')}
+                              />
+                          </div>
+
+                          <div className="cfg-grid-col-2 cfg-mb-4">
+                              <Field
+                                  label="E-mail de Envio (Usuário)"
+                                  type="email"
+                                  placeholder="Ex: vendas@sualoja.com.br"
+                                  value={form?.smtpUsername || ''}
+                                  onChange={e => update('raiz', 'smtpUsername', e.target.value)}
+                              />
+                              <Field
+                                  label="Senha (ou Senha de App)"
+                                  type="password"
+                                  placeholder="••••••••••••"
+                                  value={form?.smtpPassword || ''}
+                                  onChange={e => update('raiz', 'smtpPassword', e.target.value)}
+                                  description="Deixe em branco para manter a senha salva anteriormente."
+                              />
+                          </div>
+
+                          <div style={{ padding: '16px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', marginTop: '24px' }}>
+                              <strong style={{ color: '#1e40af', display: 'block', marginBottom: '8px' }}>💡 Dica para quem usa Gmail:</strong>
+                              <span style={{ color: '#1e3a8a', fontSize: '0.85rem', lineHeight: '1.4' }}>
+                                  O Google não permite mais usar a sua senha normal do e-mail em sistemas de terceiros. Você precisará acessar a sua Conta Google, ir em <strong>Segurança &gt; Verificação em Duas Etapas &gt; Senhas de App</strong>, e gerar uma senha exclusiva de 16 letras para colar no campo acima.
+                              </span>
+                          </div>
                       </div>
                   </div>
               )}
