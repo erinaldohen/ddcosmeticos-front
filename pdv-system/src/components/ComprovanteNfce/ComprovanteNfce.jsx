@@ -1,7 +1,59 @@
 import React from 'react';
 import './ComprovanteNfce.css';
+import html2pdf from 'html2pdf.js';
+import api from '../../services/api'; // Ajuste o caminho se necessário
+import { toast } from 'react-toastify';
 
-// Componente que recebe os dados da venda para renderizar o cupom
+// =========================================================================
+// FUNÇÃO EXPORTADA: Transforma o Cupom em PDF invisível e envia pro Java
+// =========================================================================
+export const enviarDocumentoPorEmail = async (emailDestino, idVenda, isB2B = false) => {
+  // Captura o layout perfeito que já está renderizado na tela
+  const elemento = document.getElementById('area-impressao-documento');
+
+  if (!elemento) {
+      toast.error("O comprovante precisa estar visível na tela para gerar o anexo.");
+      return;
+  }
+
+  const toastId = toast.loading("Gerando PDF oficial e enviando e-mail...");
+
+  // Configuração Inteligente: B2B usa A4, B2C usa Bobina 80mm
+  const opcoesPdf = {
+      margin:       isB2B ? 10 : 2, // Margem maior para A4, menor para bobina
+      filename:     isB2B ? `DANFE_${idVenda}.pdf` : `CupomFiscal_${idVenda}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true }, // useCORS garante que a logo e o QRCode carreguem
+      jsPDF:        isB2B
+                      ? { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                      : { unit: 'mm', format: [80, 297], orientation: 'portrait' } // Formato Bobina 80mm
+  };
+
+  try {
+      // 1. html2pdf tira a "foto" do componente e converte para um Blob (arquivo em memória)
+      const pdfBlob = await html2pdf().set(opcoesPdf).from(elemento).output('blob');
+
+      // 2. Cria o formulário para enviar o Arquivo + O E-mail digitado
+      const formData = new FormData();
+      formData.append('pdf', pdfBlob, opcoesPdf.filename);
+      formData.append('email', emailDestino);
+
+      // 3. Dispara para o nosso novo Endpoint no Java
+      await api.post(`/vendas/${idVenda}/email-documento`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      toast.update(toastId, { render: "E-mail enviado com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
+
+  } catch (error) {
+      console.error("Erro ao enviar PDF:", error);
+      toast.update(toastId, { render: "Falha ao enviar o e-mail.", type: "error", isLoading: false, autoClose: 4000 });
+  }
+};
+
+// =========================================================================
+// COMPONENTE VISUAL DO CUPOM / DANFE
+// =========================================================================
 export const ComprovanteNfce = React.forwardRef(({ venda, loja }, ref) => {
   if (!venda) return null;
 
@@ -9,7 +61,8 @@ export const ComprovanteNfce = React.forwardRef(({ venda, loja }, ref) => {
   const dataEmissao = new Date(venda.dataVenda).toLocaleString('pt-BR');
 
   return (
-    <div ref={ref} className="cupom-fiscal-container">
+    // 🚨 ADICIONADO O ID AQUI PARA A FUNÇÃO ACIMA CONSEGUIR ACHAR O DESENHO
+    <div ref={ref} id="area-impressao-documento" className="cupom-fiscal-container">
       {/* CABEÇALHO */}
       <div className="cupom-header">
         <h3 className="loja-nome">{loja?.razaoSocial || "LOJA DD COSMÉTICOS"}</h3>
@@ -105,7 +158,7 @@ export const ComprovanteNfce = React.forwardRef(({ venda, loja }, ref) => {
               <p>Data de Autorização: {dataEmissao}</p>
             </div>
 
-            {/* QR CODE - Corrigido com validação condicional */}
+            {/* QR CODE */}
             <div className="qr-code-box">
                {venda.urlQrCode ? (
                  <img
@@ -120,7 +173,7 @@ export const ComprovanteNfce = React.forwardRef(({ venda, loja }, ref) => {
             </div>
           </>
         ) : (
-          <p>*** É VEDA A AUTENTICAÇÃO DESTE CUPOM ***</p>
+          <p>*** É VEDADA A AUTENTICAÇÃO DESTE CUPOM ***</p>
         )}
         <p className="sistema-info">DD Cosméticos System v1.0</p>
       </div>
