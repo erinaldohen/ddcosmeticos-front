@@ -535,32 +535,36 @@ const Configuracoes = () => {
           <main className={`cfg-content-area ${isSaving ? 'cfg-fade-out' : ''}`}>
 
               {activeTab === 'loja' && (
-                  <div className="cfg-panel cfg-animate-fade">
-                      <h2 className="cfg-panel-title">Identidade Visual e Informações</h2>
-                      <div className="cfg-card cfg-mb-5">
-                          <div className="cfg-grid-col-2">
-                              <div className="cfg-logo-uploader">
-                                  <div className="cfg-logo-box" style={{ width: '120px', height: '120px', borderRadius: '12px', background: '#f1f5f9', border: '2px dashed #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                                      {logoPreview ? <img src={logoPreview} alt="Logo" style={{width: '100%', height: '100%', objectFit: 'contain'}}/> : <Store size={48} color="var(--text-muted)"/>}
-                                  </div>
-                                  <div className="cfg-logo-controls">
-                                      <h3>Logo da Empresa</h3>
-                                      <p>Usada no PDV e Impressão de Cupons.</p>
-                                      <div className="cfg-flex cfg-mt-2 cfg-flex-wrap">
-                                          <label className="cfg-btn-outline cfg-btn-sm"><Upload size={16}/> {logoFile ? "Imagem Escolhida" : "Enviar Arquivo"}<input type="file" hidden accept="image/*" onChange={(e) => { if(e.target.files[0]) { setLogoFile(e.target.files[0]); setLogoPreview(URL.createObjectURL(e.target.files[0])); setIsDirty(true); } }}/></label>
-                                          {(logoPreview || logoFile) && <button className="cfg-btn-link cfg-text-red" onClick={() => {setLogoPreview(null); setLogoFile(null); update('loja', 'logoUrl', '');}}>Remover</button>}
-                                      </div>
-                                  </div>
-                              </div>
-                              <div className="cfg-card-divider cfg-hide-mobile"></div>
-                              <div className="cfg-visual-controls">
-                                  <Field label="Cor Primária do Sistema" type="color" value={form.loja.corDestaque} onChange={e => update('loja', 'corDestaque', e.target.value)} />
-                                  <div className="cfg-mt-3"><ToggleSwitch label="Esta Loja é a Matriz" description="Apenas matrizes podem distribuir produtos." checked={form.loja.isMatriz} onChange={e => update('loja', 'isMatriz', e.target.checked)} /></div>
-                              </div>
-                          </div>
-                      </div>
+                                <div className="cfg-panel cfg-animate-fade">
+                                    <h2 className="cfg-panel-title">Identidade Visual e Informações</h2>
+                                    <div className="cfg-card cfg-mb-5">
+                                        <div className="cfg-grid-col-2 cfg-items-center">
+                                            {/* LADO ESQUERDO: LOGO */}
+                                            <div className="cfg-logo-uploader">
+                                                <div className="cfg-logo-box" style={{ width: '120px', height: '120px', borderRadius: '12px', background: '#f1f5f9', border: '2px dashed #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+                                                    {logoPreview ? <img src={logoPreview} alt="Logo" style={{width: '100%', height: '100%', objectFit: 'contain'}}/> : <Store size={48} color="var(--text-muted)"/>}
+                                                </div>
+                                                <div className="cfg-logo-controls">
+                                                    <h3>Logo da Empresa</h3>
+                                                    <p>Usada no PDV e Impressão de Cupons.</p>
+                                                    <div className="cfg-flex cfg-mt-2 cfg-flex-wrap">
+                                                        <label className="cfg-btn-outline cfg-btn-sm"><Upload size={16}/> {logoFile ? "Imagem Escolhida" : "Enviar Arquivo"}<input type="file" hidden accept="image/*" onChange={(e) => { if(e.target.files[0]) { setLogoFile(e.target.files[0]); setLogoPreview(URL.createObjectURL(e.target.files[0])); setIsDirty(true); } }}/></label>
+                                                        {(logoPreview || logoFile) && <button className="cfg-btn-link cfg-text-red" onClick={() => {setLogoPreview(null); setLogoFile(null); update('loja', 'logoUrl', '');}}>Remover</button>}
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                      <h2 className="cfg-panel-title">Dados Cadastrais e Endereço</h2>
+                                            {/* LADO DIREITO: CONTROLES VISUAIS E MATRIZ */}
+                                            <div className="cfg-visual-controls" style={{ padding: '1.5rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                                <Field label="Cor Primária do Sistema" type="color" value={form.loja.corDestaque} onChange={e => update('loja', 'corDestaque', e.target.value)} />
+                                                <div className="cfg-mt-3">
+                                                    <ToggleSwitch label="Esta Loja é a Matriz" description="Apenas matrizes podem distribuir produtos." checked={form.loja.isMatriz} onChange={e => update('loja', 'isMatriz', e.target.checked)} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <h2 className="cfg-panel-title">Dados Cadastrais e Endereço</h2>
                       <div className="cfg-card">
                           <div className="cfg-grid-col-3 cfg-mb-4">
                               <Field label="CNPJ" value={form.loja.cnpj} onChange={e => updateMask('loja', 'cnpj', e.target.value, 'cnpj')} onBlur={searchCNPJ} error={errors['loja.cnpj']} actionIcon={isSearching ? <RefreshCw className="cfg-spin" size={18}/> : <Search size={18}/>} onAction={searchCNPJ} placeholder="00.000.000/0000-00" />
@@ -577,6 +581,7 @@ const Configuracoes = () => {
                           </div>
 
                           <div className="cfg-grid-col-4 cfg-mb-4">
+                              <Field label="Telefone Fixo / Loja" value={form.loja.telefone} onChange={e => updateMask('loja', 'telefone', e.target.value, 'phone')} placeholder="(81) 3000-0000" />
                               <Field label="WhatsApp de Contato" value={form.loja.whatsapp} onChange={e => updateMask('loja', 'whatsapp', e.target.value, 'phone')} placeholder="(81) 90000-0000" />
                               <Field label="Instagram" prefix="@" value={form.loja.instagram} onChange={e => update('loja', 'instagram', e.target.value)} placeholder="sua.loja" />
                               <Field label="Email" value={form.loja.email} onChange={e => update('loja', 'email', e.target.value)} placeholder="loja@email.com" />

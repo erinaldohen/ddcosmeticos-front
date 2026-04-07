@@ -133,7 +133,7 @@ const PDV = () => {
   const [valorInputRaw, setValorInputRaw] = useState('');
 
   // =======================================================================
-  // INICIALIZAÇÃO
+  // INICIALIZAÇÃO E OBTENÇÃO DA LOGO
   // =======================================================================
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 992);
@@ -161,6 +161,14 @@ const PDV = () => {
 
     api.get('/configuracoes').then(res => {
         setConfigLoja(res.data);
+
+        // Puxa a Logo corretamente
+        if (res.data?.loja?.logoUrl) {
+            const url = res.data.loja.logoUrl;
+            const baseUrl = api.defaults.baseURL ? api.defaults.baseURL.split('/api')[0] : '';
+            setLojaLogo(url.startsWith('http') || url.startsWith('data:') ? url : `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`);
+        }
+
         if (res.data?.financeiro) {
             const fin = res.data.financeiro; const ativos = [];
             if (fin.aceitaPix) ativos.push({id: 'PIX', icon: <Smartphone size={20}/>, label: 'Pix'});
@@ -187,7 +195,6 @@ const PDV = () => {
   useEffect(() => { localStorage.setItem('@dd:pausadas', JSON.stringify(vendasPausadas)); }, [vendasPausadas]);
   useEffect(() => { localStorage.setItem('@dd:offline_vendas', JSON.stringify(filaOffline)); }, [filaOffline]);
 
-  // Sincroniza e-mail e telefone ao finalizar a venda para auto-preencher os modais
   useEffect(() => {
       if (vendaFinalizada) {
           setEmailEnvio(clienteAvulso.email || '');
@@ -196,7 +203,7 @@ const PDV = () => {
   }, [vendaFinalizada, clienteAvulso.email, clienteAvulso.telefone]);
 
   // =======================================================================
-  // TECLADO E BUSCA
+  // TECLADO E BUSCA (COM SCROLL AUTOMÁTICO NA LISTA)
   // =======================================================================
   useEffect(() => {
       if (busca.trim().length < 3) { setSugestoesProdutos([]); setSelectedIndex(-1); return; }
@@ -206,6 +213,16 @@ const PDV = () => {
       }, 300);
       return () => clearTimeout(delay);
   }, [busca, isOnline]);
+
+  // Scroll automático no dropdown
+  useEffect(() => {
+      if (dropdownRef.current && selectedIndex >= 0) {
+          const item = dropdownRef.current.children[selectedIndex];
+          if (item) {
+              item.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
+      }
+  }, [selectedIndex]);
 
   useEffect(() => {
       const handleKeyDown = (e) => {
@@ -262,7 +279,7 @@ const PDV = () => {
   }, [mobileViewState, carrinho.length, showClienteModal, showDescontoModal, showExitModal, showCancelVendaModal, showRupturaModal, showPausadasModal, showZapModal, showEmailModal, showFechamentoModal, showScanner, vendaFinalizada, alertaCrediario, saldoDevedor, metodoAtual, loading]);
 
   // =======================================================================
-  // AÇÕES DO CARRINHO
+  // AÇÕES DO CARRINHO E VENDA
   // =======================================================================
   const handleShowDesconto = () => { if (carrinho.length === 0) return toast.warn("Adicione produtos antes de dar desconto."); setShowDescontoModal(true); };
   const handleIrParaPagamento = () => { if (carrinho.length === 0) return toast.warn("O carrinho está vazio."); setMobileView('PAYMENT'); setValorInputRaw(Math.round(saldoDevedor * 100).toString()); setTimeout(()=> inputValorRef.current?.focus(), 100); };
@@ -295,7 +312,7 @@ const PDV = () => {
   const handleSairPdv = () => { if(carrinho.length > 0) setShowExitModal(true); else navigate('/dashboard'); };
 
   // =======================================================================
-  // LOGICA B2B E VALIDAÇÃO VISUAL
+  // LOGICA DO CLIENTE (FOCO NO TELEFONE/WHATSAPP COMO PRINCIPAL)
   // =======================================================================
   const statusDocumento = useMemo(() => {
       const clean = cleanNumeric(clienteAvulso.documento);
@@ -336,14 +353,46 @@ const PDV = () => {
       if (clean.length === 14 && validarCNPJ(clean)) buscarCnpj(clean);
   };
 
+  const handleTelefoneChange = async (e) => {
+        const val = mascaraTelefone(e.target.value);
+        setClienteAvulso(prev => ({...prev, telefone: val}));
+
+        const cleanTel = cleanNumeric(val);
+
+        if (cleanTel.length === 10 || cleanTel.length === 11) {
+            try {
+                const { data } = await api.get(`/clientes/telefone/${cleanTel}`);
+                if (data && data.nome) {
+                    setClienteAvulso(prev => ({
+                        ...prev,
+                        nome: data.nome,
+                        email: data.email || prev.email
+                        // Só busca nome/email. O documento (CPF) não é tocado para evitar B2B fantasma.
+                    }));
+                    toast.success(`Bem-vindo(a) de volta, ${data.nome}!`);
+                    playAudio('success');
+                }
+            } catch (err) {
+                // Cliente novo. O caixa digita o nome e finaliza normal.
+            }
+        }
+    };
+
   const confirmarClienteModal = () => {
-      const clean = cleanNumeric(clienteAvulso.documento);
-      if (clean.length > 0) {
-          if (clean.length < 11) return toast.warning("Documento incompleto.");
-          if (clean.length === 11 && !validarCPF(clean)) return toast.error("O CPF é inválido.");
-          if (clean.length > 11 && clean.length < 14) return toast.warning("CNPJ incompleto.");
-          if (clean.length === 14 && !validarCNPJ(clean)) return toast.error("O CNPJ é inválido.");
+      const cleanDoc = cleanNumeric(clienteAvulso.documento);
+      const cleanTel = cleanNumeric(clienteAvulso.telefone);
+
+      if (!clienteAvulso.nome && !cleanTel) {
+          return toast.warning("Informe pelo menos o WhatsApp ou o Nome do cliente.");
       }
+
+      if (cleanDoc.length > 0) {
+          if (cleanDoc.length < 11) return toast.warning("Documento incompleto.");
+          if (cleanDoc.length === 11 && !validarCPF(cleanDoc)) return toast.error("O CPF é inválido.");
+          if (cleanDoc.length > 11 && cleanDoc.length < 14) return toast.warning("CNPJ incompleto.");
+          if (cleanDoc.length === 14 && !validarCNPJ(cleanDoc)) return toast.error("O CNPJ é inválido.");
+      }
+
       toast.success("Dados confirmados.");
       setShowClienteModal(false);
       if (!isMobile) setTimeout(() => inputBuscaRef.current?.focus(), 100);
@@ -373,8 +422,14 @@ const PDV = () => {
   };
 
   const handleSearchKeyDown = (e) => {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIndex(prev => Math.min(prev + 1, sugestoesProdutos.length - 1)); }
-      else if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedIndex(prev => Math.max(prev - 1, 0)); }
+      if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setSelectedIndex(prev => Math.min(prev + 1, sugestoesProdutos.length - 1));
+      }
+      else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setSelectedIndex(prev => Math.max(prev - 1, 0));
+      }
       else if (e.key === 'Enter') {
           e.preventDefault();
           if (selectedIndex >= 0 && sugestoesProdutos[selectedIndex]) { adicionarProdutoAoCarrinho(sugestoesProdutos[selectedIndex]); }
@@ -404,16 +459,22 @@ const PDV = () => {
       if (metodoAtual === 'CREDIARIO') {
           if (!isOnline) return toast.warning("Offline: Crediário exige internet.");
           const docClean = cleanNumeric(clienteAvulso.documento);
-          if (!docClean || docClean.length < 11 || !clienteAvulso.nome) { setShowClienteModal(true); return toast.warning("Identifique o cliente para o Fiado."); }
-          setLoading(true);
-          try {
-              const { data: statusCliente } = await api.get(`/clientes/analise-credito/${docClean}`);
-              if (statusCliente.bloqueado || statusCliente.debitosAtraso > 0) { setLoading(false); setAlertaCrediario(statusCliente); return; }
-          } catch (err) {
-              if (err.response?.status === 404) { try { await api.post('/clientes', { nome: clienteAvulso.nome.toUpperCase(), documento: docClean, telefone: cleanNumeric(clienteAvulso.telefone) || "", ativo: true, limiteCredito: 0 }); } catch (erroCadastro) { setLoading(false); return toast.error("Falha ao registrar cliente."); } }
-              else { setLoading(false); return toast.warning("Serviço indisponível."); }
+
+          if (!clienteAvulso.nome || (!docClean && !clienteAvulso.telefone)) {
+              setShowClienteModal(true); return toast.warning("Cadastre o Nome e o WhatsApp (ou CPF) para vender no fiado.");
           }
-          setLoading(false);
+
+          if(docClean) {
+              setLoading(true);
+              try {
+                  const { data: statusCliente } = await api.get(`/clientes/analise-credito/${docClean}`);
+                  if (statusCliente.bloqueado || statusCliente.debitosAtraso > 0) { setLoading(false); setAlertaCrediario(statusCliente); return; }
+              } catch (err) {
+                  if (err.response?.status === 404) { try { await api.post('/clientes', { nome: clienteAvulso.nome.toUpperCase(), documento: docClean, telefone: cleanNumeric(clienteAvulso.telefone) || "", ativo: true, limiteCredito: 0 }); } catch (erroCadastro) { setLoading(false); return toast.error("Falha ao registrar cliente."); } }
+                  else { setLoading(false); return toast.warning("Serviço indisponível."); }
+              }
+              setLoading(false);
+          }
       }
 
       setPagamentos([...pagamentos, { id: Date.now(), tipo: metodoAtual, valor }]);
@@ -480,9 +541,8 @@ const PDV = () => {
   };
 
   // =======================================================================
-  // AÇÕES PÓS-VENDA (WHATSAPP, E-MAIL E IMPRESSÃO CORRIGIDOS)
+  // AÇÕES PÓS-VENDA (WHATSAPP, E-MAIL E IMPRESSÃO NATIVA)
   // =======================================================================
-
   const enviarPorWhatsApp = () => {
         const numeroLimpo = zapNumber.replace(/\D/g, '');
         if (numeroLimpo.length < 10) return toast.warning("Digite um número de WhatsApp válido.");
@@ -493,13 +553,13 @@ const PDV = () => {
         const chaveFormatada = vendaFinalizada?.chaveAcessoNfce ? vendaFinalizada.chaveAcessoNfce.replace(/(\d{4})/g, '$1 ').trim() : 'N/A';
         const dataVendaStr = vendaFinalizada?.dataVenda ? new Date(vendaFinalizada.dataVenda).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR');
 
-        // Monta a lista de produtos formatada
-        const listaProdutos = carrinho.map(item => `▪️ ${item.quantidade}x ${item.descricao} - R$ ${(item.quantidade * item.precoVenda).toFixed(2)}`).join('\n');
+        // Itens lidos da venda finalizada para garantir que existem
+        const itensZAP = vendaFinalizada?.itens || carrinho;
+        const pgsZAP = vendaFinalizada?.pagamentos || pagamentos;
 
-        // Formata os pagamentos
-        const listaPagamentos = pagamentos.map(p => `• ${p.tipo}: R$ ${p.valor.toFixed(2)}`).join('\n');
+        const listaProdutos = itensZAP.map(item => `▪️ ${item.quantidade}x ${item.descricao || item.produtoNome} - R$ ${(item.quantidade * (item.precoUnitario || item.precoVenda)).toFixed(2)}`).join('\n');
+        const listaPagamentos = pgsZAP.map(p => `• ${p.formaPagamento || p.tipo}: R$ ${p.valor.toFixed(2)}`).join('\n');
 
-        // Mensagem Rica e Completa (Baseada no Cupom Físico)
         const mensagem = `Olá${nomeCliente}! 🛍️ Agradecemos sua compra na *${configLoja?.loja?.razaoSocial || 'DD Cosméticos'}*.\n\n` +
                          `📅 *Data/Hora:* ${dataVendaStr}\n` +
                          `🎫 *Cód. Venda:* #${vendaFinalizada?.id || vendaFinalizada?.idOffline || '0000'}\n\n` +
@@ -509,7 +569,7 @@ const PDV = () => {
                          `📄 *DANFE ${vendaFinalizada?.tipoNota === 'NFE' ? 'NF-e' : 'NFC-e'}*\n` +
                          `• Chave: ${chaveFormatada}\n` +
                          `• Protocolo: ${vendaFinalizada?.protocolo || 'Aguardando Sefaz'}\n\n` +
-                         `*Acesse o link abaixo para visualizar ou baixar o seu documento fiscal oficial:*\n${urlNota}\n\n` +
+                         `*Acesse o link abaixo para visualizar o seu documento fiscal:*\n${urlNota}\n\n` +
                          `Volte sempre e aproveite seus produtos! ✨`;
 
         const linkWhatsApp = `https://api.whatsapp.com/send?phone=55${numeroLimpo}&text=${encodeURIComponent(mensagem)}`;
@@ -523,8 +583,6 @@ const PDV = () => {
         setLoading(true);
         try {
             const vendaIdCorreto = vendaFinalizada.id || vendaFinalizada.idOffline;
-
-            // Toast Promise avisa ao operador que estamos aguardando a SEFAZ
             await toast.promise(
                 api.post(`/vendas/${vendaIdCorreto}/email`, { email: emailEnvio }),
                 {
@@ -537,319 +595,335 @@ const PDV = () => {
                     }
                 }
             );
-
             setShowEmailModal(false);
         } catch (err) {
-            // O erro já é tratado pelo toast.promise
         } finally {
             setLoading(false);
         }
     };
 
   const imprimirCupomLocal = () => {
-      const isNfe = vendaFinalizada?.tipoNota === 'NFE';
-      const loja = configLoja?.loja || {};
-      const fiscal = configLoja?.fiscal || {};
+        const isNfe = vendaFinalizada?.tipoNota === 'NFE';
+        const loja = configLoja?.loja || {};
+        const fiscal = configLoja?.fiscal || {};
 
-      const razaoSocial = loja.razaoSocial || "DD COSMÉTICOS LTDA";
-      const cnpj = loja.cnpj || "57.648.950/0001-44";
-      const endereco = loja.logradouro ? `${loja.logradouro}, ${loja.numero} - ${loja.bairro}` : "Rua Arquiteto Luiz Nunes, 63 - Imbiribeira";
-      const cidadeUF = loja.cidade ? `${loja.cidade} - ${loja.uf}` : "Recife - PE";
-      const telefone = loja.telefone || "(81) 99999-9999";
+        const razaoSocial = loja.razaoSocial || "DD COSMÉTICOS LTDA";
+        const cnpj = loja.cnpj || "57.648.950/0001-44";
+        const endereco = loja.logradouro ? `${loja.logradouro}, ${loja.numero} - ${loja.bairro}` : "Rua Arquiteto Luiz Nunes, 63 - Imbiribeira";
+        const cidadeUF = loja.cidade ? `${loja.cidade} - ${loja.uf}` : "Recife - PE";
+        const telefone = loja.telefone || "(81) 99999-9999";
 
-      const numDoc = vendaFinalizada?.numeroNfce || vendaFinalizada?.id || "000000";
-      const serieDoc = vendaFinalizada?.serieNfce || "1";
-      const chaveAcesso = vendaFinalizada?.chaveAcessoNfce || "00000000000000000000000000000000000000000000";
-      const chaveFormatada = chaveAcesso.replace(/(\d{4})/g, '$1 ').trim();
-      const dataVendaStr = vendaFinalizada?.dataVenda ? new Date(vendaFinalizada.dataVenda).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR');
-      const qrCodeUrl = vendaFinalizada?.urlQrCode || `http://nfce.sefaz.pe.gov.br/nfce/consulta?chNFe=${chaveAcesso}`;
+        const numDoc = vendaFinalizada?.numeroNfce || vendaFinalizada?.id || "000000";
+        const serieDoc = vendaFinalizada?.serieNfce || "1";
+        const chaveAcesso = vendaFinalizada?.chaveAcessoNfce || "00000000000000000000000000000000000000000000";
+        const chaveFormatada = chaveAcesso.replace(/(\d{4})/g, '$1 ').trim();
+        const dataVendaStr = vendaFinalizada?.dataVenda ? new Date(vendaFinalizada.dataVenda).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR');
+        const qrCodeUrl = vendaFinalizada?.urlQrCode || `http://nfce.sefaz.pe.gov.br/nfce/consulta?chNFe=${chaveAcesso}`;
 
-      let printHtml = '';
+        const itensImpressao = vendaFinalizada?.itens || [];
+        const totalQtd = itensImpressao.reduce((acc, i) => acc + i.quantidade, 0);
+        const subtotalBase = itensImpressao.reduce((acc, i) => acc + (i.precoUnitario * i.quantidade), 0);
+        const descontosImpressao = vendaFinalizada?.descontoTotal || 0;
+        const pagamentosImpressao = vendaFinalizada?.pagamentos || [];
+        const trocoImpressao = vendaFinalizada?.troco || 0;
+        const docClienteImp = vendaFinalizada?.clienteDocumento || '';
+        const nomeClienteImp = vendaFinalizada?.clienteNome || '';
 
-      if (isNfe) {
-                toast.info("Preparando DANFE A4 (Nota Grande)...");
-                // 🚨 LAYOUT DANFE OFICIAL A4 PAISAGEM (100% DA LARGURA)
-                printHtml = `
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <title>DANFE NF-e - ${razaoSocial}</title>
-                        <style>
-                            @page { size: A4 landscape; margin: 5mm; }
-                            body { font-family: Arial, sans-serif; font-size: 10px; margin: 0; padding: 0; width: 100%; }
-                            .danfe-container { width: 100%; border: 1px solid #000; padding: 5px; box-sizing: border-box;}
-                            table { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
-                            td, th { border: 1px solid #000; padding: 4px; vertical-align: top; }
-                            .label { display: block; font-size: 8px; text-transform: uppercase; color: #333; margin-bottom: 2px;}
-                            .val { font-size: 12px; font-weight: bold; }
-                            .center { text-align: center; } .right { text-align: right; }
-                            .title-box { font-size: 12px; font-weight: bold; margin: 10px 0 5px 0; text-transform: uppercase;}
-                            .barcode { letter-spacing: 2px; font-size: 14px; text-align: center; margin-top: 10px;}
-                        </style>
-                    </head>
-                    <body>
+        // 🚨 CÁLCULO DOS TRIBUTOS (MÉDIA IBPT PARA COSMÉTICOS: 15% Fed, 18% Est)
+        const totalVenda = vendaFinalizada?.valorTotal || 0;
+        const tribFederal = (totalVenda * 0.15).toFixed(2);
+        const tribEstadual = (totalVenda * 0.18).toFixed(2);
+        const tribMunicipal = "0.00";
+
+        let printHtml = '';
+
+        if (isNfe) {
+            toast.info("Preparando DANFE A4 (Nota Grande)...");
+            printHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>DANFE NF-e - ${razaoSocial}</title>
+                    <style>
+                        @page { size: A4 landscape; margin: 5mm; }
+                        body { font-family: Arial, sans-serif; font-size: 10px; margin: 0; padding: 0; width: 100%; }
+                        .danfe-container { width: 100%; border: 1px solid #000; padding: 5px; box-sizing: border-box;}
+                        table { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
+                        td, th { border: 1px solid #000; padding: 4px; vertical-align: top; }
+                        .label { display: block; font-size: 8px; text-transform: uppercase; color: #333; margin-bottom: 2px;}
+                        .val { font-size: 12px; font-weight: bold; }
+                        .center { text-align: center; } .right { text-align: right; }
+                        .title-box { font-size: 12px; font-weight: bold; margin: 10px 0 5px 0; text-transform: uppercase;}
+                        .barcode { letter-spacing: 2px; font-size: 14px; text-align: center; margin-top: 10px;}
+                    </style>
+                </head>
+                <body>
+                    <table>
+                        <tr>
+                            <td style="width: 80%;"><span class="label">RECEBEMOS DE ${razaoSocial} OS PRODUTOS CONSTANTES DA NOTA FISCAL INDICADA AO LADO</span><span class="val">&nbsp;</span></td>
+                            <td rowspan="2" class="center" style="width: 20%;"><span class="label">NF-e</span><span class="val" style="font-size:16px;">Nº ${numDoc}</span><br><span class="val">Série ${serieDoc}</span></td>
+                        </tr>
+                        <tr>
+                            <td>
+                               <div style="display: flex; justify-content: space-between;">
+                                  <div style="width: 30%; border-right: 1px solid #000; padding-right: 5px;"><span class="label">DATA DE RECEBIMENTO</span><span class="val">&nbsp;</span></div>
+                                  <div style="width: 70%; padding-left: 5px;"><span class="label">IDENTIFICAÇÃO E ASSINATURA DO RECEBEDOR</span><span class="val">&nbsp;</span></div>
+                               </div>
+                            </td>
+                        </tr>
+                    </table>
+
+                    <div style="border-bottom: 1px dashed #000; margin: 15px 0;"></div>
+
+                    <div class="danfe-container">
                         <table>
                             <tr>
-                                <td style="width: 80%;"><span class="label">RECEBEMOS DE ${razaoSocial} OS PRODUTOS CONSTANTES DA NOTA FISCAL INDICADA AO LADO</span><span class="val">&nbsp;</span></td>
-                                <td rowspan="2" class="center" style="width: 20%;"><span class="label">NF-e</span><span class="val" style="font-size:16px;">Nº ${numDoc}</span><br><span class="val">Série ${serieDoc}</span></td>
-                            </tr>
-                            <tr>
-                                <td>
-                                   <div style="display: flex; justify-content: space-between;">
-                                      <div style="width: 30%; border-right: 1px solid #000; padding-right: 5px;"><span class="label">DATA DE RECEBIMENTO</span><span class="val">&nbsp;</span></div>
-                                      <div style="width: 70%; padding-left: 5px;"><span class="label">IDENTIFICAÇÃO E ASSINATURA DO RECEBEDOR</span><span class="val">&nbsp;</span></div>
-                                   </div>
+                                <td style="width: 40%; text-align: center; vertical-align: middle;">
+                                    <h3 style="margin:5px 0; font-size: 16px;">${razaoSocial}</h3>
+                                    <p style="margin:0; font-size: 11px;">${endereco}<br>${cidadeUF}<br>Fone: ${telefone}</p>
+                                </td>
+                                <td style="width: 20%; text-align: center; vertical-align: middle;">
+                                    <h2 style="margin:0; font-size: 20px;">DANFE</h2>
+                                    <p style="margin:0; font-size: 9px;">Documento Auxiliar da Nota Fiscal Eletrônica</p>
+                                    <p style="margin:10px 0 0 0; font-size: 12px;">0 - ENTRADA<br>1 - SAÍDA <strong>[ 1 ]</strong></p>
+                                    <h3 style="margin:5px 0; font-size: 16px;">Nº ${numDoc}</h3>
+                                    <p style="margin:0; font-size: 12px;">SÉRIE: ${serieDoc}</p>
+                                </td>
+                                <td style="width: 40%; vertical-align: middle;">
+                                    <div class="barcode">|| |||| || ||||| ||||| ||| ||</div>
+                                    <div class="center" style="margin-top: 5px;">
+                                        <span class="label">CHAVE DE ACESSO</span>
+                                        <span class="val" style="font-size: 14px;">${chaveFormatada}</span>
+                                    </div>
+                                    <div class="center" style="margin-top: 15px;">
+                                        <span class="label">Consulta de autenticidade no portal nacional da NF-e</span>
+                                        <span style="font-size:10px;">www.nfe.fazenda.gov.br/portal</span>
+                                    </div>
                                 </td>
                             </tr>
                         </table>
 
-                        <div style="border-bottom: 1px dashed #000; margin: 15px 0;"></div>
+                        <table>
+                            <tr>
+                                <td style="width: 60%;"><span class="label">NATUREZA DA OPERAÇÃO</span><span class="val">VENDA DE MERCADORIAS</span></td>
+                                <td style="width: 40%;"><span class="label">PROTOCOLO DE AUTORIZAÇÃO DE USO</span><span class="val">${vendaFinalizada?.protocolo || 'N/A'} - ${dataVendaStr}</span></td>
+                            </tr>
+                        </table>
+                        <table>
+                            <tr>
+                                <td style="width: 33%;"><span class="label">INSCRIÇÃO ESTADUAL</span><span class="val">${fiscal.inscricaoEstadual || 'ISENTO'}</span></td>
+                                <td style="width: 33%;"><span class="label">INSC. ESTADUAL DO SUBST. TRIB.</span><span class="val"></span></td>
+                                <td style="width: 34%;"><span class="label">CNPJ</span><span class="val">${cnpj}</span></td>
+                            </tr>
+                        </table>
 
-                        <div class="danfe-container">
-                            <table>
-                                <tr>
-                                    <td style="width: 40%; text-align: center; vertical-align: middle;">
-                                        <h3 style="margin:5px 0; font-size: 16px;">${razaoSocial}</h3>
-                                        <p style="margin:0; font-size: 11px;">${endereco}<br>${cidadeUF}<br>Fone: ${telefone}</p>
-                                    </td>
-                                    <td style="width: 20%; text-align: center; vertical-align: middle;">
-                                        <h2 style="margin:0; font-size: 20px;">DANFE</h2>
-                                        <p style="margin:0; font-size: 9px;">Documento Auxiliar da Nota Fiscal Eletrônica</p>
-                                        <p style="margin:10px 0 0 0; font-size: 12px;">0 - ENTRADA<br>1 - SAÍDA <strong>[ 1 ]</strong></p>
-                                        <h3 style="margin:5px 0; font-size: 16px;">Nº ${numDoc}</h3>
-                                        <p style="margin:0; font-size: 12px;">SÉRIE: ${serieDoc}</p>
-                                    </td>
-                                    <td style="width: 40%; vertical-align: middle;">
-                                        <div class="barcode">|| |||| || ||||| ||||| ||| ||</div>
-                                        <div class="center" style="margin-top: 5px;">
-                                            <span class="label">CHAVE DE ACESSO</span>
-                                            <span class="val" style="font-size: 14px;">${chaveFormatada}</span>
-                                        </div>
-                                        <div class="center" style="margin-top: 15px;">
-                                            <span class="label">Consulta de autenticidade no portal nacional da NF-e</span>
-                                            <span style="font-size:10px;">www.nfe.fazenda.gov.br/portal</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </table>
+                        <div class="title-box">DESTINATÁRIO / REMETENTE</div>
+                        <table>
+                            <tr>
+                                <td style="width: 60%;"><span class="label">NOME / RAZÃO SOCIAL</span><span class="val">${nomeClienteImp || 'CONSUMIDOR'}</span></td>
+                                <td style="width: 25%;"><span class="label">CNPJ / CPF</span><span class="val">${docClienteImp}</span></td>
+                                <td style="width: 15%;"><span class="label">DATA DA EMISSÃO</span><span class="val">${dataVendaStr.split(' ')[0]}</span></td>
+                            </tr>
+                        </table>
+                        <table>
+                            <tr>
+                                <td style="width: 45%;"><span class="label">ENDEREÇO</span><span class="val">Não Informado</span></td>
+                                <td style="width: 25%;"><span class="label">BAIRRO / DISTRITO</span><span class="val">Não Informado</span></td>
+                                <td style="width: 15%;"><span class="label">CEP</span><span class="val"></span></td>
+                                <td style="width: 15%;"><span class="label">DATA DA SAÍDA</span><span class="val">${dataVendaStr.split(' ')[0]}</span></td>
+                            </tr>
+                        </table>
 
-                            <table>
-                                <tr>
-                                    <td style="width: 60%;"><span class="label">NATUREZA DA OPERAÇÃO</span><span class="val">VENDA DE MERCADORIAS</span></td>
-                                    <td style="width: 40%;"><span class="label">PROTOCOLO DE AUTORIZAÇÃO DE USO</span><span class="val">${vendaFinalizada?.protocolo || 'N/A'} - ${dataVendaStr}</span></td>
-                                </tr>
-                            </table>
-                            <table>
-                                <tr>
-                                    <td style="width: 33%;"><span class="label">INSCRIÇÃO ESTADUAL</span><span class="val">${fiscal.inscricaoEstadual || 'ISENTO'}</span></td>
-                                    <td style="width: 33%;"><span class="label">INSC. ESTADUAL DO SUBST. TRIB.</span><span class="val"></span></td>
-                                    <td style="width: 34%;"><span class="label">CNPJ</span><span class="val">${cnpj}</span></td>
-                                </tr>
-                            </table>
+                        <div class="title-box">CÁLCULO DO IMPOSTO</div>
+                        <table>
+                            <tr>
+                                <td style="width: 20%;"><span class="label">BASE DE CÁLCULO DO ICMS</span><span class="val right">0,00</span></td>
+                                <td style="width: 20%;"><span class="label">VALOR DO ICMS</span><span class="val right">0,00</span></td>
+                                <td style="width: 20%;"><span class="label">BASE CÁLC. ICMS SUBST.</span><span class="val right">0,00</span></td>
+                                <td style="width: 20%;"><span class="label">VALOR ICMS SUBST.</span><span class="val right">0,00</span></td>
+                                <td style="width: 20%;"><span class="label">VALOR TOTAL DOS PRODUTOS</span><span class="val right">${subtotalBase.toFixed(2)}</span></td>
+                            </tr>
+                            <tr>
+                                <td><span class="label">VALOR DO FRETE</span><span class="val right">0,00</span></td>
+                                <td><span class="label">VALOR DO SEGURO</span><span class="val right">0,00</span></td>
+                                <td><span class="label">DESCONTO</span><span class="val right">${descontosImpressao.toFixed(2)}</span></td>
+                                <td><span class="label">OUTRAS DESP. ACESSÓRIAS</span><span class="val right">0,00</span></td>
+                                <td><span class="label">VALOR TOTAL DA NOTA</span><span class="val right">${totalVenda.toFixed(2)}</span></td>
+                            </tr>
+                        </table>
 
-                            <div class="title-box">DESTINATÁRIO / REMETENTE</div>
-                            <table>
-                                <tr>
-                                    <td style="width: 60%;"><span class="label">NOME / RAZÃO SOCIAL</span><span class="val">${clienteAvulso.nome || 'CONSUMIDOR'}</span></td>
-                                    <td style="width: 25%;"><span class="label">CNPJ / CPF</span><span class="val">${clienteAvulso.documento}</span></td>
-                                    <td style="width: 15%;"><span class="label">DATA DA EMISSÃO</span><span class="val">${dataVendaStr.split(' ')[0]}</span></td>
-                                </tr>
-                            </table>
-                            <table>
-                                <tr>
-                                    <td style="width: 45%;"><span class="label">ENDEREÇO</span><span class="val">${clienteAvulso.logradouro}, ${clienteAvulso.numero}</span></td>
-                                    <td style="width: 25%;"><span class="label">BAIRRO / DISTRITO</span><span class="val">${clienteAvulso.bairro}</span></td>
-                                    <td style="width: 15%;"><span class="label">CEP</span><span class="val">${mascaraCEP(clienteAvulso.cep)}</span></td>
-                                    <td style="width: 15%;"><span class="label">DATA DA SAÍDA</span><span class="val">${dataVendaStr.split(' ')[0]}</span></td>
-                                </tr>
-                            </table>
-                            <table>
-                                <tr>
-                                    <td style="width: 40%;"><span class="label">MUNICÍPIO</span><span class="val">${clienteAvulso.cidade}</span></td>
-                                    <td style="width: 20%;"><span class="label">FONE / FAX</span><span class="val">${clienteAvulso.telefone}</span></td>
-                                    <td style="width: 10%;"><span class="label">UF</span><span class="val">${clienteAvulso.uf}</span></td>
-                                    <td style="width: 30%;"><span class="label">INSCRIÇÃO ESTADUAL</span><span class="val">${clienteAvulso.ie || 'ISENTO'}</span></td>
-                                </tr>
-                            </table>
+                        <div class="title-box">DADOS DO PRODUTO / SERVIÇOS</div>
+                        <table>
+                            <tr>
+                                <th style="width: 8%;">CÓD.</th>
+                                <th style="width: 44%;">DESCRIÇÃO DO PRODUTO</th>
+                                <th style="width: 8%;">NCM/SH</th>
+                                <th style="width: 5%;">CST</th>
+                                <th style="width: 5%;">CFOP</th>
+                                <th style="width: 5%;">UN.</th>
+                                <th style="width: 5%;">QTD.</th>
+                                <th style="width: 10%;">V. UNIT.</th>
+                                <th style="width: 10%;">V. TOTAL</th>
+                            </tr>
+                            ${itensImpressao.map(i => `
+                            <tr>
+                                <td class="center">${i.produtoId || i.id}</td>
+                                <td>${i.produtoNome || i.descricao || 'Produto'}</td>
+                                <td class="center">00000000</td>
+                                <td class="center">102</td>
+                                <td class="center">5102</td>
+                                <td class="center">UN</td>
+                                <td class="right">${i.quantidade}</td>
+                                <td class="right">${i.precoUnitario.toFixed(2)}</td>
+                                <td class="right">${(i.quantidade * i.precoUnitario).toFixed(2)}</td>
+                            </tr>
+                            `).join('')}
+                        </table>
 
-                            <div class="title-box">CÁLCULO DO IMPOSTO</div>
-                            <table>
-                                <tr>
-                                    <td style="width: 20%;"><span class="label">BASE DE CÁLCULO DO ICMS</span><span class="val right">0,00</span></td>
-                                    <td style="width: 20%;"><span class="label">VALOR DO ICMS</span><span class="val right">0,00</span></td>
-                                    <td style="width: 20%;"><span class="label">BASE CÁLC. ICMS SUBST.</span><span class="val right">0,00</span></td>
-                                    <td style="width: 20%;"><span class="label">VALOR ICMS SUBST.</span><span class="val right">0,00</span></td>
-                                    <td style="width: 20%;"><span class="label">VALOR TOTAL DOS PRODUTOS</span><span class="val right">${subtotalItens.toFixed(2)}</span></td>
-                                </tr>
-                                <tr>
-                                    <td><span class="label">VALOR DO FRETE</span><span class="val right">0,00</span></td>
-                                    <td><span class="label">VALOR DO SEGURO</span><span class="val right">0,00</span></td>
-                                    <td><span class="label">DESCONTO</span><span class="val right">${(descontoTotalRaw + descontoItens).toFixed(2)}</span></td>
-                                    <td><span class="label">OUTRAS DESP. ACESSÓRIAS</span><span class="val right">0,00</span></td>
-                                    <td><span class="label">VALOR TOTAL DA NOTA</span><span class="val right">${totalPagar.toFixed(2)}</span></td>
-                                </tr>
-                            </table>
+                        <div class="title-box">DADOS ADICIONAIS</div>
+                        <table style="height: 60px;">
+                            <tr>
+                                <td><span class="label">INFORMAÇÕES COMPLEMENTARES</span><span class="val" style="font-size: 10px;">Documento emitido por ME ou EPP optante pelo Simples Nacional.<br>Trib aprox R$ ${tribFederal} Fed e R$ ${tribEstadual} Est. Fonte: IBPT.</span></td>
+                            </tr>
+                        </table>
+                    </div>
 
-                            <div class="title-box">DADOS DO PRODUTO / SERVIÇOS</div>
-                            <table>
-                                <tr>
-                                    <th style="width: 8%;">CÓD.</th>
-                                    <th style="width: 44%;">DESCRIÇÃO DO PRODUTO</th>
-                                    <th style="width: 8%;">NCM/SH</th>
-                                    <th style="width: 5%;">CST</th>
-                                    <th style="width: 5%;">CFOP</th>
-                                    <th style="width: 5%;">UN.</th>
-                                    <th style="width: 5%;">QTD.</th>
-                                    <th style="width: 10%;">V. UNIT.</th>
-                                    <th style="width: 10%;">V. TOTAL</th>
-                                </tr>
-                                ${carrinho.map(i => `
-                                <tr>
-                                    <td class="center">${i.id}</td>
-                                    <td>${i.descricao}</td>
-                                    <td class="center">${i.ncm || '00000000'}</td>
-                                    <td class="center">${i.cst || '102'}</td>
-                                    <td class="center">${i.cfop || '5102'}</td>
-                                    <td class="center">UN</td>
-                                    <td class="right">${i.quantidade}</td>
-                                    <td class="right">${i.precoVenda.toFixed(2)}</td>
-                                    <td class="right">${(i.quantidade * i.precoVenda).toFixed(2)}</td>
-                                </tr>
-                                `).join('')}
-                            </table>
+                    <script>
+                        window.onload = function() {
+                            setTimeout(function() { window.print(); }, 500);
+                        };
+                    </script>
+                </body>
+                </html>
+            `;
+        } else {
+            // 🚨 LAYOUT NFC-e BOBINA (80mm) - AJUSTES DE MARGEM E FONTE APLICADOS
+            printHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>CUPOM FISCAL</title>
+                    <style>
+                        @page { margin: 0; size: 80mm auto; }
+                        /* Margens blindadas: width em 71mm e padding-left em 4mm garantem fuga da margem direita da impressora */
+                        body {
+                            font-family: 'Courier New', Courier, monospace;
+                            font-size: 9.5px;
+                            width: 71mm;
+                            margin: 0;
+                            padding: 4mm 2mm 4mm 4mm;
+                            color: #000;
+                            line-height: 1.15;
+                            box-sizing: border-box;
+                        }
+                        .center { text-align: center; } .left { text-align: left; } .right { text-align: right; }
+                        .bold { font-weight: bold; }
+                        .line { border-bottom: 1px dashed #000; margin: 4px 0; }
+                        .double-line { border-bottom: 2px solid #000; margin: 4px 0; }
+                        table { width: 100%; border-collapse: collapse; font-size: 8.5px; table-layout: fixed; }
+                        th, td { padding: 1.5px 0; vertical-align: top; word-wrap: break-word; }
 
-                            <div class="title-box">DADOS ADICIONAIS</div>
-                            <table style="height: 60px;">
-                                <tr>
-                                    <td><span class="label">INFORMAÇÕES COMPLEMENTARES</span><span class="val" style="font-size: 10px;">Documento emitido por ME ou EPP optante pelo Simples Nacional.<br>Trib aprox R$ 0,00 Fed e R$ 0,00 Est. Fonte: IBPT.</span></td>
-                                </tr>
-                            </table>
-                        </div>
+                        /* Controle de colunas para garantir que o Total nunca saia do papel */
+                        .col-cod { width: 13%; }
+                        .col-desc { width: 44%; }
+                        .col-qtd { width: 12%; text-align: right; }
+                        .col-vlun { width: 15%; text-align: right; }
+                        .col-vltot { width: 16%; text-align: right; }
 
-                        <script>
-                            window.onload = function() {
-                                setTimeout(function() {
-                                    window.print();
-                                }, 500);
-                            };
-                        </script>
-                    </body>
-                    </html>
-                `;
-            } else {
-          // 🚨 LAYOUT NFC-e BOBINA (80mm)
-          printHtml = `
-              <!DOCTYPE html>
-              <html>
-              <head>
-                  <meta charset="UTF-8">
-                  <title>CUPOM FISCAL</title>
-                  <style>
-                      @page { margin: 0; size: 80mm auto; }
-                      body { font-family: 'Courier New', Courier, monospace; font-size: 11px; width: 72mm; margin: 0 auto; padding: 4mm 0; color: #000; line-height: 1.2; }
-                      .center { text-align: center; } .left { text-align: left; } .right { text-align: right; }
-                      .bold { font-weight: bold; }
-                      .line { border-bottom: 1px dashed #000; margin: 5px 0; }
-                      .double-line { border-bottom: 2px solid #000; margin: 5px 0; }
-                      table { width: 100%; border-collapse: collapse; font-size: 10px; }
-                      th, td { padding: 2px 0; vertical-align: top; }
-                      .item-desc { display: block; width: 100%; word-wrap: break-word; }
-                      .qr-code { display: block; margin: 10px auto; width: 140px; height: 140px; }
-                      p { margin: 2px 0; }
-                  </style>
-              </head>
-              <body>
-                  <div class="center bold" style="font-size:13px; text-transform:uppercase;">${razaoSocial}</div>
-                  <div class="center">CNPJ: ${cnpj} ${fiscal.inscricaoEstadual ? ' IE: '+fiscal.inscricaoEstadual : ''}</div>
-                  <div class="center" style="font-size:10px;">${endereco}</div>
-                  <div class="center" style="font-size:10px;">${cidadeUF} - Tel: ${telefone}</div>
-                  <div class="double-line"></div>
+                        .qr-code { display: block; margin: 8px auto; width: 110px; height: 110px; }
+                        p { margin: 2px 0; }
+                    </style>
+                </head>
+                <body>
+                    <div class="center bold" style="font-size:12px; text-transform:uppercase;">${razaoSocial}</div>
+                    <div class="center">CNPJ: ${cnpj} ${fiscal.inscricaoEstadual ? ' IE: '+fiscal.inscricaoEstadual : ''}</div>
+                    <div class="center" style="font-size:9px;">${endereco}</div>
+                    <div class="center" style="font-size:9px;">${cidadeUF} - Tel: ${telefone}</div>
+                    <div class="double-line"></div>
 
-                  <div class="center bold">DANFE NFC-e - Documento Auxiliar da<br>Nota Fiscal de Consumidor Eletrônica</div>
-                  <div class="center" style="font-size:10px;">Não permite aproveitamento de crédito de ICMS</div>
-                  <div class="double-line"></div>
+                    <div class="center bold" style="font-size:10px;">DANFE NFC-e - Documento Auxiliar da<br>Nota Fiscal de Consumidor Eletrônica</div>
+                    <div class="center" style="font-size:9px;">Não permite aproveitamento de crédito de ICMS</div>
+                    <div class="double-line"></div>
 
-                  <table style="margin-bottom: 5px;">
-                      <tr style="border-bottom: 1px dashed #000;">
-                          <th class="left" style="width:10%;">CÓD</th>
-                          <th class="left" style="width:45%;">DESCRIÇÃO</th>
-                          <th class="right" style="width:15%;">QTD/UN</th>
-                          <th class="right" style="width:15%;">VL.UN</th>
-                          <th class="right" style="width:15%;">VL.TOT</th>
-                      </tr>
-                      ${carrinho.map((i, index) => `
-                          <tr>
-                              <td class="left">${String(index + 1).padStart(3, '0')}</td>
-                              <td class="left"><span class="item-desc">${i.descricao}</span></td>
-                              <td class="right">${i.quantidade} UN</td>
-                              <td class="right">${i.precoVenda.toFixed(2)}</td>
-                              <td class="right">${(i.quantidade * i.precoVenda).toFixed(2)}</td>
-                          </tr>
-                      `).join('')}
-                  </table>
+                    <table style="margin-bottom: 4px;">
+                        <tr style="border-bottom: 1px dashed #000;">
+                            <th class="left col-cod">CÓD</th>
+                            <th class="left col-desc">DESCRIÇÃO</th>
+                            <th class="right col-qtd">QTD</th>
+                            <th class="right col-vlun">VL.UN</th>
+                            <th class="right col-vltot">TOTAL</th>
+                        </tr>
+                        ${itensImpressao.map((i, index) => `
+                            <tr>
+                                <td class="left">${String(i.produtoId || i.id).padStart(3, '0')}</td>
+                                <td class="left">${i.produtoNome || i.descricao || 'Produto'}</td>
+                                <td class="right">${i.quantidade}</td>
+                                <td class="right">${i.precoUnitario.toFixed(2)}</td>
+                                <td class="right">${(i.quantidade * i.precoUnitario).toFixed(2)}</td>
+                            </tr>
+                        `).join('')}
+                    </table>
 
-                  <div class="line"></div>
-                  <div style="display:flex; justify-content:space-between;"><span>Qtd. Total de Itens:</span><span>${totalQuantidade}</span></div>
-                  <div style="display:flex; justify-content:space-between;"><span>Subtotal:</span><span>R$ ${subtotalItens.toFixed(2)}</span></div>
-                  ${descontoTotalRaw > 0 || descontoItens > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Descontos:</span><span>- R$ ${(descontoTotalRaw + descontoItens).toFixed(2)}</span></div>` : ''}
-                  <div style="display:flex; justify-content:space-between; font-size:13px;" class="bold"><span>VALOR TOTAL R$</span><span>${totalPagar.toFixed(2)}</span></div>
-                  <div class="line"></div>
+                    <div class="line"></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Qtd. Total de Itens:</span><span>${totalQtd}</span></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Subtotal:</span><span>R$ ${subtotalBase.toFixed(2)}</span></div>
+                    ${descontosImpressao > 0 ? `<div style="display:flex; justify-content:space-between;"><span>Descontos:</span><span>- R$ ${descontosImpressao.toFixed(2)}</span></div>` : ''}
+                    <div style="display:flex; justify-content:space-between; font-size:11px;" class="bold"><span>VALOR TOTAL R$</span><span>${totalVenda.toFixed(2)}</span></div>
+                    <div class="line"></div>
 
-                  <div class="bold" style="margin-bottom: 3px;">FORMA DE PAGAMENTO</div>
-                  <table style="margin-bottom: 5px;">
-                      ${pagamentos.map(p => `
-                          <tr><td class="left">${p.tipo}</td><td class="right">R$ ${p.valor.toFixed(2)}</td></tr>
-                      `).join('')}
-                  </table>
-                  <div style="display:flex; justify-content:space-between;"><span>Troco:</span><span>R$ ${troco.toFixed(2)}</span></div>
+                    <div class="bold" style="margin-bottom: 3px;">FORMA DE PAGAMENTO</div>
+                    <table style="margin-bottom: 4px;">
+                        ${pagamentosImpressao.map(p => `
+                            <tr><td class="left">${p.formaPagamento || p.tipo}</td><td class="right">R$ ${p.valor.toFixed(2)}</td></tr>
+                        `).join('')}
+                    </table>
+                    <div style="display:flex; justify-content:space-between;"><span>Troco:</span><span>R$ ${trocoImpressao.toFixed(2)}</span></div>
 
-                  <div class="line"></div>
-                  <div class="center" style="font-size:10px;">Valores Aprox. Tributos (Lei 12.741/12):<br>Federal R$ 0,00 | Estadual R$ 0,00 | Municipal R$ 0,00</div>
-                  <div class="line"></div>
+                    <div class="line"></div>
+                    <div class="center" style="font-size:9px;">Valores Aprox. Tributos (Lei 12.741/12):<br>Federal R$ ${tribFederal} | Estadual R$ ${tribEstadual} | Municipal R$ ${tribMunicipal}</div>
+                    <div class="line"></div>
 
-                  <div class="center bold" style="margin-bottom:2px;">CONSUMIDOR</div>
-                  <div class="center" style="font-size:10px;">
-                      ${clienteAvulso.documento ? `CNPJ/CPF: ${clienteAvulso.documento}<br>` : 'CONSUMIDOR NÃO IDENTIFICADO<br>'}
-                      ${clienteAvulso.nome ? `${clienteAvulso.nome}<br>` : ''}
-                  </div>
-                  <div class="line"></div>
+                    <div class="center bold" style="margin-bottom:2px;">CONSUMIDOR</div>
+                    <div class="center" style="font-size:9px;">
+                        ${docClienteImp ? `CNPJ/CPF: ${docClienteImp}<br>` : 'CONSUMIDOR NÃO IDENTIFICADO<br>'}
+                        ${nomeClienteImp ? `${nomeClienteImp}<br>` : ''}
+                    </div>
+                    <div class="line"></div>
 
-                  <div class="center bold">Emissão: ${dataVendaStr}</div>
-                  <div class="center">NFC-e Nº ${numDoc} - Série ${serieDoc}</div>
-                  <div class="center" style="margin-top:2px;">Protocolo de Autorização: ${vendaFinalizada?.protocolo || 'N/A'}</div>
-                  <div class="center" style="margin-top:8px; font-size:10px;">Consulte pela Chave de Acesso em:</div>
-                  <div class="center" style="font-size:10px; word-break:break-all;">http://nfce.sefaz.pe.gov.br/nfce/consulta</div>
+                    <div class="center bold" style="font-size:10px;">Emissão: ${dataVendaStr}</div>
+                    <div class="center" style="font-size:10px;">NFC-e Nº ${numDoc} - Série ${serieDoc}</div>
+                    <div class="center" style="margin-top:2px;">Protocolo de Autorização: ${vendaFinalizada?.protocolo || 'N/A'}</div>
+                    <div class="center" style="margin-top:6px; font-size:9px;">Consulte pela Chave de Acesso em:</div>
+                    <div class="center" style="font-size:9px; word-break:break-all;">http://nfce.sefaz.pe.gov.br/nfce/consulta</div>
 
-                  <div class="center bold" style="margin-top:10px; font-size:11px; letter-spacing:1px; word-break:break-all;">
-                      ${chaveFormatada}
-                  </div>
+                    <div class="center bold" style="margin-top:8px; font-size:10.5px; letter-spacing:1px; word-break:break-all;">
+                        ${chaveFormatada}
+                    </div>
 
-                  <img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrCodeUrl)}" alt="QR Code" />
+                    <img class="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrCodeUrl)}" alt="QR Code" />
 
-                  <div class="center bold" style="margin-top:10px;">${fiscal.obsPadraoCupom || 'Obrigado e volte sempre!'}</div>
-                  <br><br><br>
+                    <div class="center bold" style="margin-top:8px; font-size:10px;">${fiscal.obsPadraoCupom || 'Obrigado e volte sempre!'}</div>
+                    <br><br><br>
 
-                  <script>
-                      // Gatilho automático blindado com tempo extra pro QR Code carregar
-                      window.onload = function() {
-                          setTimeout(function() {
-                              window.print();
-                          }, 800);
-                      };
-                  </script>
-              </body>
-              </html>
-          `;
-      }
+                    <script>
+                        window.onload = function() {
+                            setTimeout(function() { window.print(); }, 800);
+                        };
+                    </script>
+                </body>
+                </html>
+            `;
+        }
 
-      const printWindow = window.open('', '_blank', 'width=800,height=600');
-      if (printWindow) {
-          printWindow.document.write(printHtml);
-          printWindow.document.close();
-      } else {
-          toast.error("O bloqueador de Pop-ups do seu navegador impediu a impressão!");
-      }
-  };
+        const printWindow = window.open('', '_blank', 'width=800,height=600');
+        if (printWindow) {
+            printWindow.document.write(printHtml);
+            printWindow.document.close();
+        } else {
+            toast.error("O bloqueador de Pop-ups do seu navegador impediu a impressão!");
+        }
+    };
 
   if (validandoCaixa) return <div className="loader"><div className="spinner"></div><h2>A Iniciar Terminal...</h2></div>;
 
@@ -1048,7 +1122,7 @@ const PDV = () => {
       )}
 
       {/* ========================================================== */}
-      {/* MODAL DE CLIENTE (VALIDAÇÃO VISUAL SILENCIOSA)             */}
+      {/* MODAL DE CLIENTE: FOCO NO WHATSAPP (CORRIGIDO)               */}
       {/* ========================================================== */}
       {showClienteModal && (
           <div className="modal-glass z-max">
@@ -1060,7 +1134,14 @@ const PDV = () => {
 
                   <div className={clienteAvulso.isPj ? "grid-2-cols text-left mt-3" : "text-left w-full mt-3"}>
                       <div className="col-left">
-                          <label className="form-label">CPF / CNPJ</label>
+
+                          <label className="form-label">WHATSAPP (IDENTIFICADOR PRINCIPAL)</label>
+                          <input className="mg-input compact-input mb-2 border-primary" inputMode="numeric" value={clienteAvulso.telefone} onChange={handleTelefoneChange} autoFocus placeholder="(81) 90000-0000" onKeyDown={e => e.key === 'Enter' && confirmarClienteModal()}/>
+
+                          <label className="form-label">{clienteAvulso.isPj ? 'RAZÃO SOCIAL' : 'NOME DO CLIENTE'}</label>
+                          <input className="mg-input compact-input mb-2" value={clienteAvulso.nome} onChange={e => setClienteAvulso({...clienteAvulso, nome: e.target.value})} placeholder="Nome completo" onKeyDown={e => e.key === 'Enter' && confirmarClienteModal()}/>
+
+                          <label className="form-label">CPF / CNPJ (OPCIONAL)</label>
                           <div className="relative mb-2">
                               <input
                                   className={`mg-input compact-input ${statusDocumento === 'valid' ? 'border-success' : statusDocumento === 'invalid' ? 'border-danger' : ''}`}
@@ -1069,7 +1150,6 @@ const PDV = () => {
                                   onChange={handleDocumentoChange}
                                   onKeyDown={e => e.key === 'Enter' && confirmarClienteModal()}
                                   placeholder="Apenas números..."
-                                  autoFocus
                               />
                               <div className="absolute right-3 top-3 d-flex align-center gap-2" style={{pointerEvents: 'none'}}>
                                   {loadingCnpj && <div className="spinner-micro"></div>}
@@ -1078,19 +1158,8 @@ const PDV = () => {
                               </div>
                           </div>
 
-                          <label className="form-label">{clienteAvulso.isPj ? 'RAZÃO SOCIAL' : 'NOME'}</label>
-                          <input className="mg-input compact-input mb-2" value={clienteAvulso.nome} onChange={e => setClienteAvulso({...clienteAvulso, nome: e.target.value})}/>
-
-                          <div className="d-flex gap-2 mb-2">
-                              <div className="flex-1">
-                                  <label className="form-label">WHATSAPP</label>
-                                  <input className="mg-input compact-input" inputMode="numeric" value={clienteAvulso.telefone} onChange={e => setClienteAvulso({...clienteAvulso, telefone: mascaraTelefone(e.target.value)})}/>
-                              </div>
-                              <div className="flex-1">
-                                  <label className="form-label">E-MAIL (OPCIONAL)</label>
-                                  <input type="email" className="mg-input compact-input" placeholder="email@exemplo.com" value={clienteAvulso.email} onChange={e => setClienteAvulso({...clienteAvulso, email: e.target.value})}/>
-                              </div>
-                          </div>
+                          <label className="form-label">E-MAIL (OPCIONAL)</label>
+                          <input type="email" className="mg-input compact-input mb-2" placeholder="email@exemplo.com" value={clienteAvulso.email} onChange={e => setClienteAvulso({...clienteAvulso, email: e.target.value})} onKeyDown={e => e.key === 'Enter' && confirmarClienteModal()}/>
 
                           {clienteAvulso.isPj && (
                               <>
@@ -1120,8 +1189,40 @@ const PDV = () => {
                       )}
                   </div>
                   <div className="mg-actions mt-4">
-                      <button className="mg-btn cancel" onClick={() => { setClienteAvulso({nome:'',telefone:'',documento:'', email: '', isPj: false, ie: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: ''}); setShowClienteModal(false); }}>Limpar Formulário</button>
+                      <button className="mg-btn cancel" onClick={() => { setClienteAvulso({nome:'',telefone:'',documento:'', email: '', isPj: false, ie: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: ''}); setShowClienteModal(false); }}>Limpar</button>
                       <button className="mg-btn confirm" onClick={confirmarClienteModal}>Salvar Dados (Enter)</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* ========================================================== */}
+      {/* MODAL DE AVISO DE RUPTURA DE ESTOQUE (TECLA F9 CORRIGIDA)  */}
+      {/* ========================================================== */}
+      {showRupturaModal && (
+          <div className="modal-glass z-max">
+              <div className="modal-glass-card text-center sm fade-in border-top-warning">
+                  <h2 className="title-main mb-2">Aviso de Ruptura (Falta)</h2>
+                  <p className="text-sec mb-4">Faltou algum produto na prateleira? Informe abaixo para a gerência repor o estoque.</p>
+
+                  <input type="text" className="mg-input mb-4" placeholder="Ex: Esmalte Risqué Vermelho..." id="ruptura-input" autoFocus onKeyDown={e => {
+                      if(e.key === 'Enter') {
+                          if(!e.target.value) return toast.warn("Informe o produto.");
+                          toast.success("Aviso de ruptura registrado!");
+                          registrarAcaoAuditoria("AVISO_RUPTURA", `Produto em falta reportado: ${e.target.value}`);
+                          setShowRupturaModal(false);
+                      }
+                  }}/>
+
+                  <div className="d-flex gap-3">
+                      <button className="btn-outline-sec flex-1" onClick={() => setShowRupturaModal(false)}>Cancelar</button>
+                      <button className="btn-action-warning flex-1" onClick={() => {
+                          const val = document.getElementById('ruptura-input').value;
+                          if(!val) return toast.warn("Informe o nome do produto.");
+                          toast.success("Aviso de ruptura registrado com sucesso!");
+                          registrarAcaoAuditoria("AVISO_RUPTURA", `Produto em falta reportado: ${val}`);
+                          setShowRupturaModal(false);
+                      }}>Registrar (Enter)</button>
                   </div>
               </div>
           </div>
@@ -1195,7 +1296,7 @@ const PDV = () => {
             <div className="modal-glass-card text-center sm fade-in border-top-success">
                 <MessageCircle size={50} color="#25D366" className="mx-auto mb-3"/>
                 <h2 className="title-main mb-2">Enviar via WhatsApp</h2>
-                <p className="text-sec mb-4">Digite o número com DDD para enviar o link do Cupom.</p>
+                <p className="text-sec mb-4">Confirme o WhatsApp para enviar o link do documento fiscal.</p>
                 <input
                     type="tel"
                     className="mg-input mb-4 text-center"
@@ -1217,7 +1318,7 @@ const PDV = () => {
               <div className="modal-glass-card text-center sm fade-in border-top-primary">
                   <Mail size={50} color="#3b82f6" className="mx-auto mb-3"/>
                   <h2 className="title-main mb-2">Enviar via E-mail</h2>
-                  <p className="text-sec mb-4">A nota fiscal será enviada em anexo.</p>
+                  <p className="text-sec mb-4">O documento PDF oficial será enviado em anexo.</p>
                   <input
                       type="email"
                       className="mg-input mb-4 text-center"
