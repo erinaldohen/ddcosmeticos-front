@@ -1,88 +1,393 @@
-/* ========================================================= */
-/* CONTAINER BASE E ESTRUTURA (BLINDADO COM PREFIXO hist-)   */
-/* ========================================================= */
-.hist-container { padding: 24px; background-color: #f8fafc; min-height: 100vh; font-family: 'Inter', system-ui, sans-serif; color: #0f172a; }
+.hist-container {
+    padding: 24px;
+    background: #f8fafc;
+    min-height: 100vh;
+}
 
-.hist-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
-.hist-header h2 { margin: 0; font-size: 1.5rem; color: #1e293b; }
-.hist-search { display: flex; align-items: center; background: white; padding: 8px 16px; border-radius: 8px; border: 1px solid #e2e8f0; width: 100%; max-width: 350px; gap: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
-.hist-search input { border: none; outline: none; width: 100%; font-size: 0.95rem; color: #334155; }
+.hist-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    gap: 16px;
+    flex-wrap: wrap; /* Importante para mobile */
+}
 
-/* Tabela */
-.hist-table-container { background: white; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.02); }
-.hist-table { width: 100%; border-collapse: collapse; text-align: left; }
-.hist-table th { background: #f1f5f9; padding: 16px; font-size: 0.85rem; font-weight: 600; color: #64748b; text-transform: uppercase; border-bottom: 1px solid #e2e8f0; }
-.hist-table td { padding: 16px; font-size: 0.95rem; color: #334155; border-bottom: 1px solid #e2e8f0; }
-.hist-table tbody tr:hover { background: #f8fafc; }
-.hist-fw-bold { font-weight: 700; color: #0f172a; }
-.hist-text-center { text-align: center; }
+.hist-header h2 {
+    color: #0f172a;
+    font-size: 1.5rem;
+    margin: 0;
+}
 
-/* Badges de Status */
-.hist-status-badge { padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; }
-.hist-status-badge.autorizada { background: #d1fae5; color: #059669; }
-.hist-status-badge.pendente { background: #fef3c7; color: #d97706; }
-.hist-status-badge.cancelada { background: #fee2e2; color: #dc2626; }
+.hist-search {
+    display: flex;
+    align-items: center;
+    background: white;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 8px 16px;
+    width: 100%;
+    max-width: 350px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
 
-/* Botão de Ação */
-.hist-btn-icon { background: transparent; border: none; cursor: pointer; padding: 8px; border-radius: 6px; transition: 0.2s; display: flex; align-items: center; justify-content: center; position: relative; }
-.hist-btn-icon:hover { background: #e0e7ff; }
+.hist-search input {
+    border: none;
+    outline: none;
+    margin-left: 8px;
+    width: 100%;
+    font-size: 0.95rem;
+    color: #334155;
+}
 
-/* Loading */
-.hist-loading { padding: 40px; text-align: center; color: #64748b; font-weight: 500; display: flex; flex-direction: column; align-items: center; gap: 10px;}
-.hist-spinner { width: 30px; height: 30px; border: 3px solid #e2e8f0; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.hist-table-container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    overflow: hidden;
+}
 
-/* ========================================================= */
-/* MODAL DE DETALHES (BLINDADO E TAMANHO XL)                 */
-/* ========================================================= */
-.hist-modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.6); display: flex; align-items: center; justify-content: center; z-index: 999999; backdrop-filter: blur(4px); padding: 20px; animation: fadeIn 0.2s ease-out; }
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.hist-table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
 
-.hist-modal-content { background: white !important; width: 95% !important; max-width: 1000px !important; border-radius: 16px !important; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1) !important; display: flex !important; flex-direction: column !important; max-height: 95vh !important; animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.hist-table th {
+    background: #f1f5f9;
+    padding: 16px;
+    color: #475569;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid #e2e8f0;
+}
 
-.hist-modal-header { display: flex; justify-content: space-between; align-items: center; padding: 20px 24px; border-bottom: 1px solid #e2e8f0; }
-.hist-modal-header h3 { margin: 0; font-size: 1.25rem; color: #0f172a; }
-.hist-btn-close { background: transparent; border: none; cursor: pointer; color: #94a3b8; padding: 4px; transition: 0.2s;}
-.hist-btn-close:hover { color: #dc2626; }
+.hist-table td {
+    padding: 16px;
+    color: #1e293b;
+    border-bottom: 1px solid #e2e8f0;
+    vertical-align: middle;
+}
 
-.hist-modal-body { padding: 24px; overflow-y: auto; }
-.hist-modal-info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; background: #f8fafc; padding: 16px; border-radius: 8px; border: 1px solid #f1f5f9; }
-.hist-info-box { display: flex; flex-direction: column; gap: 4px; }
-.hist-info-box .label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; font-weight: 600; }
-.hist-info-box strong { font-size: 0.95rem; color: #1e293b; }
+.hist-table tr:hover {
+    background-color: #f8fafc;
+}
 
-.hist-modal-body h4 { display: flex; align-items: center; gap: 8px; font-size: 1.05rem; color: #334155; margin: 0 0 16px 0; padding-bottom: 8px; border-bottom: 2px solid #f1f5f9; }
+.hist-status-badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    display: inline-block;
+}
 
-/* Listas de Produtos e Pagamentos */
-.hist-modal-lista-itens, .hist-modal-lista-pgto { list-style: none; padding: 0; margin: 0 0 24px 0; display: flex; flex-direction: column; gap: 12px; }
+.hist-status-badge.autorizada { background: #dcfce7; color: #15803d; }
+.hist-status-badge.pendente { background: #fef9c3; color: #b45309; }
+.hist-status-badge.cancelada { background: #fee2e2; color: #b91c1c; }
 
-/* PRODUTOS DETALHADOS */
-.hist-modal-lista-itens li.hist-produto-detalhado { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; }
-.hist-item-main-row { display: flex; justify-content: space-between; align-items: center; width: 100%; }
-.hist-item-desc { display: flex; gap: 12px; align-items: center; }
-.hist-item-qtd { font-weight: 800; color: #3b82f6; background: #eff6ff; padding: 4px 8px; border-radius: 6px; font-size: 0.9rem;}
-.hist-item-nome { font-weight: 600; color: #1e293b; font-size: 0.95rem; }
-.hist-item-preco { font-weight: 700; color: #0f172a; font-size: 1rem; }
+.hist-fw-bold { font-weight: 700; }
+.text-main { color: #d11d7e; }
 
-.hist-item-sub-row { display: flex; justify-content: space-between; align-items: center; width: 100%; padding-left: 44px; }
-.hist-item-ean { font-family: 'Courier New', Courier, monospace; background: #e2e8f0; padding: 2px 8px; border-radius: 4px; color: #475569; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.5px;}
-.hist-item-unit { font-size: 0.85rem; color: #64748b; }
+.hist-btn-icon {
+    background: #eff6ff;
+    border: none;
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
 
-/* PAGAMENTOS DETALHADOS */
-.hist-modal-lista-pgto li.hist-pgto-detalhado { display: flex; justify-content: space-between; align-items: center; font-size: 0.95rem; padding: 12px 16px; border-bottom: 1px dashed #e2e8f0; }
-.hist-modal-lista-pgto li.hist-pgto-detalhado:last-child { border-bottom: none; }
+.hist-btn-icon:hover {
+    background: #dbeafe;
+    transform: scale(1.05);
+}
 
-.hist-modal-obs { background: #fffbeb; padding: 16px; border-radius: 8px; border-left: 4px solid #f59e0b; font-size: 0.95rem; color: #92400e; margin-bottom: 24px; }
+.hist-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: #64748b;
+    gap: 12px;
+    font-weight: 500;
+}
 
-/* Totais */
-.hist-modal-totais { background: #f8fafc; padding: 20px; border-radius: 8px; display: flex; flex-direction: column; gap: 10px; border: 1px solid #e2e8f0;}
-.hist-total-linha { display: flex; justify-content: space-between; font-size: 1rem; color: #475569; }
-.hist-total-linha.text-red { color: #dc2626; }
-.hist-total-linha.destaque { font-size: 1.25rem; font-weight: 800; color: #0f172a; margin-top: 10px; padding-top: 10px; border-top: 2px dashed #cbd5e1; }
+.hist-spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #d11d7e;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+}
 
-.hist-modal-footer { display: flex; justify-content: flex-end; gap: 12px; padding: 16px 24px; border-top: 1px solid #e2e8f0; background: #f8fafc; border-radius: 0 0 16px 16px; }
-.hist-btn-secondary { background: white; border: 1px solid #e2e8f0; color: #475569; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; transition: 0.2s;}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* ========================================================================= */
+/* MODAIS */
+/* ========================================================================= */
+.hist-modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    padding: 16px;
+    backdrop-filter: blur(4px);
+}
+
+.hist-modal-content {
+    background: white;
+        border-radius: 16px;
+        width: 100%;
+        max-width: 980px; /* 🚨 ALARGADO AQUI: De 700px para 900px */
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        overflow: hidden;
+        animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.hist-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+}
+
+.hist-modal-header h3 { margin: 0; color: #0f172a; font-size: 1.25rem; }
+
+.hist-btn-close {
+    background: none; border: none; color: #64748b; cursor: pointer;
+    padding: 4px; border-radius: 4px; transition: 0.2s;
+}
+.hist-btn-close:hover { background: #e2e8f0; color: #0f172a; }
+
+.hist-modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.hist-modal-info-grid {
+    display: grid;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.hist-info-box {
+    background: #f1f5f9;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.hist-info-box .label {
+    display: flex; align-items: center; gap: 6px;
+    color: #64748b; font-size: 0.8rem; text-transform: uppercase; font-weight: 700; margin-bottom: 8px;
+}
+
+.hist-info-box strong { color: #0f172a; font-size: 1.05rem; }
+
+.hist-item-main-row { display: flex; justify-content: space-between; align-items: center; }
+.hist-item-sub-row { display: flex; justify-content: space-between; align-items: center; }
+.text-muted { color: #64748b; }
+.text-sm { font-size: 0.85rem; }
+.font-medium { font-weight: 500; }
+.font-bold { font-weight: 700; }
+.bg-gray-100 { background-color: #f1f5f9; }
+.px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+.py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.rounded { border-radius: 4px; }
+.ml-2 { margin-left: 0.5rem; }
+.mt-1 { margin-top: 0.25rem; }
+.mt-3 { margin-top: 0.75rem; }
+.mt-4 { margin-top: 1rem; }
+.pb-2 { padding-bottom: 0.5rem; }
+.border-bottom { border-bottom: 1px solid #e2e8f0; }
+
+.hist-modal-lista-itens, .hist-modal-lista-pgto {
+    list-style: none; padding: 0; margin: 0;
+}
+
+.hist-produto-detalhado {
+    padding: 12px 0;
+    border-bottom: 1px solid #f1f5f9;
+}
+.hist-produto-detalhado:last-child { border-bottom: none; }
+
+.flex-between { display: flex; justify-content: space-between; align-items: center; }
+
+.hist-modal-footer {
+    display: flex;
+    justify-content: flex-end; /* Alterado para empurrar itens para a direita */
+    gap: 12px;
+    padding: 20px 24px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    flex-wrap: wrap; /* Importante para mobile */
+}
+
+.hist-btn-secondary {
+    padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;
+    background: white; border: 1px solid #cbd5e1; color: #475569;
+    display: flex; align-items: center; gap: 8px; justify-content: center;
+}
 .hist-btn-secondary:hover { background: #f1f5f9; }
-.hist-btn-primary { background: #3b82f6; border: none; color: white; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s;}
-.hist-btn-primary:hover { background: #2563eb; }
+
+.hist-btn-primary {
+    padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;
+    background: #d11d7e; border: none; color: white;
+    display: flex; align-items: center; gap: 8px; justify-content: center;
+}
+.hist-btn-primary:hover { background: #b8146b; }
+
+
+/* ========================================================================= */
+/* ADAPTAÇÕES PARA MOBILE (Ecrãs menores que 768px) */
+/* ========================================================================= */
+@media (max-width: 768px) {
+    .hist-container {
+        padding: 12px;
+    }
+
+    .hist-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .hist-search {
+        max-width: 100%;
+    }
+
+    /* Transformando a Tabela em Cards no Mobile */
+    .hist-table thead {
+        display: none; /* Esconde os cabeçalhos da tabela */
+    }
+
+    .hist-table, .hist-table tbody, .hist-table tr, .hist-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .hist-table tr {
+        margin-bottom: 16px;
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        padding: 12px;
+    }
+
+    .hist-table td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px dashed #f1f5f9;
+        padding: 10px 4px;
+        text-align: right;
+    }
+
+    .hist-table td:last-child {
+        border-bottom: none;
+    }
+
+    /* Adiciona a etiqueta falsa (ex: "Cliente:") antes do valor no mobile */
+    .hist-table td::before {
+        content: attr(data-label);
+        font-weight: 600;
+        color: #64748b;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        margin-right: 16px;
+        text-align: left;
+    }
+
+    /* Ajustes nos modais para mobile */
+    .hist-modal-content {
+        max-height: 95vh;
+    }
+
+    .hist-modal-body {
+        padding: 16px;
+    }
+
+    .hist-modal-info-grid {
+        grid-template-columns: 1fr !important; /* Força 1 coluna no mobile */
+    }
+
+    .hist-modal-footer {
+        flex-direction: column-reverse; /* Empilha os botões. Fechar/Secundários em baixo, Ação Principal em cima */
+    }
+
+    .hist-modal-footer button {
+        width: 100%; /* Botões ocupam 100% no mobile */
+        margin-left: 0 !important;
+    }
+}
+
+/* ========================================================================= */
+/* LEGENDA INSTANTÂNEA (TOOLTIP) - Oculta no mobile por falta de hover */
+/* ========================================================================= */
+@media (min-width: 769px) {
+    [data-tooltip] {
+        position: relative;
+        cursor: pointer;
+    }
+
+    [data-tooltip]:hover::after {
+        content: attr(data-tooltip);
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: rgba(15, 23, 42, 0.9);
+        color: white;
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+        pointer-events: none;
+        z-index: 9999;
+        margin-bottom: 8px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        opacity: 0;
+        animation: fadeInTooltip 0.2s ease forwards;
+    }
+
+    [data-tooltip]:hover::before {
+        content: '';
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border-width: 6px;
+        border-style: solid;
+        border-color: rgba(15, 23, 42, 0.9) transparent transparent transparent;
+        margin-bottom: -4px;
+        pointer-events: none;
+        z-index: 9999;
+        opacity: 0;
+        animation: fadeInTooltip 0.2s ease forwards;
+    }
+
+    @keyframes fadeInTooltip {
+        to { opacity: 1; }
+    }
+}
