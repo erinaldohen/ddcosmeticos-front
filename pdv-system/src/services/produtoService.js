@@ -4,9 +4,6 @@ const RESOURCE_URL = '/produtos';
 
 export const produtoService = {
 
-  /**
-   * [ATUALIZADO] Lista produtos com paginação e filtro NO SERVIDOR
-   */
   listar: async (pagina = 0, tamanho = 10, termo = '', filtros = {}) => {
     try {
       const params = {
@@ -26,6 +23,8 @@ export const produtoService = {
         if (filtros.semImagem) params.semImagem = true;
         if (filtros.semNcm) params.semNcm = true;
         if (filtros.precoZerado) params.precoZero = true;
+        // 🔥 CORREÇÃO: Agora passa o filtro de revisão pendente para o Backend!
+        if (filtros.revisaoPendente) params.revisaoPendente = true;
       }
 
       const response = await api.get(RESOURCE_URL, { params });
@@ -43,9 +42,16 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Busca um único produto pelo ID
-   */
+  // 🔥 NOVO: Busca a contagem rapidamente no Backend sem carregar os produtos
+  contarPendentesRevisao: async () => {
+    try {
+      const response = await api.get(`${RESOURCE_URL}/alertas/pendentes-revisao`);
+      return response.data;
+    } catch (error) {
+      return 0;
+    }
+  },
+
   obterPorId: async (id) => {
     try {
       const response = await api.get(`${RESOURCE_URL}/${id}`);
@@ -56,9 +62,6 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Salva um novo produto
-   */
   salvar: async (produto) => {
     try {
       const response = await api.post(RESOURCE_URL, produto);
@@ -69,9 +72,6 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Atualiza um produto existente
-   */
   atualizar: async (id, produto) => {
     try {
       const response = await api.put(`${RESOURCE_URL}/${id}`, produto);
@@ -82,9 +82,6 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Exclui (Inativa) um produto
-   */
   excluir: async (ean) => {
     try {
       await api.delete(`${RESOURCE_URL}/${ean}`);
@@ -94,9 +91,6 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Executa o Robô de IA para corrigir NCMs
-   */
   corrigirNcmsIA: async () => {
     try {
       const response = await api.post(`${RESOURCE_URL}/corrigir-ncms-ia`);
@@ -107,9 +101,6 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Saneamento fiscal em massa
-   */
   saneamentoFiscal: async () => {
     try {
       const response = await api.post(`${RESOURCE_URL}/saneamento-fiscal`);
@@ -120,9 +111,6 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Importação de Arquivo
-   */
   importarProdutos: async (formData) => {
     try {
       const response = await api.post(`${RESOURCE_URL}/importar`, formData, {
@@ -135,9 +123,6 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Exportação de Arquivo
-   */
   exportarProdutos: async (tipo) => {
     try {
       const response = await api.get(`${RESOURCE_URL}/exportar/${tipo}`, {
@@ -150,9 +135,6 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Validação Fiscal no Formulário
-   */
   validarDadosFiscais: async (descricao, ncm) => {
     try {
       const response = await api.post('/fiscal/validar', { descricao, ncm });
@@ -162,14 +144,9 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Consulta se um EAN já existe
-   */
   consultarEan: async (ean) => {
     try {
-      // Ajuste para usar a busca por termo, que é mais segura para validação prévia
       const response = await api.get(`${RESOURCE_URL}?termo=${ean}&size=1`);
-      // Se retornar lista vazia, não existe. Se retornar item e o EAN bater, existe.
       if (response.data && response.data.content && response.data.content.length > 0) {
          const produto = response.data.content[0];
          if (produto.codigoBarras === ean) return produto;
@@ -180,9 +157,6 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Impressão de etiqueta
-   */
   imprimirEtiqueta: async (id) => {
     try {
       const response = await api.get(`${RESOURCE_URL}/${id}/etiqueta`);
@@ -193,14 +167,10 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Upload de imagem
-   */
   uploadImagem: async (id, arquivo) => {
     try {
       const formData = new FormData();
       formData.append('file', arquivo);
-
       await api.post(`${RESOURCE_URL}/${id}/imagem`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
@@ -212,9 +182,6 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Histórico
-   */
   buscarHistorico: async (id) => {
     try {
       const response = await api.get(`${RESOURCE_URL}/${id}/historico`);
@@ -225,9 +192,6 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Busca itens da Lixeira (Inativos)
-   */
   buscarLixeira: async () => {
     try {
       const response = await api.get(`${RESOURCE_URL}/lixeira`);
@@ -238,9 +202,6 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Restaurar da lixeira
-   */
   restaurar: async (ean) => {
     try {
       await api.put(`${RESOURCE_URL}/${ean}/reativar`);
@@ -250,9 +211,6 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Alias para restaurar
-   */
   reativar: async (ean) => {
     try {
       await api.put(`${RESOURCE_URL}/${ean}/reativar`);
@@ -261,9 +219,6 @@ export const produtoService = {
     }
   },
 
-  /**
-   * Busca NCM via BrasilAPI
-   */
   buscarNcms: async (termo) => {
     try {
       const isNumeric = !isNaN(termo);
@@ -282,13 +237,8 @@ export const produtoService = {
     }
   },
 
-  /**
-   * [CORRIGIDO] Gera EAN interno chamando o Backend
-   * Removemos a lógica manual antiga que estava causando erro de sintaxe.
-   */
   gerarEanInterno: async () => {
       const response = await api.get(`${RESOURCE_URL}/proximo-sequencial`);
-      // O backend retorna o número direto (String)
       return response.data;
   }
 };

@@ -12,15 +12,36 @@ import {
 } from 'lucide-react';
 import './ProdutoList.css';
 
-// --- HOOK: DEBOUNCE ---
-function useDebounce(value, delay) {
-  const [debouncedValue, setDebouncedValue] = useState(value);
+// --- COMPONENTE: SEARCH BAR ISOLADA (PERFORMANCE MÁXIMA) ---
+// Este componente gere a sua própria digitação para não travar a tabela gigante.
+const SearchBar = ({ onSearch }) => {
+  const [localTerm, setLocalTerm] = useState('');
+
   useEffect(() => {
-    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    // Só avisa a tabela principal para pesquisar 500ms DEPOIS de parar de digitar
+    const handler = setTimeout(() => {
+      onSearch(localTerm);
+    }, 500);
     return () => clearTimeout(handler);
-  }, [value, delay]);
-  return debouncedValue;
-}
+  }, [localTerm, onSearch]);
+
+  return (
+    <div className="input-group">
+      <Search className="input-icon" size={18} />
+      <input
+        type="text"
+        placeholder="Procurar produto..."
+        value={localTerm}
+        onChange={(e) => setLocalTerm(e.target.value)}
+      />
+      {localTerm && (
+        <button className="clear-btn" onClick={() => setLocalTerm('')}>
+          <X size={14}/>
+        </button>
+      )}
+    </div>
+  );
+};
 
 // --- COMPONENTE: SKELETON ---
 const TableSkeleton = () => (
@@ -112,6 +133,7 @@ const ProdutoList = () => {
 
   // Estados Principais
   const [produtos, setProdutos] = useState([]);
+  const [produtosPendentesDeRevisao, setProdutosPendentesDeRevisao] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingSaneamento, setLoadingSaneamento] = useState(false);
   const [loadingPrint, setLoadingPrint] = useState(null);
@@ -124,8 +146,9 @@ const ProdutoList = () => {
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+
+  // O termo final de pesquisa (após o utilizador parar de digitar)
   const [termoBusca, setTermoBusca] = useState('');
-  const debouncedSearch = useDebounce(termoBusca, 500);
 
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger', confirmText: 'Confirmar' });
 
@@ -133,9 +156,6 @@ const ProdutoList = () => {
   const getImageUrl = (url) => url ? (url.startsWith('blob:') || url.startsWith('http') ? url : `http://localhost:8080${url}`) : null;
   const marcasDisponiveis = useMemo(() => Array.from(new Set(produtos.map(p => p.marca).filter(Boolean))).sort(), [produtos]);
   const categoriasDisponiveis = useMemo(() => Array.from(new Set(produtos.map(p => p.categoria).filter(Boolean))).sort(), [produtos]);
-
-  // Contagem para o Alerta de Revisão
-  const produtosPendentesDeRevisao = useMemo(() => produtos.filter(p => p.revisaoPendente).length, [produtos]);
 
   // Busca na API
   const carregarProdutos = useCallback(async (pagina, termo) => {
@@ -152,7 +172,7 @@ const ProdutoList = () => {
         setTotalPages(1);
         setTotalElements(filtrados.length);
       } else {
-        const dados = await produtoService.listar(pagina, 1000, termo, filtros); // Ajustei o limite temporário para o Front fazer a contagem dos pendentes (O ideal era via backend)
+        const dados = await produtoService.listar(pagina, 50, termo, filtros);
         let listaProdutos = [];
 
         if (Array.isArray(dados)) {
@@ -166,6 +186,9 @@ const ProdutoList = () => {
         setProdutos(listaProdutos);
         setTotalPages(dados?.totalPages || dados?.totalPaginas || 1);
         setTotalElements(dados?.totalElements || dados?.totalElementos || listaProdutos.length);
+
+        const pendentes = await produtoService.contarPendentesRevisao();
+        setProdutosPendentesDeRevisao(pendentes);
       }
     } catch (error) {
         console.error("Erro ao carregar produtos:", error);
@@ -174,14 +197,13 @@ const ProdutoList = () => {
     finally { setLoading(false); }
   }, [modoLixeira, filtros]);
 
-  useEffect(() => { if (page !== 0) setPage(0); carregarProdutos(0, debouncedSearch); }, [debouncedSearch, filtros, modoLixeira]);
-  useEffect(() => { carregarProdutos(page, debouncedSearch); }, [page]);
+  useEffect(() => { if (page !== 0) setPage(0); carregarProdutos(0, termoBusca); }, [termoBusca, filtros, modoLixeira]);
+  useEffect(() => { carregarProdutos(page, termoBusca); }, [page]);
   useEffect(() => { setSelectedIds([]); }, [modoLixeira]);
 
   // Handlers de Interface
   const handleFiltroChange = (key, value) => setFiltros(prev => ({ ...prev, [key]: value }));
   const limparFiltros = () => setFiltros({ estoque: 'todos', marca: '', categoria: '', semImagem: false, semNcm: false, precoZerado: false, revisaoPendente: false });
-  const handleSearchChange = (e) => setTermoBusca(e.target.value);
   const handleSelectAll = (e) => e.target.checked ? setSelectedIds(produtos.map(p => p.id)) : setSelectedIds([]);
   const handleSelectOne = (id) => selectedIds.includes(id) ? setSelectedIds(selectedIds.filter(itemId => itemId !== id)) : setSelectedIds([...selectedIds, id]);
   const handleTriggerImport = () => { if (fileInputRef.current) fileInputRef.current.click(); };
@@ -222,7 +244,7 @@ const ProdutoList = () => {
         try {
           const res = await api.post('/produtos/corrigir-ncms-ia');
           toast.update(toastId, { render: `Sucesso! ${res.data.qtdCorrigidos || 0} NCMs corrigidos.`, type: "success", isLoading: false, autoClose: 5000 });
-          carregarProdutos(page, debouncedSearch);
+          carregarProdutos(page, termoBusca);
         } catch (e) { toast.update(toastId, { render: "Erro ao executar robô fiscal.", type: "error", isLoading: false, autoClose: 3000 }); }
       }
     });
@@ -233,7 +255,7 @@ const ProdutoList = () => {
       isOpen: true, type: 'warning', title: 'Recalcular Tributos', message: 'Recalcular regras fiscais de todo o estoque?', confirmText: 'Recalcular Agora',
       onConfirm: async () => {
         setLoadingSaneamento(true);
-        try { await produtoService.saneamentoFiscal(); toast.success("Tributos atualizados!"); carregarProdutos(page, debouncedSearch); }
+        try { await produtoService.saneamentoFiscal(); toast.success("Tributos atualizados!"); carregarProdutos(page, termoBusca); }
         catch (e) { toast.error("Falha no saneamento."); } finally { setLoadingSaneamento(false); }
       }
     });
@@ -267,7 +289,7 @@ const ProdutoList = () => {
             const prod = produtos.find(p => p.id === id);
             return isRestore ? produtoService.restaurar(prod.codigoBarras) : produtoService.excluir(prod.codigoBarras);
           }));
-          toast.success(`Operação realizada em lote.`); setSelectedIds([]); carregarProdutos(page, debouncedSearch);
+          toast.success(`Operação realizada em lote.`); setSelectedIds([]); carregarProdutos(page, termoBusca);
         } catch (e) { toast.error("Erro na operação em lote."); }
       }
     });
@@ -282,7 +304,7 @@ const ProdutoList = () => {
       onConfirm: async () => {
         try {
           if (isDelete) await produtoService.excluir(prod.codigoBarras); else await produtoService.restaurar(prod.codigoBarras);
-          toast.success("Sucesso na operação."); carregarProdutos(isDelete ? page : 0, debouncedSearch);
+          toast.success("Sucesso na operação."); carregarProdutos(isDelete ? page : 0, termoBusca);
         } catch (e) { toast.error("Falha ao atualizar produto."); }
       }
     });
@@ -316,8 +338,7 @@ const ProdutoList = () => {
       return <span className="status-badge active">Ativo</span>;
   };
 
-  // Filtragem Front-end para a flag (até o backend implementar o filtro de revisao_pendente)
-  const produtosExibidos = filtros.revisaoPendente ? produtos.filter(p => p.revisaoPendente) : produtos;
+  const produtosExibidos = produtos;
 
   return (
     <>
@@ -401,11 +422,10 @@ const ProdutoList = () => {
 
         <div className="content-card">
           <div className="card-toolbar">
-            <div className="input-group">
-              <Search className="input-icon" size={18} />
-              <input type="text" placeholder="Procurar produto..." value={termoBusca} onChange={handleSearchChange} />
-              {termoBusca && <button className="clear-btn" onClick={() => setTermoBusca('')}><X size={14}/></button>}
-            </div>
+
+            {/* 🔥 NOVO: Barra de pesquisa ultra-rápida, isolada do componente */}
+            <SearchBar onSearch={setTermoBusca} />
+
             <div className="toolbar-actions">
               <button className={`btn-filter ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(!showFilters)}>
                   <Filter size={16}/> Filtros
@@ -517,7 +537,7 @@ const ProdutoList = () => {
             </table>
           </div>
 
-          {!modoLixeira && totalPages > 1 && !filtros.revisaoPendente && (
+          {totalPages > 1 && (
             <div className="pagination-bar">
               <span className="info">Página <strong>{page + 1}</strong> de {totalPages}</span>
               <div className="controls">
