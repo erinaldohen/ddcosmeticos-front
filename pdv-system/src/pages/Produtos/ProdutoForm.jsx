@@ -38,7 +38,8 @@ const ProdutoForm = () => {
     impostoSeletivo: false, monofasico: false, urlImagem: '',
     precoCusto: '0,00', precoVenda: '0,00', precoMedio: '0,00', margemLucro: '', markup: '',
     quantidadeEmEstoque: 0, estoqueMinimo: 5, diasParaReposicao: 0, estoqueFiscal: 0, estoqueNaoFiscal: 0,
-    revisaoPendente: false // 🚩 Adicionado
+    lote: '', validade: '', // 🚩 Adicionados Lote e Validade
+    revisaoPendente: false
   });
 
   const parseMoeda = (v) => { if(!v) return 0; if(typeof v === 'number') return v; return parseFloat(v.toString().replace(/\./g, '').replace(',', '.')) || 0; };
@@ -78,6 +79,10 @@ const ProdutoForm = () => {
     try {
       const d = await produtoService.obterPorId(id);
       const custo = d.precoCusto || 0; const venda = d.precoVenda || 0;
+
+      // 🚩 Formatando a data do backend (YYYY-MM-DDTHH:mm:ss) para o input type="date" (YYYY-MM-DD)
+      const dataValidade = d.validade ? d.validade.substring(0, 10) : '';
+
       setFormData({
         ...d,
         ncm: d.ncm||'', cest: d.cest||'', cst: d.cst||'', origem: d.origem||'0',
@@ -86,12 +91,13 @@ const ProdutoForm = () => {
         urlImagem: d.urlImagem||'', unidade: d.unidade||'UN',
         impostoSeletivo: d.impostoSeletivo||false, monofasico: d.monofasico||false, ativo: d.ativo!==undefined?d.ativo:true,
         estoqueMinimo: d.estoqueMinimo!==null?d.estoqueMinimo:5, diasParaReposicao: d.diasParaReposicao!==null?d.diasParaReposicao:0,
+        lote: d.lote || '', validade: dataValidade,
         estoqueFiscal: d.estoqueFiscal||0, estoqueNaoFiscal: d.estoqueNaoFiscal||0,
         quantidadeEmEstoque: (d.estoqueFiscal||0)+(d.estoqueNaoFiscal||0),
         precoCusto: formatarMoeda(d.precoCusto), precoVenda: formatarMoeda(d.precoVenda), precoMedio: formatarMoeda(d.precoMedioPonderado),
         margemLucro: custo>0 && venda>0 ? (((venda-custo)/venda)*100).toFixed(2).replace('.',',') : '',
         markup: custo>0 && venda>0 ? (((venda-custo)/custo)*100).toFixed(2).replace('.',',') : '',
-        revisaoPendente: d.revisaoPendente || false // Puxa do backend
+        revisaoPendente: d.revisaoPendente || false
       });
       if(d.urlImagem) setPreviewImagem(d.urlImagem);
     } catch(e) { toast.error("Erro ao carregar produto."); navigate('/produtos'); } finally { setLoading(false); }
@@ -193,7 +199,6 @@ const ProdutoForm = () => {
     setSearchingEan(false);
   };
 
-  // --- FUNÇÃO DE ANÁLISE COM IA ---
   const handleAnaliseIA = async (descricaoParaAnalise = formData.descricao) => {
     if (!descricaoParaAnalise || descricaoParaAnalise.trim().length < 3) {
       toast.warning("Informe uma descrição válida para a IA analisar.");
@@ -253,11 +258,16 @@ const ProdutoForm = () => {
 
     setLoading(true);
     try {
+      // 🚩 Montando o payload com a formatação correta para a data
+      const dataValidade = formData.validade ? `${formData.validade}T00:00:00` : null;
+
       const p = {
         ...formData, precoCusto: parseMoeda(formData.precoCusto), precoVenda: parseMoeda(formData.precoVenda),
         diasParaReposicao: Number(formData.diasParaReposicao)||0, estoqueMinimo: Number(formData.estoqueMinimo)||0, origem: Number(formData.origem),
-        revisaoPendente: false // 🧹 LIMPEZA: Ao salvar no admin, o alerta some.
+        validade: dataValidade,
+        revisaoPendente: false
       };
+
       delete p.margemLucro; delete p.markup; delete p.estoqueFiscal; delete p.estoqueNaoFiscal; delete p.quantidadeEmEstoque;
       let res = isEditMode ? await produtoService.atualizar(id, p) : await produtoService.salvar(p);
       if(arquivoImagem && (res.id || id)) await produtoService.uploadImagem(res.id||id, arquivoImagem);
@@ -302,7 +312,6 @@ const ProdutoForm = () => {
               <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20}}>
                 <h2 className="section-title" style={{marginBottom:0}}><Package size={20} /> Informações Básicas</h2>
                 <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-                    {/* Botão de Análise de IA */}
                     <button type="button" className="btn-tool magic" style={{padding: '5px 10px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '5px', background: '#e0e7ff', color: '#4338ca', border: '1px solid #c7d2fe', fontWeight: 'bold'}} onClick={() => handleAnaliseIA()} disabled={analisandoIA} title="Analisar Categoria e NCM com IA">
                         {analisandoIA ? <div className="spinner-micro" /> : <Bot size={16} />}
                         Analisar com IA
@@ -482,9 +491,10 @@ const ProdutoForm = () => {
               </div>
             </section>
 
-            {/* SEÇÃO 4: ESTOQUE */}
+            {/* SEÇÃO 4: ESTOQUE (COM LOTE E VALIDADE) */}
             <section className="form-section">
               <h2 className="section-title"><Layers size={20} /> Controle de Estoque</h2>
+
               <div className="form-row" style={{backgroundColor:'#f8fafc', padding:16, borderRadius:8, border:'1px dashed #cbd5e1'}}>
                 <ProdInput label="Estoque Fiscal" value={formData.estoqueFiscal||0} disabled tooltip="Qtd. via XML." className="flex-1" />
                 <ProdInput label="Estoque S/ Nota" value={formData.estoqueNaoFiscal||0} disabled className="flex-1" />
@@ -495,10 +505,13 @@ const ProdutoForm = () => {
                   </div>
                 </div>
               </div>
+
               <div className="form-row" style={{marginTop:20}}>
                 <ProdInput label="Estoque Mínimo" name="estoqueMinimo" type="number" value={formData.estoqueMinimo} onChange={handleChange} className="flex-1" />
                 <ProdInput label="Dias Reposição" name="diasParaReposicao" type="number" value={formData.diasParaReposicao} onChange={handleChange} className="flex-1" />
-                <div className="flex-2"></div>
+                {/* 🚩 Campos Novos: Lote e Validade */}
+                <ProdInput label="Lote de Fabricação" name="lote" value={formData.lote} onChange={handleChange} className="flex-1" tooltip="Importante para controle da Anvisa." />
+                <ProdInput label="Data de Validade" name="validade" type="date" value={formData.validade} onChange={handleChange} className="flex-1" />
               </div>
             </section>
 
