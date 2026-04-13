@@ -1,6 +1,10 @@
 import api from './api';
+import axios from 'axios'; // Necessário para chamar a BrasilAPI diretamente
 
 const RESOURCE_URL = '/produtos';
+
+// 🔥 O Segredo da Velocidade: Cache em memória no Frontend para NCM
+const ncmCache = {};
 
 export const produtoService = {
 
@@ -23,7 +27,6 @@ export const produtoService = {
         if (filtros.semImagem) params.semImagem = true;
         if (filtros.semNcm) params.semNcm = true;
         if (filtros.precoZerado) params.precoZero = true;
-        // 🔥 CORREÇÃO: Agora passa o filtro de revisão pendente para o Backend!
         if (filtros.revisaoPendente) params.revisaoPendente = true;
       }
 
@@ -42,7 +45,6 @@ export const produtoService = {
     }
   },
 
-  // 🔥 NOVO: Busca a contagem rapidamente no Backend sem carregar os produtos
   contarPendentesRevisao: async () => {
     try {
       const response = await api.get(`${RESOURCE_URL}/alertas/pendentes-revisao`);
@@ -219,22 +221,40 @@ export const produtoService = {
     }
   },
 
+  // 🔥 ROTA DE NCM TURBINADA COM CACHE EM MEMÓRIA
   buscarNcms: async (termo) => {
-    try {
-      const isNumeric = !isNaN(termo);
-      const url = isNumeric
-        ? `https://brasilapi.com.br/api/ncm/v1?code=${termo}`
-        : `https://brasilapi.com.br/api/ncm/v1?search=${termo}`;
+      if (!termo || termo.length < 2) return [];
 
-      const response = await fetch(url);
-      if (response.ok) {
-        return await response.json();
+      const termoLimpo = termo.toLowerCase().trim();
+
+      // 1. Verifica se já pesquisou isto nesta sessão (Devolve em 0ms)
+      if (ncmCache[termoLimpo]) {
+          return ncmCache[termoLimpo];
       }
-      return [];
-    } catch (error) {
-      console.error("Erro ao buscar NCM:", error);
-      return [];
-    }
+
+      try {
+          // 2. Se não tem no cache, consulta a API pública mais rápida do Brasil
+          const response = await axios.get(`https://brasilapi.com.br/api/ncm/v1?search=${encodeURIComponent(termoLimpo)}`);
+
+          // Mapeia os dados e limita a 15 resultados
+          const resultados = response.data.slice(0, 15).map(item => ({
+              codigo: item.codigo,
+              descricao: item.descricao
+          }));
+
+          // 3. Guarda no Cache para a próxima vez
+          ncmCache[termoLimpo] = resultados;
+
+          return resultados;
+      } catch (error) {
+          // Se der erro 404 (Não Encontrado na BrasilAPI), devolvemos array vazio sem mostrar erro no console
+          if (error.response && error.response.status === 404) {
+              ncmCache[termoLimpo] = []; // Guarda no cache que este termo não existe para não repetir a chamada
+              return [];
+          }
+          console.error("Erro ao buscar sugestões de NCM na BrasilAPI:", error);
+          return [];
+      }
   },
 
   gerarEanInterno: async () => {

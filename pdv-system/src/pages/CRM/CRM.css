@@ -21,7 +21,7 @@ html, body {
     padding: 0;
     background-color: var(--bg-app);
     overflow-x: hidden;
-    width: 100vw;
+    width: 100%; /* 🔥 Correção: 100% em vez de 100vw para evitar conflito com a barra vertical */
     box-sizing: border-box;
 }
 
@@ -40,7 +40,9 @@ html, body {
     min-height: 100vh;
     font-family: 'Inter', sans-serif;
     color: var(--text-main);
+    width: 100%;
     max-width: 100%;
+    box-sizing: border-box; /* 🔥 Garante que o padding não estica a tela para os lados */
 }
 
 .animate-fade { animation: fadeIn 0.4s ease-out; }
@@ -88,6 +90,16 @@ html, body {
     opacity: 1; visibility: visible; transform: translateX(-50%) scale(1);
 }
 
+/* Proteção para as legendas dos botões encostados à direita na tabela */
+.quick-actions [data-tooltip]::before {
+    left: auto;
+    right: 0;
+    transform: translateX(0) scale(0.9);
+}
+.quick-actions [data-tooltip]:hover::before {
+    transform: translateX(0) scale(1);
+}
+
 /* =======================================================
    2. TOOLBAR E TABELA PREMIUM
    ======================================================= */
@@ -106,22 +118,24 @@ html, body {
 .crm-table { width: 100%; border-collapse: separate; border-spacing: 0; text-align: left; min-width: 1000px; }
 .crm-table th { position: sticky; top: 0; background: rgba(248, 250, 252, 0.95); padding: 16px 20px; font-size: 0.8rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; border-bottom: 2px solid var(--border-color); z-index: 10; backdrop-filter: blur(8px);}
 .crm-table td { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; font-size: 0.95rem; }
+.crm-table tr:last-child td { border-bottom: none; }
 .crm-table tr:hover td { background: #f8fafc; }
 .nowrap-text { white-space: nowrap !important; }
 
-.tier-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase;}
+.tier-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;}
 .tier-premium { background: #fffbeb; color: #b45309; border: 1px solid #fde047; }
 .tier-standard { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
 .tier-basic { background: #fdf2f8; color: #be185d; border: 1px solid #fbcfe8; }
 .tier-novo { background: #f0fdf4; color: #059669; border: 1px solid #a7f3d0; }
 
-.sefaz-alert { color: #dc2626; font-size: 0.8rem; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; background: #fef2f2; padding: 4px 8px; border-radius: 8px; border: 1px solid #fecaca;}
-.sefaz-ok { color: #059669; font-size: 0.8rem; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; background: #d1fae5; padding: 4px 8px; border-radius: 8px;}
+.sefaz-alert { color: #dc2626; font-size: 0.8rem; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; background: #fef2f2; padding: 6px 10px; border-radius: 8px; border: 1px solid #fecaca; cursor: help;}
+.sefaz-ok { color: #059669; font-size: 0.8rem; font-weight: 800; display: inline-flex; align-items: center; gap: 4px; background: #d1fae5; padding: 6px 10px; border-radius: 8px;}
 .badge-ie { padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700;}
 .badge-ie.isento { background: #f1f5f9; color: #64748b; }
 .badge-ie.ativo { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;}
 
-.engajamento-container { display: flex; flex-direction: column; gap: 6px; width: 100px; }
+.engajamento-container { display: flex; flex-direction: column; gap: 6px; width: 130px; }
+.engajamento-container strong { font-size: 0.95rem; }
 .progress-bg { width: 100%; height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden; }
 .progress-bar { height: 100%; border-radius: 3px; transition: width 0.8s ease-out; }
 
@@ -141,26 +155,35 @@ html, body {
    4. MODAL CRM GERAL (Correção Fiscal)
    ======================================================= */
 .crm-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 2000; padding: 20px; }
-.crm-modal-content { background: #ffffff; padding: 30px; border-radius: 20px; width: 100%; max-width: 700px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.2); }
-.crm-modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px;}
+.crm-modal-content { background: #ffffff; padding: 30px; border-radius: 24px; width: 100%; max-width: 700px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.2); }
+.crm-modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px;}
 .crm-modal-header h2 { font-size: 1.5rem; margin: 0 0 6px; color: #1e293b; font-weight: 800;}
 .crm-modal-header p { font-size: 0.95rem; margin: 0; color: #64748b; }
-.btn-close-modal { background: #f1f5f9; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; color: #64748b; transition: 0.2s; font-size: 1.2rem;}
+.btn-close-modal { background: #f1f5f9; border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; color: #64748b; transition: 0.2s; display: flex; justify-content: center; align-items: center; font-size: 1.2rem;}
 .btn-close-modal:hover { background: #fee2e2; color: #ef4444; transform: rotate(90deg); }
 
 .alert-box-sefaz { background: #fef2f2; border-left: 5px solid #ef4444; padding: 16px; border-radius: 10px; display: flex; gap: 16px; color: #991b1b; margin-top: 16px; margin-bottom: 16px; align-items: center;}
+.alert-box-sefaz p { margin: 6px 0 0; font-size: 0.9rem; font-weight: 500;}
+
 .form-section { background: #f8fafc; padding: 24px; border-radius: 16px; border: 1px solid #e2e8f0; margin-bottom: 20px;}
+.section-title { font-size: 1.05rem; color: #334155; margin: 0 0 16px 0; font-weight: 700; display: block; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;}
 .form-grid-crm { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
 .address-grid { grid-template-columns: 1fr 1fr 1fr; }
 .full-width { grid-column: span 2; }
 .address-grid .full-width { grid-column: span 3; }
 .form-group-crm label { display: block; font-size: 0.85rem; color: #475569; margin-bottom: 6px; font-weight: 700; }
-.form-group-crm input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; }
+.form-group-crm input { width: 100%; padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 0.95rem; transition: 0.2s; background: white; box-sizing: border-box;}
+.form-group-crm input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1); }
+
 .ie-section { border: 2px solid #f59e0b; background: #fffbeb; }
-.input-ie-master { border-color: #f59e0b !important; font-weight: bold; color: #b45309 !important;}
+.input-ie-master { border-color: #f59e0b !important; font-weight: bold; color: #b45309 !important; font-size: 1.1rem !important;}
+.ie-help-text { color: #d97706; font-size: 0.8rem; display: block; margin-top: 8px; font-weight: 500;}
+
 .crm-modal-footer { display: flex; justify-content: flex-end; gap: 12px; margin-top: 20px;}
-.btn-modal-cancel { background: #ffffff; border: 1px solid #cbd5e1; padding: 10px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; }
-.btn-modal-save { background: #0f172a; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 700; cursor: pointer; }
+.btn-modal-cancel { background: #ffffff; border: 1px solid #cbd5e1; color: #475569; padding: 12px 24px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: 0.2s;}
+.btn-modal-cancel:hover { background: #f1f5f9; color: #1e293b;}
+.btn-modal-save { background: #0f172a; color: white; border: none; padding: 12px 24px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: 0.2s;}
+.btn-modal-save:hover { background: #1e293b; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2);}
 
 /* =======================================================
    5. MODAL HISTÓRICO DE COMPRAS (LISTAGEM)

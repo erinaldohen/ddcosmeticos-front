@@ -4,9 +4,9 @@ import { produtoService } from '../../services/produtoService';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import {
-  Save, ArrowLeft, Package, Barcode, DollarSign,
+  Save, ArrowLeft, Package, DollarSign,
   Layers, Landmark, DownloadCloud, Upload, Image as ImageIcon,
-  Info, PlusCircle, Wand2, Sparkles, AlertCircle, Bot, AlertTriangle
+  Info, PlusCircle, Wand2, Sparkles, AlertCircle, Bot, AlertTriangle, Search
 } from 'lucide-react';
 import './ProdutoForm.css';
 
@@ -18,6 +18,7 @@ const ProdutoForm = () => {
   const eanInputRef = useRef(null);
   const skuInputRef = useRef(null);
   const formRef = useRef(null);
+  const ncmRef = useRef(null);
   const typingTimer = useRef(null);
 
   const [loading, setLoading] = useState(false);
@@ -28,8 +29,8 @@ const ProdutoForm = () => {
   const [previewImagem, setPreviewImagem] = useState(null);
   const [sugestoesNcm, setSugestoesNcm] = useState([]);
   const [buscandoNcm, setBuscandoNcm] = useState(false);
+  const [descricaoNcmSelecionado, setDescricaoNcmSelecionado] = useState(''); // 🔥 Estado para a Descrição do NCM
 
-  // ESTADO DE ERROS
   const [errors, setErrors] = useState({});
 
   const [formData, setFormData] = useState({
@@ -38,7 +39,7 @@ const ProdutoForm = () => {
     impostoSeletivo: false, monofasico: false, urlImagem: '',
     precoCusto: '0,00', precoVenda: '0,00', precoMedio: '0,00', margemLucro: '', markup: '',
     quantidadeEmEstoque: 0, estoqueMinimo: 5, diasParaReposicao: 0, estoqueFiscal: 0, estoqueNaoFiscal: 0,
-    lote: '', validade: '', // 🚩 Adicionados Lote e Validade
+    lote: '', validade: '',
     revisaoPendente: false
   });
 
@@ -55,13 +56,23 @@ const ProdutoForm = () => {
   useEffect(() => { if(!isEditMode && eanInputRef.current) eanInputRef.current.focus(); }, [isEditMode]);
   useEffect(() => { if(isEditMode) carregarProduto(); }, [id]);
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+        if (ncmRef.current && !ncmRef.current.contains(event.target)) {
+            setSugestoesNcm([]);
+        }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [ncmRef]);
+
   const validateField = (name, value) => {
     let errorMsg = '';
     switch (name) {
-      case 'descricao': if (!value || value.trim().length < 3) errorMsg = 'Descrição é obrigatória (mín. 3 letras).'; break;
-      case 'precoVenda': if (parseMoeda(value) <= 0) errorMsg = 'Preço de venda deve ser maior que zero.'; break;
-      case 'ncm': if (!value || value.length < 2) errorMsg = 'NCM Obrigatório.'; break;
-      case 'cst': if (!value) errorMsg = 'CST Obrigatório.'; break;
+      case 'descricao': if (!value || value.trim().length < 3) errorMsg = 'Mínimo de 3 letras.'; break;
+      case 'precoVenda': if (parseMoeda(value) <= 0) errorMsg = 'Maior que zero.'; break;
+      case 'ncm': if (!value || value.length < 2) errorMsg = 'Obrigatório.'; break;
+      case 'cst': if (!value) errorMsg = 'Obrigatório.'; break;
       default: break;
     }
     setErrors(prev => ({ ...prev, [name]: errorMsg }));
@@ -80,8 +91,13 @@ const ProdutoForm = () => {
       const d = await produtoService.obterPorId(id);
       const custo = d.precoCusto || 0; const venda = d.precoVenda || 0;
 
-      // 🚩 Formatando a data do backend (YYYY-MM-DDTHH:mm:ss) para o input type="date" (YYYY-MM-DD)
-      const dataValidade = d.validade ? d.validade.substring(0, 10) : '';
+      let dataValidade = '';
+      if (d.validade) {
+          const dateObj = new Date(d.validade);
+          if (!isNaN(dateObj.getTime()) && dateObj.getFullYear() > 1970) {
+              dataValidade = dateObj.toISOString().split('T')[0];
+          }
+      }
 
       setFormData({
         ...d,
@@ -133,32 +149,77 @@ const ProdutoForm = () => {
     });
   };
 
-  const handleNcmChange = (e) => {
-    const v = e.target.value; setFormData(prev => ({...prev, ncm: v}));
-    if (v.length >= 2) setErrors(prev => ({...prev, ncm: ''}));
-    if(typingTimer.current) clearTimeout(typingTimer.current);
-    if(v.length >= 2) {
-      setBuscandoNcm(true);
-      typingTimer.current = setTimeout(async () => {
-        try { const res = await produtoService.buscarNcms(v); if(Array.isArray(res)) setSugestoesNcm(res.slice(0,10)); }
-        catch(e) { console.error(e); } finally { setBuscandoNcm(false); }
-      }, 400);
-    } else setSugestoesNcm([]);
-  };
+    const triggerNcmSearch = async (termoBusca) => {
+        if (!termoBusca || termoBusca.trim().length < 2) {
+            setSugestoesNcm([]);
+            return;
+        }
+
+        setBuscandoNcm(true);
+        try {
+            const res = await produtoService.buscarNcms(termoBusca);
+            if (Array.isArray(res) && res.length > 0) {
+                setSugestoesNcm(res);
+            } else {
+                setSugestoesNcm([]);
+            }
+        } catch (e) {
+            console.error("Falha na busca inteligente:", e);
+        } finally {
+            setBuscandoNcm(false);
+        }
+    };
+
+    const handleNcmChange = (e) => {
+      const v = e.target.value;
+      setFormData(prev => ({...prev, ncm: v}));
+      setDescricaoNcmSelecionado(''); // Limpa a descrição ao editar
+
+      if (v.length >= 2) setErrors(prev => ({...prev, ncm: ''}));
+
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+
+      if (v.length >= 2) {
+          typingTimer.current = setTimeout(() => triggerNcmSearch(v), 300);
+      } else {
+          setSugestoesNcm([]);
+      }
+    };
 
   const handleValidacaoFiscal = async () => {
-    if(!formData.descricao) return; setValidandoFiscal(true);
-    try {
-      const res = await api.post('/fiscal/validar', { descricao: formData.descricao, ncm: formData.ncm });
-      const d = res.data;
-      setFormData(prev => ({ ...prev, ncm: d.ncm||prev.ncm, cest: d.cest||prev.cest, cst: d.cst||prev.cst, monofasico: d.monofasico, impostoSeletivo: d.impostoSeletivo }));
-      if(d.ncm && d.ncm !== formData.ncm) toast.success("Dados Fiscais Ajustados! 🤖");
-    } catch(e) {} finally { setValidandoFiscal(false); }
-  };
+      if(!formData.descricao || !formData.ncm || formData.ncm.length < 8) return;
+
+      setValidandoFiscal(true);
+      try {
+        const res = await api.post('/fiscal/validar', { descricao: formData.descricao, ncm: formData.ncm });
+        const d = res.data;
+
+        setFormData(prev => ({
+            ...prev,
+            ncm: d.ncm || prev.ncm,
+            cest: d.cest || prev.cest,
+            cst: d.cst || prev.cst,
+            monofasico: d.monofasico,
+            impostoSeletivo: d.impostoSeletivo
+        }));
+
+        // Só avisa "Ajustado" se o Backend realmente alterou o NCM ou o CST
+        if((d.ncm && d.ncm !== formData.ncm) || (d.cst && d.cst !== formData.cst)) {
+            toast.success("Dados Fiscais Ajustados pela IA Tributária! 🤖");
+        }
+
+      } catch(e) {
+          console.warn("Validação fiscal ignorada (Backend indisponível ou erro 404).");
+      } finally {
+          setValidandoFiscal(false);
+      }
+    };
 
   const selecionarNcm = (item) => {
     setFormData(prev => ({...prev, ncm: item.codigo}));
-    setSugestoesNcm([]); setErrors(prev => ({...prev, ncm: ''}));
+    setDescricaoNcmSelecionado(item.descricao); // Guarda a descrição na tela
+    setSugestoesNcm([]);
+    setErrors(prev => ({...prev, ncm: ''}));
     setTimeout(handleValidacaoFiscal, 100);
   };
 
@@ -170,29 +231,30 @@ const ProdutoForm = () => {
       setFormData(prev => ({...prev, codigoBarras: val}));
       if(val) { toast.info(`Gerado: ${val}`); setTimeout(() => skuInputRef.current?.focus(), 100); }
       else toast.warning("Código vazio.");
-    } catch(e) { console.error(e); toast.error("Erro ao gerar EAN."); }
+    } catch(e) { toast.error("Erro ao gerar EAN."); }
   };
 
   const handleBuscarEan = async () => {
-    const ean = formData.codigoBarras; if(!ean || ean.length < 3) { toast.warning("Muito curto."); return; }
+    const ean = formData.codigoBarras; if(!ean || ean.length < 3) { toast.warning("Código muito curto."); return; }
     setSearchingEan(true); let local = false;
     try {
       const res = await api.get(`/produtos?termo=${ean}&size=1`);
       if(res.data.content?.length > 0 && res.data.content[0].codigoBarras === ean) {
         local = true;
-        if(isEditMode && String(res.data.content[0].id) === String(id)) toast.info("Mesmo produto.");
-        else { toast.error("Já cadastrado!"); setFormData(prev => ({...prev, codigoBarras: ''})); }
+        if(isEditMode && String(res.data.content[0].id) === String(id)) toast.info("Já está a editar este produto.");
+        else { toast.error("Produto já cadastrado no sistema!"); setFormData(prev => ({...prev, codigoBarras: ''})); }
       }
     } catch(e) {}
+
     if(!local) {
       try {
         const dExt = await produtoService.consultarEan(ean);
         if(dExt && (dExt.nome || dExt.descricao)) {
           setFormData(prev => ({...prev, descricao: dExt.nome||dExt.descricao||prev.descricao, urlImagem: dExt.urlImagem||prev.urlImagem, marca: dExt.marca||prev.marca, ncm: dExt.ncm||prev.ncm}));
           if(dExt.urlImagem) setPreviewImagem(dExt.urlImagem);
-          toast.success("Encontrado!");
-          handleAnaliseIA(dExt.nome || dExt.descricao); // Chama a IA se encontrar fora
-        } else toast.info("Novo código.");
+          toast.success("Encontrado na base nacional!");
+          handleAnaliseIA(dExt.nome || dExt.descricao);
+        } else toast.info("Novo código. Preencha os dados manualmente.");
       } catch(e) { toast.info("Novo cadastro."); }
       setTimeout(() => skuInputRef.current?.focus(), 100);
     }
@@ -200,39 +262,17 @@ const ProdutoForm = () => {
   };
 
   const handleAnaliseIA = async (descricaoParaAnalise = formData.descricao) => {
-    if (!descricaoParaAnalise || descricaoParaAnalise.trim().length < 3) {
-      toast.warning("Informe uma descrição válida para a IA analisar.");
-      return;
-    }
-
+    if (!descricaoParaAnalise || descricaoParaAnalise.trim().length < 3) { toast.warning("Informe a descrição primeiro."); return; }
     setAnalisandoIA(true);
     try {
-      const payload = {
-        descricao: descricaoParaAnalise,
-        codigoBarras: formData.codigoBarras,
-        marca: formData.marca
-      };
-
-      const res = await api.post('/produtos/analisar-ia', payload);
+      const res = await api.post('/produtos/analisar-ia', { descricao: descricaoParaAnalise, codigoBarras: formData.codigoBarras, marca: formData.marca });
       const iaData = res.data;
-
       if (iaData) {
-        setFormData(prev => ({
-          ...prev,
-          categoria: iaData.categoria || prev.categoria,
-          subcategoria: iaData.subcategoria || prev.subcategoria,
-          ncm: iaData.ncm || prev.ncm,
-          marca: iaData.marca || prev.marca
-        }));
-        toast.success("Análise de IA concluída com sucesso! ✨");
-        if(iaData.ncm) handleValidacaoFiscal(); // Valida o NCM encontrado
+        setFormData(prev => ({ ...prev, categoria: iaData.categoria || prev.categoria, subcategoria: iaData.subcategoria || prev.subcategoria, ncm: iaData.ncm || prev.ncm, marca: iaData.marca || prev.marca }));
+        toast.success("Análise de IA concluída! ✨");
+        if(iaData.ncm) handleValidacaoFiscal();
       }
-    } catch (e) {
-      toast.error("Erro ao analisar produto com IA.");
-      console.error(e);
-    } finally {
-      setAnalisandoIA(false);
-    }
+    } catch (e) { toast.error("Erro ao analisar com IA."); } finally { setAnalisandoIA(false); }
   };
 
   const handleChange = (e) => {
@@ -249,16 +289,11 @@ const ProdutoForm = () => {
     const isValidNcm = validateField('ncm', formData.ncm);
     const isValidCst = validateField('cst', formData.cst);
 
-    if (!isValidDesc || !isValidPreco || !isValidNcm || !isValidCst) {
-        toast.error("Corrija os campos em vermelho.");
-        return;
-    }
-
+    if (!isValidDesc || !isValidPreco || !isValidNcm || !isValidCst) { toast.error("Corrija os campos obrigatórios em vermelho."); return; }
     if(formRef.current && !formRef.current.checkValidity()) { formRef.current.reportValidity(); return; }
 
     setLoading(true);
     try {
-      // 🚩 Montando o payload com a formatação correta para a data
       const dataValidade = formData.validade ? `${formData.validade}T00:00:00` : null;
 
       const p = {
@@ -271,22 +306,20 @@ const ProdutoForm = () => {
       delete p.margemLucro; delete p.markup; delete p.estoqueFiscal; delete p.estoqueNaoFiscal; delete p.quantidadeEmEstoque;
       let res = isEditMode ? await produtoService.atualizar(id, p) : await produtoService.salvar(p);
       if(arquivoImagem && (res.id || id)) await produtoService.uploadImagem(res.id||id, arquivoImagem);
-      toast.success("Salvo com sucesso!");
+      toast.success("Produto gravado com sucesso!");
       if(stay) window.location.reload(); else navigate('/produtos');
     } catch(e) {
-      let msg = "Erro desconhecido.";
-      if(e.response?.data?.message) msg = e.response.data.message;
-      else if(e.response?.status === 404) msg = "Verifique NCM ou Categoria.";
+      let msg = e.response?.data?.message || "Erro ao gravar produto.";
       toast.error(msg);
     } finally { setLoading(false); }
   };
 
   return (
-    <main className="container-fluid">
+    <main className="container-fluid animate-fade">
       <header className="page-header">
         <div className="page-title">
           <h1>{isEditMode ? 'Editar Produto' : 'Novo Produto'}</h1>
-          <p>Cadastro seguro com validação inteligente</p>
+          <p>Gestão e auditoria fiscal de stock</p>
         </div>
         <div className="header-actions">
           <button className="btn-secondary" onClick={() => navigate('/produtos')}><ArrowLeft size={18} /> Voltar</button>
@@ -294,230 +327,223 @@ const ProdutoForm = () => {
       </header>
 
       <div className="form-container">
-        {/* 🚨 AVISO DE REVISÃO NO TOPO DO FORMULÁRIO */}
         {formData.revisaoPendente && isEditMode && (
-            <div className="fade-in" style={{ background: '#fffbeb', border: '1px solid #fcd34d', padding: '12px 16px', borderRadius: '8px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', color: '#b45309' }}>
-                <AlertTriangle size={20} />
-                <span><strong>Atenção:</strong> Este produto foi criado no caixa. Por favor, preencha o <strong>Preço de Custo</strong>, verifique o <strong>NCM</strong> e salve para concluir o cadastro.</span>
+            <div className="alert-ribbon-warning">
+                <AlertTriangle size={24} />
+                <div className="alert-text">
+                    <strong>Revisão Pendente!</strong>
+                    <span>Este produto foi cadastrado rapidamente no caixa. Preencha o <b>Preço de Custo</b>, valide o <b>NCM</b> e salve.</span>
+                </div>
             </div>
         )}
 
         {loading && isEditMode && !formData.descricao ? (
-          <div className="loading-screen"><div className="spinner"></div> Carregando...</div>
+          <div className="loading-state"><div className="spinner"></div><p>A carregar registo...</p></div>
         ) : (
-          <form ref={formRef} onSubmit={(e) => e.preventDefault()}>
+          <form ref={formRef} onSubmit={(e) => e.preventDefault()} className="pf-form-body">
 
-            {/* SEÇÃO 1: INFORMAÇÕES BÁSICAS */}
-            <section className="form-section">
-              <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20}}>
-                <h2 className="section-title" style={{marginBottom:0}}><Package size={20} /> Informações Básicas</h2>
-                <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
-                    <button type="button" className="btn-tool magic" style={{padding: '5px 10px', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '5px', background: '#e0e7ff', color: '#4338ca', border: '1px solid #c7d2fe', fontWeight: 'bold'}} onClick={() => handleAnaliseIA()} disabled={analisandoIA} title="Analisar Categoria e NCM com IA">
-                        {analisandoIA ? <div className="spinner-micro" /> : <Bot size={16} />}
-                        Analisar com IA
-                    </button>
-                    <div className="mandatory-legend"><span className="mandatory-star">*</span> Obrigatório</div>
-                </div>
-              </div>
+            {/* SEÇÃO 1: BÁSICOS & IMAGEM */}
+                        <section className="form-section">
+                          <div className="section-header-row">
+                            <h2 className="section-title"><Package size={22} /> Identificação e Classificação</h2>
+                            <button type="button" className="btn-ia-analyze" onClick={() => handleAnaliseIA()} disabled={analisandoIA} title="A IA analisa a descrição e sugere a Categoria e o NCM correto.">
+                                {analisandoIA ? <div className="spinner-micro" /> : <Bot size={18} />}
+                                <span className="hide-mobile">Analisar NCM/Cat. via IA</span>
+                            </button>
+                          </div>
 
-              <div className="form-row">
-                <ProdInput
-                  label="Descrição Completa *"
-                  name="descricao"
-                  value={formData.descricao}
-                  onChange={handleChange}
-                  onBlur={handleBlurValidation}
-                  error={errors.descricao}
-                  required
-                />
-              </div>
+                          <div className="pf-layout-grid">
+                            <div className="pf-layout-inputs">
+                              <ProdInput
+                                label="Descrição Completa *"
+                                name="descricao"
+                                value={formData.descricao}
+                                onChange={handleChange}
+                                onBlur={handleBlurValidation}
+                                error={errors.descricao}
+                                required
+                                tooltip="Nome visível para o cliente no PDV e na Nota Fiscal."
+                              />
 
-              <div style={{display:'flex', gap:30, flexWrap:'wrap', alignItems:'flex-start'}}>
-                <div style={{flex:2}}>
-                  <div className="form-row">
-                    <div className="form-group flex-1">
-                      <div className="floating-group input-action-group">
-                        <input
-                          id="codigoBarras"
-                          ref={eanInputRef}
-                          type="text"
-                          name="codigoBarras"
-                          className="ff-input-floating"
-                          value={formData.codigoBarras}
-                          onChange={handleChange}
-                          placeholder=" "
-                          onKeyDown={(e)=>e.key==='Enter'&&handleBuscarEan()}
-                        />
-                        <label className="ff-label-floating">EAN / Código</label>
-                        <div className="input-tools">
-                          <button type="button" className="btn-tool magic" onClick={handleGerarEanInterno} data-tip="Gerar Sequencial">
-                            <Wand2 size={18} />
-                          </button>
-                          <button type="button" className="btn-tool cloud" onClick={handleBuscarEan} data-tip="Consultar na Nuvem">
-                            {searchingEan ? <div className="spinner-micro" /> : <DownloadCloud size={18} />}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                              <div className="pf-row-fluid">
+                                <div className="form-group-modern input-action-group">
+                                    <div className="label-row">
+                                        <label>EAN / Código de Barras</label>
+                                        <span className="tooltip-wrapper" data-tooltip="Código de barras oficial do produto (GTIN/EAN).">
+                                            <Info size={14} className="info-icon" />
+                                        </span>
+                                    </div>
+                                    <div className="input-action-wrapper">
+                                        <input ref={eanInputRef} type="text" name="codigoBarras" className="pf-input" value={formData.codigoBarras} onChange={handleChange} placeholder="Bipe ou digite..." onKeyDown={(e)=>e.key==='Enter'&&handleBuscarEan()} />
+                                        <div className="input-tools">
+                                            <button type="button" className="btn-tool magic" onClick={handleGerarEanInterno} title="Gerar Código Interno Automático"><Wand2 size={16} /></button>
+                                            <button type="button" className="btn-tool cloud" onClick={handleBuscarEan} title="Buscar cadastro na Nuvem (Base Nacional)">
+                                                {searchingEan ? <div className="spinner-micro" /> : <DownloadCloud size={16} />}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <ProdInput
+                                    label="Referência / SKU Interno"
+                                    name="referencia"
+                                    value={formData.referencia}
+                                    onChange={handleChange}
+                                    ref={skuInputRef}
+                                    tooltip="Código rápido exclusivo da sua loja."
+                                />
+                              </div>
 
-                    <ProdInput label="Referência / SKU" name="referencia" value={formData.referencia} onChange={handleChange} ref={skuInputRef} tooltip="Código interno rápido." className="flex-1" />
-                  </div>
+                              <div className="pf-row-fluid">
+                                <ProdInput label="Marca" name="marca" value={formData.marca} onChange={handleChange} />
+                                <ProdInput label="Categoria" name="categoria" value={formData.categoria} onChange={handleChange} tooltip="Ex: Perfumaria, Cabelos, Maquiagem." />
+                              </div>
 
-                  <div className="form-row">
-                    <ProdInput label="Marca" name="marca" value={formData.marca} onChange={handleChange} className="flex-1" />
-                    <ProdInput label="Categoria" name="categoria" value={formData.categoria} onChange={handleChange} className="flex-1" />
-                  </div>
+                              <div className="pf-row-fluid">
+                                <ProdInput label="Subcategoria" name="subcategoria" value={formData.subcategoria} onChange={handleChange} tooltip="Ex: Shampoo, Condicionador, Batom." />
+                                <div className="form-group-modern">
+                                    <div className="label-row">
+                                        <label>Unidade de Medida</label>
+                                        <span className="tooltip-wrapper" data-tooltip="Como o produto é vendido. Afeta a emissão fiscal.">
+                                            <Info size={14} className="info-icon" />
+                                        </span>
+                                    </div>
+                                    <select name="unidade" value={formData.unidade} onChange={handleChange} className="pf-input">
+                                        <option value="UN">Unidade (UN)</option>
+                                        <option value="KG">Quilograma (KG)</option>
+                                        <option value="LT">Litro (LT)</option>
+                                        <option value="CX">Caixa (CX)</option>
+                                        <option value="KIT">Kit (KIT)</option>
+                                    </select>
+                                </div>
+                              </div>
+                            </div>
 
-                  <div className="form-row">
-                    <div className="form-group flex-small">
-                      <div className="floating-group">
-                        <select name="unidade" className="ff-input-floating" value={formData.unidade} onChange={handleChange}>
-                          <option value="UN">UN</option><option value="KG">KG</option><option value="LT">LT</option><option value="CX">CX</option><option value="KIT">KIT</option>
-                        </select>
-                        <label className="ff-label-floating">Unidade</label>
-                      </div>
-                    </div>
-                    <ProdInput label="Subcategoria" name="subcategoria" value={formData.subcategoria} onChange={handleChange} className="flex-1" />
-                  </div>
-                </div>
-
-                <figure className="image-upload-area" style={{flex:1, minWidth:220, margin:0}}>
-                  <div className="image-preview-box">
-                    {previewImagem ? <img src={getImageUrl(previewImagem)} alt="Preview" style={{width:'100%', height:'100%', objectFit:'contain'}} /> : <ImageIcon size={40} color="#ccc" />}
-                  </div>
-                  <label htmlFor="file-upload" className="btn-upload"><Upload size={16} /> Alterar Imagem</label>
-                  <input id="file-upload" type="file" accept="image/*" onChange={handleFileChange} style={{display:'none'}} />
-                  <ProdInput label="URL Externa" name="urlImagem" value={formData.urlImagem} onChange={(e)=>{handleChange(e);setPreviewImagem(e.target.value)}} style={{marginTop:10, marginBottom:0}} />
-                </figure>
-              </div>
-            </section>
+                            <div className="pf-layout-image">
+                              <div className="image-upload-area">
+                                <div className="image-preview-box">
+                                  {previewImagem ? <img src={getImageUrl(previewImagem)} alt="Preview" /> : <ImageIcon size={48} color="#cbd5e1" />}
+                                </div>
+                                <label htmlFor="file-upload" className="btn-upload-img"><Upload size={16} /> Enviar Imagem</label>
+                                <input id="file-upload" type="file" accept="image/*" onChange={handleFileChange} style={{display:'none'}} />
+                                <ProdInput
+                                    label="Ou URL Externa:"
+                                    name="urlImagem"
+                                    value={formData.urlImagem}
+                                    onChange={(e)=>{handleChange(e);setPreviewImagem(e.target.value)}}
+                                    tooltip="Cole um link direto para a imagem na internet."
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </section>
 
             {/* SEÇÃO 2: FISCAL */}
-            <section className="form-section" style={{borderLeft:'4px solid #f22998'}}>
-              <h2 className="section-title"><Landmark size={20} /> Dados Fiscais {validandoFiscal && <span style={{fontSize:'0.8rem', color:'#f22998', marginLeft:10}}><Sparkles size={14} style={{display:'inline'}}/> Otimizando...</span>}</h2>
-              <div className="form-row">
-                <div className="form-group flex-1" style={{position:'relative'}}>
-                  <ProdInput
-                    label="NCM *"
-                    name="ncm"
-                    value={formData.ncm}
-                    onChange={handleNcmChange}
-                    onBlur={handleBlurValidation}
-                    error={errors.ncm}
-                    required
-                    tooltip="Classificação Fiscal."
-                  />
-                  {(buscandoNcm||validandoFiscal) && <div className="spinner-mini" style={{top:18}}/>}
-                  {sugestoesNcm.length>0 && <div className="ncm-dropdown">{sugestoesNcm.map((i,x)=><div key={x} className="ncm-suggestion-item" onClick={()=>selecionarNcm(i)}><span>{i.codigo}</span><span>{i.descricao}</span></div>)}</div>}
-                </div>
-                <div className="form-group flex-1">
-                  <div className="floating-group">
-                    <select name="origem" className="ff-input-floating" value={formData.origem} onChange={handleChange}>
-                      <option value="0">0 - Nacional</option><option value="1">1 - Imp. Direta</option><option value="2">2 - Estrang. (Merc. Int)</option>
-                    </select>
-                    <label className="ff-label-floating">Origem</label>
-                  </div>
-                </div>
-                <ProdInput
-                  label="CST / CSOSN *"
-                  name="cst"
-                  value={formData.cst}
-                  onChange={handleChange}
-                  onBlur={handleBlurValidation}
-                  error={errors.cst}
-                  required
-                  className="flex-1"
-                />
-              </div>
+            <section className="form-section highlight-fiscal">
+              <h2 className="section-title text-fiscal"><Landmark size={22} /> Matriz Tributária e Fiscal {validandoFiscal && <span className="validando-badge"><Sparkles size={14}/> Validando Sefaz...</span>}</h2><br />
 
-              <div className="form-row">
-                <div className="form-group flex-2">
-                  <div className="floating-group">
-                    <select name="classificacaoReforma" className="ff-input-floating" value={formData.classificacaoReforma} onChange={handleChange}>
-                      <option value="PADRAO">Padrão</option><option value="CESTA_BASICA">Cesta Básica (0%)</option><option value="REDUZIDA_60">Reduzida 60%</option><option value="REDUZIDA_30">Reduzida 30%</option><option value="IMUNE">Imune</option>
-                    </select>
-                    <label className="ff-label-floating">Reforma Tributária (LC 214)</label>
-                  </div>
-                </div>
-                <ProdInput label="CEST" name="cest" value={formData.cest} onChange={handleChange} className="flex-1" />
-              </div>
+              <div className="pf-layout-inputs">
+                  <div className="pf-row-fluid">
 
-              <div className="form-row" style={{backgroundColor:'#fff1f2', padding:15, borderRadius:8, border:'1px solid #fecaca'}}>
-                <div className="checkbox-group"><label className="checkbox-label" style={{color:'#991b1b', fontWeight:700}}><input type="checkbox" name="impostoSeletivo" checked={formData.impostoSeletivo} onChange={handleChange}/> Imposto Seletivo</label></div>
-                <div className="checkbox-group" style={{marginLeft:20}}><label className="checkbox-label"><input type="checkbox" name="monofasico" checked={formData.monofasico} onChange={handleChange}/> Monofásico</label></div>
-                <div className="checkbox-group" style={{marginLeft:20}}><label className="checkbox-label"><input type="checkbox" name="ativo" checked={formData.ativo} onChange={handleChange}/> Ativo</label></div>
+                    <div className="form-group-modern input-action-group" ref={ncmRef}>
+                        <div className="label-row"><label>NCM *</label><Info size={14} className="info-icon" title="Nomenclatura Comum do Mercosul" /></div>
+                        <div className="input-action-wrapper">
+                            <input
+                                type="text" name="ncm"
+                                className={`pf-input ${errors.ncm ? 'pf-input-error' : ''}`}
+                                value={formData.ncm} onChange={handleNcmChange} onBlur={handleBlurValidation}
+                                placeholder="Digite número ou nome..." autoComplete="off"
+                            />
+                            <div className="input-tools">
+                                <button type="button" className="btn-tool cloud" onClick={() => triggerNcmSearch(formData.ncm)} title="Pesquisar NCM">
+                                    {buscandoNcm ? <div className="spinner-micro" /> : <Search size={16} />}
+                                </button>
+                            </div>
+                        </div>
+
+                        {errors.ncm ? (
+                            <span className="pf-error-msg"><AlertCircle size={12}/> {errors.ncm}</span>
+                        ) : descricaoNcmSelecionado ? (
+                            <span style={{fontSize: '0.75rem', color: '#059669', fontWeight: '700', marginTop: '4px', display: 'block', lineHeight: '1.2'}}>
+                                ✓ {descricaoNcmSelecionado}
+                            </span>
+                        ) : null}
+
+                        {sugestoesNcm.length > 0 && (
+                            <div className="ncm-dropdown">
+                                {sugestoesNcm.map((i,x)=>(
+                                    <div key={x} className="ncm-suggestion-item" onClick={()=>selecionarNcm(i)}>
+                                        <strong>{i.codigo}</strong><span>{i.descricao}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="form-group-modern">
+                        <div className="label-row"><label>Origem da Mercadoria</label></div>
+                        <select name="origem" value={formData.origem} onChange={handleChange} className="pf-input">
+                          <option value="0">0 - Nacional</option><option value="1">1 - Estrangeira (Imp. Direta)</option><option value="2">2 - Estrangeira (Mercado Interno)</option>
+                        </select>
+                    </div>
+
+                    <ProdInput label="CST / CSOSN *" name="cst" value={formData.cst} onChange={handleChange} onBlur={handleBlurValidation} error={errors.cst} required />
+                  </div>
+
+                  <div className="pf-row-fluid">
+                    <div className="form-group-modern">
+                        <div className="label-row"><label>Reforma Tributária (LC 214)</label></div>
+                        <select name="classificacaoReforma" value={formData.classificacaoReforma} onChange={handleChange} className="pf-input border-warning">
+                          <option value="PADRAO">Padrão</option><option value="CESTA_BASICA">Cesta Básica (0%)</option><option value="REDUZIDA_60">Reduzida 60%</option><option value="REDUZIDA_30">Reduzida 30%</option><option value="IMUNE">Imune</option>
+                        </select>
+                    </div>
+                    <ProdInput label="CEST (Subst. Tributária)" name="cest" value={formData.cest} onChange={handleChange} />
+                  </div>
+
+                  <div className="pf-checkbox-row">
+                    <label className="custom-checkbox danger"><input type="checkbox" name="impostoSeletivo" checked={formData.impostoSeletivo} onChange={handleChange}/> <span>Sujeito a Imposto Seletivo</span></label>
+                    <label className="custom-checkbox"><input type="checkbox" name="monofasico" checked={formData.monofasico} onChange={handleChange}/> <span>Tributação Monofásica</span></label>
+                    <label className="custom-checkbox success"><input type="checkbox" name="ativo" checked={formData.ativo} onChange={handleChange}/> <span><strong>Ativo no Sistema</strong></span></label>
+                  </div>
               </div>
             </section>
 
             {/* SEÇÃO 3: PRECIFICAÇÃO */}
             <section className="form-section">
-              <h2 className="section-title"><DollarSign size={20} /> Precificação Inteligente</h2>
+              <h2 className="section-title"><DollarSign size={22} /> Formação de Preço</h2><br />
 
-              <div className="form-row" style={{alignItems:'flex-start'}}>
-                <div className="form-group flex-1">
-                  <div className="floating-group group-money">
-                    <input type="text" className="ff-input-floating" value={formData.precoCusto} onChange={handlePrecoCustoChange} placeholder=" " />
-                    <span className="prefix">R$</span>
-                    <label className="ff-label-floating">Preço Custo</label>
+              <div className="pf-layout-inputs">
+                  <div className="pf-row-fluid">
+                    <ProdInput label="Custo Bruto" value={formData.precoCusto} onChange={handlePrecoCustoChange} className="text-bold" prefix="R$" tooltip="Valor base pago ao fornecedor." />
+                    <ProdInput label="Markup" value={formData.markup} onChange={handleMarkupChange} className="text-success text-bold" suffix="%" tooltip="Cálculo: (Venda - Custo) / Custo. Digite para sugerir o Preço Final." />
+                    <ProdInput label="Preço Final *" name="precoVenda" value={formData.precoVenda} onChange={handlePrecoVendaChange} onBlur={handleBlurValidation} error={errors.precoVenda} required className="text-primary text-bold" prefix="R$" tooltip="Preço na prateleira. Alterá-lo recalcula o Markup e a Margem." />
+                    <ProdInput label="Margem Líquida" value={formData.margemLucro} disabled className="bg-disabled text-bold" suffix="%" tooltip="Cálculo: (Venda - Custo) / Venda. O lucro percentual que fica no caixa." />
                   </div>
-                </div>
-
-                <div className="form-group" style={{maxWidth:140}}>
-                  <div className="floating-group group-percent">
-                    <input type="text" className="ff-input-floating" value={formData.markup} onChange={handleMarkupChange} placeholder=" " style={{fontWeight:'bold', color:'#059669'}} />
-                    <span className="suffix">%</span>
-                    <label className="ff-label-floating">Markup</label>
-                    <Info size={16} className="tooltip-icon" title="% sobre custo." />
-                  </div>
-                </div>
-
-                <div className="form-group flex-1">
-                  <div className="floating-group group-money">
-                    <input type="text" name="precoVenda" className={`ff-input-floating ${errors.precoVenda ? 'input-error' : ''}`} value={formData.precoVenda} onChange={handlePrecoVendaChange} onBlur={handleBlurValidation} required placeholder=" " style={{fontWeight:'bold', color:'#6366f1'}} />
-                    <span className="prefix">R$</span>
-                    <label className="ff-label-floating">Preço Venda *</label>
-                    {errors.precoVenda && <span className="error-message"><AlertCircle size={12}/> {errors.precoVenda}</span>}
-                  </div>
-                </div>
-
-                <div className="form-group" style={{maxWidth:140}}>
-                  <div className="floating-group group-percent">
-                    <input type="text" className="ff-input-floating" value={formData.margemLucro} disabled placeholder=" " style={{backgroundColor:'#f1f5f9', fontWeight:'bold'}} />
-                    <span className="suffix">%</span>
-                    <label className="ff-label-floating">Margem</label>
-                    <Info size={16} className="tooltip-icon" title="Lucro real final." />
-                  </div>
-                </div>
               </div>
             </section>
 
-            {/* SEÇÃO 4: ESTOQUE (COM LOTE E VALIDADE) */}
+            {/* SEÇÃO 4: ESTOQUE E VALIDADE */}
             <section className="form-section">
-              <h2 className="section-title"><Layers size={20} /> Controle de Estoque</h2>
+              <h2 className="section-title"><Layers size={22} /> Logística e Validade</h2><br />
 
-              <div className="form-row" style={{backgroundColor:'#f8fafc', padding:16, borderRadius:8, border:'1px dashed #cbd5e1'}}>
-                <ProdInput label="Estoque Fiscal" value={formData.estoqueFiscal||0} disabled tooltip="Qtd. via XML." className="flex-1" />
-                <ProdInput label="Estoque S/ Nota" value={formData.estoqueNaoFiscal||0} disabled className="flex-1" />
-                <div className="form-group flex-1">
-                  <div className="floating-group">
-                    <input type="text" className="ff-input-floating" value={formData.quantidadeEmEstoque} disabled placeholder=" " style={{backgroundColor:'#e0e7ff', fontWeight:'bold', color:Number(formData.quantidadeEmEstoque)<Number(formData.estoqueMinimo)?'#ef4444':'#312e81'}} />
-                    <label className="ff-label-floating">Total Disponível</label>
+              <div className="pf-layout-inputs">
+                  <div className="pf-row-fluid bg-light-panel">
+                    <ProdInput label="Estoque Físico/XML" value={formData.estoqueFiscal||0} disabled className="bg-disabled" tooltip="Entradas automatizadas via notas fiscais." />
+                    <ProdInput label="Estoque Avulso" value={formData.estoqueNaoFiscal||0} disabled className="bg-disabled" tooltip="Entradas e saídas manuais (sem nota)." />
+                    <ProdInput label="Volume Total" value={formData.quantidadeEmEstoque} disabled className="bg-disabled highlight-blue text-bold" tooltip="Soma automática (Fiscal + Avulso)." />
                   </div>
-                </div>
-              </div>
 
-              <div className="form-row" style={{marginTop:20}}>
-                <ProdInput label="Estoque Mínimo" name="estoqueMinimo" type="number" value={formData.estoqueMinimo} onChange={handleChange} className="flex-1" />
-                <ProdInput label="Dias Reposição" name="diasParaReposicao" type="number" value={formData.diasParaReposicao} onChange={handleChange} className="flex-1" />
-                {/* 🚩 Campos Novos: Lote e Validade */}
-                <ProdInput label="Lote de Fabricação" name="lote" value={formData.lote} onChange={handleChange} className="flex-1" tooltip="Importante para controle da Anvisa." />
-                <ProdInput label="Data de Validade" name="validade" type="date" value={formData.validade} onChange={handleChange} className="flex-1" />
+                  <div className="pf-row-fluid mt-4">
+                    <ProdInput label="Estoque Mínimo" name="estoqueMinimo" type="number" value={formData.estoqueMinimo} onChange={handleChange} />
+                    <ProdInput label="Ciclo Reposição (Dias)" name="diasParaReposicao" type="number" value={formData.diasParaReposicao} onChange={handleChange} />
+                    <ProdInput label="Lote" name="lote" value={formData.lote} onChange={handleChange} />
+                    <ProdInput label="Data de Vencimento" name="validade" type="date" value={formData.validade} onChange={handleChange} className="date-input" />
+                  </div>
               </div>
             </section>
 
             <footer className="form-footer">
-              {!isEditMode && <button type="button" className="btn-secondary" onClick={(e)=>saveProduct(true)} disabled={loading} title="Salvar e limpar"><PlusCircle size={18}/> Salvar e Novo</button>}
-              <button type="button" className="action-btn-primary" onClick={()=>saveProduct(false)} disabled={loading} title="Alt+S"><Save size={18}/> {loading?'Salvando...':'Salvar'}</button>
+              {!isEditMode && <button type="button" className="btn-secondary" onClick={(e)=>saveProduct(true)} disabled={loading} title="Salvar e continuar na tela"><PlusCircle size={18}/> Salvar e Novo</button>}
+              <button type="button" className="btn-action-primary" onClick={()=>saveProduct(false)} disabled={loading} title="Atalho: Alt+S"><Save size={20}/> {loading?'A gravar...':'Gravar Produto'}</button>
             </footer>
 
           </form>
@@ -527,20 +553,27 @@ const ProdutoForm = () => {
   );
 };
 
-// --- COMPONENTE INPUT COM SUPORTE A ERRO ---
-const ProdInput = React.forwardRef(({ label, name, value, onChange, type="text", className="", required=false, disabled=false, id, onBlur, tooltip, style, error }, ref) => (
-  <div className={`form-group ${className}`} style={style}>
-    <div className="floating-group">
-      <input
-        ref={ref} id={id} type={type} name={name}
-        className={`ff-input-floating ${error ? 'input-error' : ''}`}
-        placeholder=" "
-        value={value} onChange={onChange} onBlur={onBlur} required={required} disabled={disabled}
-      />
-      <label className="ff-label-floating">{label}</label>
-      {tooltip && <Info size={16} className="tooltip-icon" title={tooltip} />}
-      {error && <span className="error-message"><AlertCircle size={12}/> {error}</span>}
+// --- COMPONENTE INPUT OTIMIZADO ---
+const ProdInput = React.forwardRef(({ label, name, value, onChange, type="text", className="", required=false, disabled=false, id, onBlur, tooltip, error, prefix, suffix }, ref) => (
+  <div className={`form-group-modern ${className}`}>
+    <div className="label-row">
+        <label htmlFor={id || name}>{label}</label>
+        {tooltip && (
+            <span className="tooltip-wrapper" data-tooltip={tooltip}>
+                <Info size={14} className="info-icon" />
+            </span>
+        )}
     </div>
+    <div className={`input-wrapper ${prefix ? 'has-prefix' : ''} ${suffix ? 'has-suffix' : ''}`}>
+        {prefix && <span className="input-prefix">{prefix}</span>}
+        <input
+          ref={ref} id={id || name} type={type} name={name}
+          className={`pf-input ${error ? 'pf-input-error' : ''}`}
+          value={value} onChange={onChange} onBlur={onBlur} required={required} disabled={disabled}
+        />
+        {suffix && <span className="input-suffix">{suffix}</span>}
+    </div>
+    {error && <span className="pf-error-msg"><AlertCircle size={12}/> {error}</span>}
   </div>
 ));
 
