@@ -17,6 +17,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // 1. Trata falhas de rede brutas (servidor offline)
     if (error.code === 'ECONNABORTED' || !error.response) {
       if (!isRedirecting) {
           toast.error("Servidor DD Cosméticos indisponível.", { toastId: 'network-error' });
@@ -28,6 +29,13 @@ api.interceptors.response.use(
     const originalRequest = error.config;
     const url = originalRequest.url || '';
 
+    // Rotas de IA e Pesquisa que não devem causar spam de erros na tela
+    const isSilentSearch = url.includes('/ncm/sugestoes') || url.includes('/fiscal/validar') || (url.includes('/produtos') && url.includes('termo='));
+
+    if (status === 404 && isSilentSearch) {
+        return Promise.reject(error);
+    }
+
     const isLoginRequest = url.includes('login');
     const isReportRequest = url.includes('/relatorios');
 
@@ -38,11 +46,21 @@ api.interceptors.response.use(
        backendMessage = error.response.data?.mensagem || error.response.data?.message || "Operação inválida.";
     }
 
+    // Erros de Validação
     if (status === 428) return Promise.reject(error);
 
+    // 2. Trata Autenticação e Autorização (Login, Sessão Expirada)
     if (status === 401 || status === 403) {
       if (isLoginRequest) {
           toast.error("E-mail ou senha incorretos.", { toastId: 'bad-credentials' });
+          return Promise.reject(error);
+      }
+
+      // 🔥 CORREÇÃO DE ARQUITETURA: Blindagem contra o falso 401/403 do Spring Boot
+      // Se a rota não existir no Backend, o Spring reencaminha para /error e devolve 403.
+      // Jamais deslogamos o utilizador por causa de um endpoint de IA/Fiscal que falhou ou não foi criado.
+      if (isSilentSearch) {
+          console.warn(`[Segurança] Rota ${url} bloqueada pelo backend (${status}). Ignorando redirecionamento de login.`);
           return Promise.reject(error);
       }
 
@@ -64,6 +82,7 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // 3. Trata Bad Request
     if (status === 400 && !isLoginRequest) {
       if (isReportRequest) {
         console.warn("[BI] Erro 400 na rota de relatórios.");
@@ -72,6 +91,7 @@ api.interceptors.response.use(
       toast.warning(backendMessage, { toastId: `bad-request-${status}` });
     }
 
+    // 4. Trata Internal Server Error
     if (status === 500) {
       console.error(`[ERRO 500 NO JAVA] Rota: ${url} | Detalhes:`, error.response.data);
       if (!isReportRequest) {

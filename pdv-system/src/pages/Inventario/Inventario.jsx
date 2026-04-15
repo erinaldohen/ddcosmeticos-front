@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+// 🔥 IMPORTANTE: Adicionei a importação do ProdutoForm aqui para o renderizar no Modal
+import ProdutoForm from '../Produtos/ProdutoForm';
 import {
   Package, AlertTriangle, ShoppingCart, Calendar, Search,
   RefreshCw, Download, MoreVertical, Filter, ArrowRight,
   CheckCircle, XCircle, AlertOctagon, Sparkles, TrendingUp, DollarSign,
   TrendingDown, Minus, BarChart3, ClipboardList, FileText, MessageCircle,
-  Flame, Zap, Snowflake, Truck
+  Flame, Zap, Snowflake, Truck, X
 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import './Inventario.css';
 
@@ -35,7 +36,6 @@ const RenderizarCurvaABC = ({ curva }) => {
     return <span className={`curva-badge ${classes[curva] || 'abc-c'}`} data-tooltip={dicas[curva] || 'Baixo impacto'}>Classe {curva}</span>;
 };
 
-// 🔥 NOVO: TERMÔMETRO DE GIRO DIÁRIO
 const RenderizarGiro = ({ giro }) => {
     if (giro >= 2.0) return <span className="giro-badge hot" data-tooltip="Produto de Saída Rápida"><Flame size={14}/> {giro.toFixed(1)}/dia</span>;
     if (giro >= 0.5) return <span className="giro-badge warm" data-tooltip="Saída Constante"><Zap size={14}/> {giro.toFixed(1)}/dia</span>;
@@ -81,15 +81,16 @@ const InventoryIntelligence = ({ produtos, onAcao }) => {
 };
 
 const Inventario = () => {
-  const navigate = useNavigate(); // 🔥 NOVO: Para navegação fluida
   const [produtos, setProdutos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({ total: 0, vencidos: 0, baixoEstoque: 0, sugestoesCompra: 0 });
   const [filtro, setFiltro] = useState({ busca: '', status: 'todos' });
   const [abaAtiva, setAbaAtiva] = useState('MATRIZ');
-
-  // 🔥 NOVO: Filtro de Fornecedor
   const [fornecedorSelecionado, setFornecedorSelecionado] = useState('TODOS');
+
+  // 🔥 NOVO: Estado para controlar o Modal de Edição de Produto
+  const [produtoEmEdicaoId, setProdutoEmEdicaoId] = useState(null);
+  const [isModalAberto, setIsModalAberto] = useState(false);
 
   const mainRef = useRef(null);
   useEffect(() => { mainRef.current?.focus(); }, []);
@@ -165,20 +166,23 @@ const Inventario = () => {
       }
   };
 
-  // 🔥 NOVO: Redireciona para a página de Produtos já a pesquisar pelo item
+  // 🔥 CORREÇÃO: Abre o Modal de Edição na mesma página
   const handleAcessoProduto = (produto) => {
-      toast.info(`A redirecionar para o cadastro de: ${produto.descricao}`);
-      // Assumindo que a sua rota de produtos aceita um estado ou parâmetro de busca
-      navigate('/produtos', { state: { buscaProduto: produto.codigoBarras || produto.descricao } });
+      setProdutoEmEdicaoId(produto.id);
+      setIsModalAberto(true);
   };
 
-  // Lógica da Lista de Compras
+  // Função para fechar o Modal e atualizar o inventário caso tenha havido alterações
+  const fecharModal = (houveAlteracao) => {
+      setIsModalAberto(false);
+      setProdutoEmEdicaoId(null);
+      if (houveAlteracao === true) {
+          carregarInventario(); // Recarrega a lista se salvou o produto no modal
+      }
+  };
+
   const todosParaComprar = produtos.filter(p => p.sugestaoCompra > 0).sort((a,b) => a.curvaABC.localeCompare(b.curvaABC));
-
-  // Extrair fornecedores únicos para o Filtro
   const fornecedoresDisponiveis = [...new Set(todosParaComprar.map(p => p.fornecedorNome))].filter(Boolean);
-
-  // Aplica o filtro de fornecedor na aba de compras
   const produtosParaComprar = todosParaComprar.filter(p => fornecedorSelecionado === 'TODOS' || p.fornecedorNome === fornecedorSelecionado);
   const investimentoSugerido = produtosParaComprar.reduce((acc, p) => acc + (p.sugestaoCompra * (p.precoCusto || 0)), 0);
 
@@ -321,7 +325,7 @@ const Inventario = () => {
                               </div>
                           </td>
                           <td className="actions-cell">
-                            <button className="action-btn" data-tooltip="Abrir Cadastro" onClick={() => handleAcessoProduto(p)}>
+                            <button className="action-btn" data-tooltip="Editar Cadastro" onClick={() => handleAcessoProduto(p)}>
                                 <MoreVertical size={18} />
                             </button>
                           </td>
@@ -348,7 +352,6 @@ const Inventario = () => {
                   </div>
 
                   <div className="compras-header-actions">
-                      {/* 🔥 NOVO: FILTRO DE FORNECEDOR */}
                       <div className="fornecedor-selector" data-tooltip="Visão Isolada de Compras">
                           <Truck size={18} color="#64748b"/>
                           <select value={fornecedorSelecionado} onChange={(e) => setFornecedorSelecionado(e.target.value)}>
@@ -412,8 +415,31 @@ const Inventario = () => {
               )}
           </section>
       )}
-    </main>
-  );
-};
 
-export default Inventario;
+      {/* 🔥 ATUALIZADO: MODAL FLUTUANTE COM CHAVE ÚNICA (KEY) */}
+            {isModalAberto && produtoEmEdicaoId && (
+              <div className="modal-overlay" onClick={() => fecharModal(false)}>
+                  <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                      <div className="modal-header">
+                          <h2>Auditoria Rápida de Produto</h2>
+                          <button className="btn-close-modal" onClick={() => fecharModal(false)}><X size={24} /></button>
+                      </div>
+                      <div className="modal-body-scroll">
+                          {/* A prop 'key' é o segredo: toda vez que o 'produtoEmEdicaoId' mudar,
+                            o React limpa o formulário anterior e carrega o novo produto.
+                          */}
+                          <ProdutoForm
+                              key={produtoEmEdicaoId}
+                              id={produtoEmEdicaoId}
+                              onSave={() => fecharModal(true)}
+                          />
+                      </div>
+                  </div>
+              </div>
+            )}
+
+          </main>
+        );
+      };
+
+      export default Inventario;

@@ -149,42 +149,49 @@ const ProdutoForm = () => {
     });
   };
 
-    const triggerNcmSearch = async (termoBusca) => {
-        if (!termoBusca || termoBusca.trim().length < 2) {
+  // --- LÓGICA DE BUSCA NCM ATIVADA ---
+      const triggerNcmSearch = async (termoBusca) => {
+          // Só dispara se tiver pelo menos 2 números
+          if (!termoBusca || termoBusca.trim().length < 2) {
+              setSugestoesNcm([]);
+              return;
+          }
+
+          setBuscandoNcm(true);
+          try {
+              // 🔥 Chamada para o serviço que consulta a API (BrasilAPI ou Backend)
+              const res = await produtoService.buscarNcms(termoBusca);
+              if (Array.isArray(res)) {
+                  setSugestoesNcm(res);
+              } else {
+                  setSugestoesNcm([]);
+              }
+          } catch (e) {
+              console.error("Falha na busca inteligente de NCM:", e);
+              setSugestoesNcm([]);
+          } finally {
+              setBuscandoNcm(false);
+          }
+      };
+
+      const handleNcmChange = (e) => {
+        const v = e.target.value;
+        setFormData(prev => ({...prev, ncm: v}));
+        setDescricaoNcmSelecionado('');
+
+        if (v.length >= 2) setErrors(prev => ({...prev, ncm: ''}));
+
+        // 🔥 Gerenciamento do Timer para disparar a API após 400ms de pausa na digitação
+        if (typingTimer.current) clearTimeout(typingTimer.current);
+
+        if (v.length >= 2) {
+            typingTimer.current = setTimeout(() => {
+                triggerNcmSearch(v);
+            }, 400);
+        } else {
             setSugestoesNcm([]);
-            return;
         }
-
-        setBuscandoNcm(true);
-        try {
-            const res = await produtoService.buscarNcms(termoBusca);
-            if (Array.isArray(res) && res.length > 0) {
-                setSugestoesNcm(res);
-            } else {
-                setSugestoesNcm([]);
-            }
-        } catch (e) {
-            console.error("Falha na busca inteligente:", e);
-        } finally {
-            setBuscandoNcm(false);
-        }
-    };
-
-    const handleNcmChange = (e) => {
-      const v = e.target.value;
-      setFormData(prev => ({...prev, ncm: v}));
-      setDescricaoNcmSelecionado(''); // Limpa a descrição ao editar
-
-      if (v.length >= 2) setErrors(prev => ({...prev, ncm: ''}));
-
-      if (typingTimer.current) clearTimeout(typingTimer.current);
-
-      if (v.length >= 2) {
-          typingTimer.current = setTimeout(() => triggerNcmSearch(v), 300);
-      } else {
-          setSugestoesNcm([]);
-      }
-    };
+      };
 
   const handleValidacaoFiscal = async () => {
       if(!formData.descricao || !formData.ncm || formData.ncm.length < 8) return;
@@ -445,13 +452,19 @@ const ProdutoForm = () => {
                   <div className="pf-row-fluid">
 
                     <div className="form-group-modern input-action-group" ref={ncmRef}>
-                        <div className="label-row"><label>NCM *</label><Info size={14} className="info-icon" title="Nomenclatura Comum do Mercosul" /></div>
+                        <div className="label-row">
+                            <label>NCM *</label>
+                            <Info size={14} className="info-icon" title="Nomenclatura Comum do Mercosul" />
+                        </div>
                         <div className="input-action-wrapper">
                             <input
                                 type="text" name="ncm"
                                 className={`pf-input ${errors.ncm ? 'pf-input-error' : ''}`}
-                                value={formData.ncm} onChange={handleNcmChange} onBlur={handleBlurValidation}
-                                placeholder="Digite número ou nome..." autoComplete="off"
+                                value={formData.ncm}
+                                onChange={handleNcmChange} // 🔥 Aciona a lógica acima
+                                onBlur={handleBlurValidation}
+                                placeholder="Digite número ou nome..."
+                                autoComplete="off"
                             />
                             <div className="input-tools">
                                 <button type="button" className="btn-tool cloud" onClick={() => triggerNcmSearch(formData.ncm)} title="Pesquisar NCM">
@@ -460,6 +473,7 @@ const ProdutoForm = () => {
                             </div>
                         </div>
 
+                        {/* Exibe erro ou a descrição selecionada em verde */}
                         {errors.ncm ? (
                             <span className="pf-error-msg"><AlertCircle size={12}/> {errors.ncm}</span>
                         ) : descricaoNcmSelecionado ? (
@@ -468,11 +482,13 @@ const ProdutoForm = () => {
                             </span>
                         ) : null}
 
+                        {/* 🔥 LISTA DE SUGESTÕES (DROPDOWN) */}
                         {sugestoesNcm.length > 0 && (
-                            <div className="ncm-dropdown">
-                                {sugestoesNcm.map((i,x)=>(
-                                    <div key={x} className="ncm-suggestion-item" onClick={()=>selecionarNcm(i)}>
-                                        <strong>{i.codigo}</strong><span>{i.descricao}</span>
+                            <div className="ncm-dropdown" style={{position: 'absolute', width: '100%', zIndex: 100}}>
+                                {sugestoesNcm.map((i, x) => (
+                                    <div key={x} className="ncm-suggestion-item" onClick={() => selecionarNcm(i)} style={{cursor: 'pointer'}}>
+                                        <strong>{i.codigo}</strong>
+                                        <span>{i.descricao}</span>
                                     </div>
                                 ))}
                             </div>
