@@ -10,9 +10,10 @@ import {
 } from 'lucide-react';
 import './ProdutoForm.css';
 
-const ProdutoForm = () => {
+const ProdutoForm = ({ id: propsId, onSave }) => {
   const navigate = useNavigate();
-  const { id } = useParams();
+  const routeParams = useParams();
+  const id = propsId || routeParams.id;
   const isEditMode = !!id;
 
   const eanInputRef = useRef(null);
@@ -29,7 +30,7 @@ const ProdutoForm = () => {
   const [previewImagem, setPreviewImagem] = useState(null);
   const [sugestoesNcm, setSugestoesNcm] = useState([]);
   const [buscandoNcm, setBuscandoNcm] = useState(false);
-  const [descricaoNcmSelecionado, setDescricaoNcmSelecionado] = useState(''); // 🔥 Estado para a Descrição do NCM
+  const [descricaoNcmSelecionado, setDescricaoNcmSelecionado] = useState('');
 
   const [errors, setErrors] = useState({});
 
@@ -54,6 +55,7 @@ const ProdutoForm = () => {
   }, [formData]);
 
   useEffect(() => { if(!isEditMode && eanInputRef.current) eanInputRef.current.focus(); }, [isEditMode]);
+
   useEffect(() => { if(isEditMode) carregarProduto(); }, [id]);
 
   useEffect(() => {
@@ -149,49 +151,63 @@ const ProdutoForm = () => {
     });
   };
 
-  // --- LÓGICA DE BUSCA NCM ATIVADA ---
-      const triggerNcmSearch = async (termoBusca) => {
-          // Só dispara se tiver pelo menos 2 números
-          if (!termoBusca || termoBusca.trim().length < 2) {
+  // 🔥 INTEGRAÇÃO BRASILAPI: A melhor e mais rápida do mercado para NCM
+  const triggerNcmSearch = async (termoBusca) => {
+      if (!termoBusca || termoBusca.trim().length < 2) {
+          setSugestoesNcm([]);
+          return;
+      }
+
+      setBuscandoNcm(true);
+      try {
+          // Chamada direta à BrasilAPI para evitar sobrecarga no seu backend
+          const response = await fetch(`https://brasilapi.com.br/api/ncm/v1?search=${encodeURIComponent(termoBusca)}`);
+          if (response.ok) {
+              const data = await response.json();
+              // A BrasilAPI retorna um array enorme, limitamos a 15 para a tela não travar
+              const formatado = data.slice(0, 15).map(item => ({
+                  codigo: item.codigo,
+                  descricao: item.descricao
+              }));
+              setSugestoesNcm(formatado);
+          } else {
               setSugestoesNcm([]);
-              return;
           }
+      } catch (e) {
+          console.error("Falha na busca inteligente de NCM:", e);
+          setSugestoesNcm([]);
+      } finally {
+          setBuscandoNcm(false);
+      }
+  };
 
-          setBuscandoNcm(true);
-          try {
-              // 🔥 Chamada para o serviço que consulta a API (BrasilAPI ou Backend)
-              const res = await produtoService.buscarNcms(termoBusca);
-              if (Array.isArray(res)) {
-                  setSugestoesNcm(res);
-              } else {
-                  setSugestoesNcm([]);
-              }
-          } catch (e) {
-              console.error("Falha na busca inteligente de NCM:", e);
-              setSugestoesNcm([]);
-          } finally {
-              setBuscandoNcm(false);
-          }
-      };
+  const handleNcmChange = (e) => {
+      const v = e.target.value;
+      setFormData(prev => ({...prev, ncm: v}));
+      setDescricaoNcmSelecionado(''); // Limpa a descrição ao editar
 
-      const handleNcmChange = (e) => {
-        const v = e.target.value;
-        setFormData(prev => ({...prev, ncm: v}));
-        setDescricaoNcmSelecionado('');
+      if (v.length >= 2) setErrors(prev => ({...prev, ncm: ''}));
 
-        if (v.length >= 2) setErrors(prev => ({...prev, ncm: ''}));
+      // 🔥 BLINDAGEM DO DEBOUNCE: Impede o loop cancelando o cronómetro anterior
+      if (typingTimer.current) clearTimeout(typingTimer.current);
 
-        // 🔥 Gerenciamento do Timer para disparar a API após 400ms de pausa na digitação
-        if (typingTimer.current) clearTimeout(typingTimer.current);
+      if (v.length >= 2) {
+          typingTimer.current = setTimeout(() => {
+              triggerNcmSearch(v);
+          }, 400); // Só chama a API 400ms após parar de digitar
+      } else {
+          setSugestoesNcm([]);
+      }
+  };
 
-        if (v.length >= 2) {
-            typingTimer.current = setTimeout(() => {
-                triggerNcmSearch(v);
-            }, 400);
-        } else {
-            setSugestoesNcm([]);
-        }
-      };
+  // 🔥 SELECIONAR NCM ÚNICO: Removemos a duplicação que havia no seu código
+  const selecionarNcm = (item) => {
+      setFormData(prev => ({...prev, ncm: item.codigo}));
+      setDescricaoNcmSelecionado(item.descricao); // Guarda a descrição na tela
+      setSugestoesNcm([]); // Esconde o dropdown
+      setErrors(prev => ({...prev, ncm: ''}));
+      setTimeout(handleValidacaoFiscal, 100);
+  };
 
   const handleValidacaoFiscal = async () => {
       if(!formData.descricao || !formData.ncm || formData.ncm.length < 8) return;
@@ -210,24 +226,14 @@ const ProdutoForm = () => {
             impostoSeletivo: d.impostoSeletivo
         }));
 
-        // Só avisa "Ajustado" se o Backend realmente alterou o NCM ou o CST
         if((d.ncm && d.ncm !== formData.ncm) || (d.cst && d.cst !== formData.cst)) {
             toast.success("Dados Fiscais Ajustados pela IA Tributária! 🤖");
         }
-
       } catch(e) {
           console.warn("Validação fiscal ignorada (Backend indisponível ou erro 404).");
       } finally {
           setValidandoFiscal(false);
       }
-    };
-
-  const selecionarNcm = (item) => {
-    setFormData(prev => ({...prev, ncm: item.codigo}));
-    setDescricaoNcmSelecionado(item.descricao); // Guarda a descrição na tela
-    setSugestoesNcm([]);
-    setErrors(prev => ({...prev, ncm: ''}));
-    setTimeout(handleValidacaoFiscal, 100);
   };
 
   const handleGerarEanInterno = async () => {
@@ -314,7 +320,9 @@ const ProdutoForm = () => {
       let res = isEditMode ? await produtoService.atualizar(id, p) : await produtoService.salvar(p);
       if(arquivoImagem && (res.id || id)) await produtoService.uploadImagem(res.id||id, arquivoImagem);
       toast.success("Produto gravado com sucesso!");
-      if(stay) window.location.reload(); else navigate('/produtos');
+      if (onSave) onSave(); // 🔥 Resolve o comportamento se estiver no Modal
+      else if(stay) window.location.reload();
+      else navigate('/produtos');
     } catch(e) {
       let msg = e.response?.data?.message || "Erro ao gravar produto.";
       toast.error(msg);
@@ -323,17 +331,19 @@ const ProdutoForm = () => {
 
   return (
     <main className="container-fluid animate-fade">
-      <header className="page-header">
-        <div className="page-title">
-          <h1>{isEditMode ? 'Editar Produto' : 'Novo Produto'}</h1>
-          <p>Gestão e auditoria fiscal de stock</p>
-        </div>
-        <div className="header-actions">
-          <button className="btn-secondary" onClick={() => navigate('/produtos')}><ArrowLeft size={18} /> Voltar</button>
-        </div>
-      </header>
+      {!onSave && (
+          <header className="page-header">
+            <div className="page-title">
+              <h1>{isEditMode ? 'Editar Produto' : 'Novo Produto'}</h1>
+              <p>Gestão e auditoria fiscal de stock</p>
+            </div>
+            <div className="header-actions">
+              <button className="btn-secondary" onClick={() => navigate('/produtos')}><ArrowLeft size={18} /> Voltar</button>
+            </div>
+          </header>
+      )}
 
-      <div className="form-container">
+      <div className="form-container" style={onSave ? { padding: '0', boxShadow: 'none', border: 'none', background: 'transparent' } : {}}>
         {formData.revisaoPendente && isEditMode && (
             <div className="alert-ribbon-warning">
                 <AlertTriangle size={24} />
@@ -451,20 +461,15 @@ const ProdutoForm = () => {
               <div className="pf-layout-inputs">
                   <div className="pf-row-fluid">
 
-                    <div className="form-group-modern input-action-group" ref={ncmRef}>
-                        <div className="label-row">
-                            <label>NCM *</label>
-                            <Info size={14} className="info-icon" title="Nomenclatura Comum do Mercosul" />
-                        </div>
+                    {/* 🔥 CAIXA DO NCM: Agora com estilo de dropdown e API Integrada */}
+                    <div className="form-group-modern input-action-group" ref={ncmRef} style={{position: 'relative'}}>
+                        <div className="label-row"><label>NCM *</label><Info size={14} className="info-icon" title="Nomenclatura Comum do Mercosul" /></div>
                         <div className="input-action-wrapper">
                             <input
                                 type="text" name="ncm"
                                 className={`pf-input ${errors.ncm ? 'pf-input-error' : ''}`}
-                                value={formData.ncm}
-                                onChange={handleNcmChange} // 🔥 Aciona a lógica acima
-                                onBlur={handleBlurValidation}
-                                placeholder="Digite número ou nome..."
-                                autoComplete="off"
+                                value={formData.ncm} onChange={handleNcmChange} onBlur={handleBlurValidation}
+                                placeholder="Digite número ou nome..." autoComplete="off"
                             />
                             <div className="input-tools">
                                 <button type="button" className="btn-tool cloud" onClick={() => triggerNcmSearch(formData.ncm)} title="Pesquisar NCM">
@@ -473,7 +478,6 @@ const ProdutoForm = () => {
                             </div>
                         </div>
 
-                        {/* Exibe erro ou a descrição selecionada em verde */}
                         {errors.ncm ? (
                             <span className="pf-error-msg"><AlertCircle size={12}/> {errors.ncm}</span>
                         ) : descricaoNcmSelecionado ? (
@@ -482,13 +486,12 @@ const ProdutoForm = () => {
                             </span>
                         ) : null}
 
-                        {/* 🔥 LISTA DE SUGESTÕES (DROPDOWN) */}
                         {sugestoesNcm.length > 0 && (
-                            <div className="ncm-dropdown" style={{position: 'absolute', width: '100%', zIndex: 100}}>
-                                {sugestoesNcm.map((i, x) => (
-                                    <div key={x} className="ncm-suggestion-item" onClick={() => selecionarNcm(i)} style={{cursor: 'pointer'}}>
-                                        <strong>{i.codigo}</strong>
-                                        <span>{i.descricao}</span>
+                            <div className="ncm-dropdown" style={{position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 9999, background: '#fff', border: '1px solid #cbd5e1', borderRadius: '8px', marginTop: '4px', maxHeight: '250px', overflowY: 'auto', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'}}>
+                                {sugestoesNcm.map((i,x)=>(
+                                    <div key={x} className="ncm-suggestion-item" onClick={()=>selecionarNcm(i)} style={{padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9'}}>
+                                        <strong style={{color: '#0f172a', display: 'block'}}>{i.codigo}</strong>
+                                        <span style={{color: '#64748b', fontSize: '0.85rem'}}>{i.descricao}</span>
                                     </div>
                                 ))}
                             </div>
