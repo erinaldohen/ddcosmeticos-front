@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Search, Trash2, Plus, Minus, ArrowLeft, X, UserCheck, ArrowRight, Banknote, Smartphone,
-  CreditCard, Tag, ShoppingBag, CheckCircle2, TrendingDown,
+  CreditCard, Tag, ShoppingBag, CheckCircle2, TrendingDown, Sparkles, // 🔥 Sparkles adicionado aqui
   Printer, MessageCircle, AlertTriangle, PauseCircle, PlayCircle, Clock, FileText, Building2, MapPin, WifiOff, Wifi, Mail
 } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -110,6 +110,8 @@ const PDV = () => {
   const [sugestoesProdutos, setSugestoesProdutos] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [ultimoItemAdicionadoId, setUltimoItemAdicionadoId] = useState(null);
+  const [sugestoesCrossSell, setSugestoesCrossSell] = useState([]);
+  const [loadingCrossSell, setLoadingCrossSell] = useState(false);
 
   const [showClienteModal, setShowClienteModal] = useState(false);
   const [showDescontoModal, setShowDescontoModal] = useState(false);
@@ -129,6 +131,42 @@ const PDV = () => {
 
   const [metodoAtual, setMetodoAtual] = useState('PIX');
   const [valorInputRaw, setValorInputRaw] = useState('');
+
+  // =======================================================================
+    // 🔥 MOTOR DE INTELIGÊNCIA: CROSS-SELL AUTOMÁTICO
+    // =======================================================================
+    useEffect(() => {
+        // Só busca sugestões se houver itens e a venda não estiver finalizada
+        if (carrinho.length === 0 || mobileViewState !== 'SCAN' || vendaFinalizada) {
+            setSugestoesCrossSell([]);
+            return;
+        }
+
+        // Pega o ID do último produto adicionado para guiar a IA
+        const ultimoProduto = carrinho[carrinho.length - 1];
+
+        const buscarSugestoesIA = async () => {
+            if (!isOnline) return; // Cross-sell requer internet
+            setLoadingCrossSell(true);
+            try {
+                // Chama o endpoint de inteligência da DD Cosméticos
+                const { data } = await api.get(`/produtos/cross-sell?produtoBaseId=${ultimoProduto.id}&limite=3`);
+
+                // Filtra para não sugerir o que já está no carrinho
+                const sugestoesFiltradas = data.filter(sugestao => !carrinho.some(item => item.id === sugestao.id));
+                setSugestoesCrossSell(sugestoesFiltradas);
+            } catch (error) {
+                console.warn("IA de Cross-sell indisponível no momento.");
+                setSugestoesCrossSell([]);
+            } finally {
+                setLoadingCrossSell(false);
+            }
+        };
+
+        // Pequeno delay para não sobrecarregar a API caso o operador passe muitos itens rápido
+        const timer = setTimeout(buscarSugestoesIA, 800);
+        return () => clearTimeout(timer);
+    }, [carrinho.length, isOnline, mobileViewState, vendaFinalizada]);
 
   // =======================================================================
   // INICIALIZAÇÃO E OBTENÇÃO DA LOGO
@@ -1032,6 +1070,43 @@ const PDV = () => {
               )}
           </div>
           )}
+
+      {/* 🔥 NOVO: PAINEL DE SUGESTÕES INTELIGENTES (CROSS-SELL) */}
+                {sugestoesCrossSell.length > 0 && (!isMobile || mobileViewState === 'SCAN') && (
+                    <div className="cross-sell-panel animate-fade-in-down" style={{ padding: '0 20px', marginBottom: '15px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                            <Sparkles size={16} color="#ec4899" className="pulse-animation" />
+                            <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#be185d', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sugestão Inteligente (Complementos)</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px' }}>
+                            {sugestoesCrossSell.map(prod => (
+                                <div key={prod.id} onClick={() => adicionarProdutoAoCarrinho(prod)} style={{
+                                    background: '#fdf2f8', border: '1px solid #fbcfe8', borderRadius: '8px', padding: '12px 14px',
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '15px',
+                                    cursor: 'pointer', minWidth: '260px', maxWidth: '320px', flexShrink: 0, /* flexShrink 0 garante que o cartão não é esmagado */
+                                    transition: '0.2s', boxShadow: '0 2px 4px rgba(236, 72, 153, 0.05)'
+                                }} className="hover-scale">
+                                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+
+                                        {/* 🔥 CORREÇÃO: Descrição quebra de linha automaticamente e mostra tudo */}
+                                        <strong style={{
+                                            fontSize: '0.85rem', color: '#831843', lineHeight: '1.3',
+                                            marginBottom: '6px', display: 'block', wordBreak: 'break-word'
+                                        }}>
+                                            {prod.descricao}
+                                        </strong>
+
+                                        <span style={{ fontSize: '0.95rem', fontWeight: '900', color: '#be185d' }}>R$ {prod.precoVenda.toFixed(2)}</span>
+                                    </div>
+                                    <div style={{ background: '#ec4899', color: 'white', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
+                                        <Plus size={18} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                {/* 🔥 FIM DO PAINEL CROSS-SELL */}
 
           <div className="pos-cart-body">
               {carrinho.length === 0 ? (

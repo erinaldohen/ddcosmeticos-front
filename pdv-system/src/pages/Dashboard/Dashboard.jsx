@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import InsightsPanel from './components/InsightsPanel';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as TooltipChart,
-  ResponsiveContainer, Cell, PieChart, Pie, Legend
+  ResponsiveContainer, Cell, PieChart, Pie, Legend, BarChart, Bar // 🔥 Adicionado BarChart e Bar
 } from 'recharts';
 import {
   DollarSign, ShoppingBag, Activity, Clock, RefreshCcw, ArrowRight,
@@ -64,7 +64,7 @@ const Dashboard = () => {
   const chartContainerRef = useRef(null);
   const [chartWidth, setChartWidth] = useState(0);
 
-  const [abaAtiva, setAbaAtiva] = useState('financeiro');
+  const [abaAtiva, setAbaAtiva] = useState('comercial'); // 🔥 Inicia na Comercial para você testar
   const [modalDrillDown, setModalDrillDown] = useState(null);
   const [listaDrillDown, setListaDrillDown] = useState([]);
   const [filtroPeriodo, setFiltroPeriodo] = useState('hoje');
@@ -126,10 +126,7 @@ const Dashboard = () => {
 
   if (loading && !data) return <DashboardSkeleton />;
 
-  // 🚨 CORREÇÃO: Desempacotamento alinhado com o DashboardDTO do backend
   const payload = data || {};
-
-  // No seu Backend, o MAP principal retornava "financeiro", "inventario", "topProdutos", etc.
   const fin = payload.financeiro || {};
   const inv = payload.inventario || {};
   const ia = payload.inteligencia || {};
@@ -146,8 +143,12 @@ const Dashboard = () => {
   const percentualDesconto = faturamento > 0 ? (descontosHoje / (faturamento + descontosHoje)) * 100 : 0;
   const impostoMes = Number(fin.impostoProvisorioMes || 0);
 
-  const graficoEvolucao = Array.isArray(fin.graficoVendas) ? fin.graficoVendas.map(i => ({ dia: i.data || '', total: Number(i.total || 0) })) : [];
-  const faturamentoPeriodoChart = graficoEvolucao.reduce((acc, curr) => acc + curr.total, 0);
+  const graficoEvolucao = Array.isArray(fin.graficoVendas) ? fin.graficoVendas.map(i => ({
+      dia: i.data || '',
+      faturamento: Number(i.total || 0),
+      custo: Number(i.custo || i.total * 0.4)
+  })) : [];
+  const faturamentoPeriodoChart = graficoEvolucao.reduce((acc, curr) => acc + curr.faturamento, 0);
 
   const faturamentoCalculoMeta = filtroPeriodo === 'hoje' ? faturamento : faturamentoPeriodoChart;
   const taxaMargemMensal = faturamentoCalculoMeta > 0 ? ((lucroBruto - (faturamentoCalculoMeta * 0.04)) / faturamentoCalculoMeta) : 0.40;
@@ -158,32 +159,35 @@ const Dashboard = () => {
   const faltaParaPagar = Math.max(0, custoFixoMes - margemAcumulada);
   const lucroLiquidoRealMes = Math.max(0, margemAcumulada - custoFixoMes);
 
-  // Agora só usa o que vem do banco de dados, assumindo 0 se não configurado
   const META_MENSAL = payload.metaMensal ? Number(payload.metaMensal) : 0;
-
-  const META_ALVO = filtroPeriodo === 'hoje'
-      ? (payload.metaDiaria ? Number(payload.metaDiaria) : 0)
-      : META_MENSAL;
-
-  // A validação > 0 impede erros matemáticos (como dividir por zero) caso a meta ainda não tenha sido definida
+  const META_ALVO = filtroPeriodo === 'hoje' ? (payload.metaDiaria ? Number(payload.metaDiaria) : 0) : META_MENSAL;
   const progressoMetaMensal = META_ALVO > 0 ? Math.min(100, (faturamentoCalculoMeta / META_ALVO) * 100) : 0;
 
   const runRate = Number(fin.runRate || 0);
-
   const crescimentoMoM = Number(fin.crescimentoMoM || 0);
   const isCrescimentoPositivo = crescimentoMoM >= 0;
   const roiIAValor = Number(ia.roiValor || 0);
   const roiIAItens = Number(ia.roiItens || 0);
+
+  // 🔥 MAPA DE CALOR: Preparado para o BarChart
   const mapaDeCalor = Array.isArray(fin.vendasPorHora) ? fin.vendasPorHora : [];
 
   const estoqueCurvaC = inv.estoqueCurvaC || { itens: 0, valorImobilizado: 0 };
   const produtosVencendo = inv.produtosVencendo || { itens: 0, valorRisco: 0 };
   const taxaRecorrencia = Number(fin.taxaRecorrencia || 0);
-  const fluxo7Dias = fin.fluxoCaixa7Dias || { receitasPrevistas: 0, despesasPrevistas: 0, saldoProjetado: 0 };
+
+  const receitasFuturas = Number(fin.fluxoCaixa7Dias?.receitasPrevistas || 0);
+  const despesasFuturas = Number(fin.fluxoCaixa7Dias?.despesasPrevistas || 0);
+  const saldoPrevisto = receitasFuturas - despesasFuturas;
+  const fluxoTotalBase = receitasFuturas + despesasFuturas;
+  const percReceita = fluxoTotalBase > 0 ? (receitasFuturas / fluxoTotalBase) * 100 : 50;
+
   const vendasPerdidas = inv.vendasPerdidas || { quantidade: 0, valorEstimado: 0 };
 
-  const topCategorias = Array.isArray(payload.topCategorias) ? payload.topCategorias.slice(0, 5) : [];
   const performanceVendedores = Array.isArray(payload.performanceVendedores) ? payload.performanceVendedores : [];
+
+  // 🔥 TOP CATEGORIAS: Para o novo Painel de Categorias
+  const topCategorias = Array.isArray(payload.topCategorias) ? payload.topCategorias.slice(0, 5) : [];
 
   const formasPagamentoRaw = Array.isArray(fin.formasPagamento) ? fin.formasPagamento : [];
   const formasPagamento = formasPagamentoRaw.length > 0 ? formasPagamentoRaw.map(p => {
@@ -198,13 +202,12 @@ const Dashboard = () => {
   }) : [{ name: 'Sem Vendas', value: 1, fill: '#e2e8f0' }];
 
   const topProdutosBruto = Array.isArray(payload.topProdutos) ? payload.topProdutos : [];
-
   const topProdutosMapeados = topProdutosBruto.map(p => ({
       nome: p.nome || p.descricao || p.name || p.produto || 'Produto Desconhecido',
       valor: Number(p.valor || p.total || p.faturamento || p.vendas || 0)
   }));
 
-  const topProdutosOrdenados = [...topProdutosMapeados].sort((a, b) => b.valor - a.valor).slice(0, 10);
+  const topProdutosOrdenados = [...topProdutosMapeados].sort((a, b) => b.valor - a.valor).slice(0, 15);
   const faturamentoTotalABC = topProdutosOrdenados.reduce((acc, curr) => acc + curr.valor, 0);
 
   let fatAcumulado = 0;
@@ -231,12 +234,6 @@ const Dashboard = () => {
       analise.push("⏳ O movimento da loja está fraco nesta última hora. Considere disparar uma oferta no WhatsApp.");
     }
     return analise.join(" ");
-  };
-
-  const gerarInsightPagamento = () => {
-      const temCartaoAlto = formasPagamento.find(p => p.name.toUpperCase().includes('CRÉDITO') && p.value > faturamento * 0.5);
-      if (temCartaoAlto) return "Mais de 50% das vendas em Crédito. Considere oferecer um leve desconto no PIX/Dinheiro para melhorar a liquidez imediata.";
-      return "O seu mix de pagamentos está pulverizado. Excelente para a saúde do fluxo de caixa diário.";
   };
 
   const gerarInsightEvolucao = () => {
@@ -317,43 +314,63 @@ const Dashboard = () => {
 
       {abaAtiva === 'financeiro' && (
         <section className="dash-block animate-fade-in">
-            <div className="dash-top-grid triple">
-              <div className="break-even-widget be-purple">
-                <div className="widget-header">
-                    <div><h3 className="flex-center-gap"><Flag size={20} className="icon-purple"/> Meta de {labelPeriodo} <InfoTooltip text="Progresso da meta estipulada."/></h3></div>
-                    <div className="widget-status">
-                                      <span>META BÁSICA</span>
-                                      <h4 className={progressoMetaMensal >= 100 ? 'text-success' : 'text-purple'}>{progressoMetaMensal >= 100 ? `BATIDA!` : `${formatCurrency(Math.max(0, META_ALVO - faturamentoCalculoMeta))}`}</h4>
-                                    </div>
-                </div>
-                <div className="progress-bar-container"><div className={`progress-bar-fill ${progressoMetaMensal >= 100 ? 'bg-success-grad' : 'bg-purple-grad'}`} style={{ width: `${progressoMetaMensal}%` }}></div></div>
-                <div className="widget-footer"><span>Alcançado: <b>{formatCurrency(faturamentoCalculoMeta)}</b></span><span>{progressoMetaMensal.toFixed(1)}%</span></div>
-                {filtroPeriodo === 'este_mes' && (<NanoInsightIA insight={`Projeção de Fecho (Run Rate): ${formatCurrency(runRate)}`} tipo={runRate >= META_MENSAL ? "success" : "warning"} />)}
+            <div className="dash-top-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '24px' }}>
+              <div className="box-card hover-effect" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+                  <h3 className="flex-center-gap w-full" style={{ marginBottom: '16px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}><Flag size={18} className="text-purple"/> Meta de {labelPeriodo}</h3>
+                  <div style={{ position: 'relative', width: '120px', height: '120px', margin: '10px 0' }}>
+                      <svg viewBox="0 0 36 36" width="100%" height="100%">
+                          <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#f1f5f9" strokeWidth="4" />
+                          <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#ec4899" strokeWidth="4" strokeDasharray={`${progressoMetaMensal}, 100`} />
+                      </svg>
+                      <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
+                          <span style={{ fontSize: '1.2rem', fontWeight: '900', color: '#0f172a' }}>{progressoMetaMensal.toFixed(0)}%</span>
+                      </div>
+                  </div>
+                  <div style={{ textAlign: 'center', marginTop: '10px' }}>
+                      <span style={{ display: 'block', fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 'bold' }}>Atingido / Alvo</span>
+                      <strong style={{ fontSize: '1.1rem', color: '#0f172a' }}>{formatCurrency(faturamentoCalculoMeta)}</strong>
+                      <span style={{ fontSize: '0.85rem', color: '#94a3b8', margin: '0 4px' }}>/</span>
+                      <span style={{ fontSize: '0.9rem', color: '#64748b' }}>{formatCurrency(META_ALVO)}</span>
+                  </div>
               </div>
 
-              <div className="break-even-widget">
-                <div className="widget-header">
-                    <div><h3 className="flex-center-gap"><Scale size={20} className="icon-blue"/> Break-Even <InfoTooltip text="Verifica se a margem gerada cobriu os custos fixos."/></h3></div>
-                    <div className="widget-status">
-                      <span>LUCRO LÍQUIDO</span>
-                      <h4 className={progressoEquilibrio >= 100 ? 'text-success' : 'text-warning'}>{progressoEquilibrio >= 100 ? `+ ${formatCurrency(lucroLiquidoRealMes)}` : `FALTAM ${formatCurrency(faltaParaPagar)}`}</h4>
-                    </div>
-                </div>
-                <div className="progress-bar-container"><div className={`progress-bar-fill ${progressoEquilibrio >= 100 ? 'bg-success-grad' : 'bg-blue-grad'}`} style={{ width: `${progressoEquilibrio}%` }}></div></div>
-                <div className="widget-footer"><span>Margem Bruta: <b>{formatCurrency(margemAcumulada)}</b></span><span>Custos: {formatCurrency(custoFixoMes)}</span></div>
-                <NanoInsightIA insight={progressoEquilibrio >= 100 ? "Lucro garantido! Pense em reinvestir na Curva A." : "Venda mais produtos de ticket alto para bater os custos."} tipo={progressoEquilibrio >= 100 ? "success" : "warning"} />
+              <div className="box-card hover-effect" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+                  <h3 className="flex-center-gap w-full" style={{ marginBottom: '16px', borderBottom: '1px solid #f1f5f9', paddingBottom: '8px' }}><Scale size={18} className="text-blue"/> Ponto de Equilíbrio</h3>
+                  <div style={{ position: 'relative', width: '120px', height: '120px', margin: '10px 0' }}>
+                      <svg viewBox="0 0 36 36" width="100%" height="100%">
+                          <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#f1f5f9" strokeWidth="4" />
+                          <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#3b82f6" strokeWidth="4" strokeDasharray={`${progressoEquilibrio}, 100`} />
+                      </svg>
+                      <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
+                          <span style={{ fontSize: '1.2rem', fontWeight: '900', color: progressoEquilibrio >= 100 ? '#10b981' : '#0f172a' }}>{progressoEquilibrio.toFixed(0)}%</span>
+                      </div>
+                  </div>
+                  <div style={{ textAlign: 'center', marginTop: '10px' }}>
+                      <span style={{ display: 'block', fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 'bold' }}>Margem vs Custos Fixos</span>
+                      <strong style={{ fontSize: '1.1rem', color: progressoEquilibrio >= 100 ? '#10b981' : '#ef4444' }}>
+                          {progressoEquilibrio >= 100 ? `Lucro: ${formatCurrency(lucroLiquidoRealMes)}` : `Faltam: ${formatCurrency(faltaParaPagar)}`}
+                      </strong>
+                  </div>
               </div>
 
-              <div className="box-card hover-effect cashflow-box">
+              <div className="box-card hover-effect" style={{ display: 'flex', flexDirection: 'column', padding: '24px', gridColumn: 'span 1' }}>
                 <div className="box-header">
-                  <h3 className="flex-center-gap"><Activity size={18} className="icon-blue"/> Fluxo Futuro (7 Dias) <InfoTooltip text="Contas a pagar estimadas vs faturamento futuro."/></h3>
-                  <span className="ia-badge blue">Caixa</span>
+                  <h3 className="flex-center-gap"><Activity size={18} className="text-emerald"/> Liquidez Futura (7 Dias) <InfoTooltip text="Projeção baseada em Contas a Receber vs Pagar."/></h3>
                 </div>
-                <div className="cf-body">
-                  <div className="cf-row"><span className="cf-label text-success">A Receber Est.</span><strong className="cf-val text-success">+{formatCurrency(fluxo7Dias.receitasPrevistas)}</strong></div>
-                  <div className="cf-row"><span className="cf-label text-danger">A Pagar Est.</span><strong className="cf-val text-danger">-{formatCurrency(fluxo7Dias.despesasPrevistas)}</strong></div>
-                  <div className="cf-divider"></div>
-                  <div className="cf-row total"><span className="cf-label">Saldo de Segurança</span><strong className={`cf-val ${fluxo7Dias.saldoProjetado >= 0 ? 'text-success' : 'text-danger'}`}>{formatCurrency(fluxo7Dias.saldoProjetado)}</strong></div>
+                <div style={{ marginTop: '20px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <div><span style={{ color: '#64748b', fontSize: '0.85rem', fontWeight: 'bold', textTransform: 'uppercase' }}>Recebimentos</span><br/><strong style={{ color: '#10b981', fontSize: '1.2rem' }}>+{formatCurrency(receitasFuturas)}</strong></div>
+                        <div style={{ textAlign: 'right' }}><span style={{ color: '#64748b', fontSize: '0.85rem', fontWeight: 'bold', textTransform: 'uppercase' }}>Pagamentos</span><br/><strong style={{ color: '#ef4444', fontSize: '1.2rem' }}>-{formatCurrency(despesasFuturas)}</strong></div>
+                    </div>
+                    <div style={{ width: '100%', height: '12px', borderRadius: '6px', display: 'flex', overflow: 'hidden', margin: '16px 0', background: '#f1f5f9' }}>
+                        {fluxoTotalBase > 0 ? (
+                            <><div style={{ width: `${percReceita}%`, background: '#10b981' }}></div><div style={{ width: `${100 - percReceita}%`, background: '#ef4444' }}></div></>
+                        ) : (<div style={{ width: '100%', background: '#e2e8f0' }}></div>)}
+                    </div>
+                    <div style={{ background: saldoPrevisto >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${saldoPrevisto >= 0 ? '#bbf7d0' : '#fecaca'}`, padding: '12px', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ color: saldoPrevisto >= 0 ? '#166534' : '#991b1b', fontWeight: 'bold' }}>Saldo de Segurança</span>
+                        <strong style={{ color: saldoPrevisto >= 0 ? '#15803d' : '#dc2626', fontSize: '1.3rem' }}>{formatCurrency(saldoPrevisto)}</strong>
+                    </div>
                 </div>
               </div>
             </div>
@@ -366,7 +383,6 @@ const Dashboard = () => {
                 </div>
                 <NanoInsightIA insight={isCrescimentoPositivo ? "Ritmo superior ao médio." : "Tráfego em queda. Sugerida promoção."} tipo={isCrescimentoPositivo ? "success" : "warning"} />
               </div>
-
               <div className="kpi-card hover-effect kpi-indigo">
                 <div className="kpi-info">
                   <div className="kpi-info-header"><span className="kpi-label flex-center-gap">CMV Total <InfoTooltip text="Custo da mercadoria vendida."/></span><RefreshCcw size={18} className="kpi-icon"/></div>
@@ -374,7 +390,6 @@ const Dashboard = () => {
                 </div>
                 <NanoInsightIA insight={faturamento > 0 && (valorReposicao / faturamento) > 0.60 ? "Custo muito elevado." : "Custo controlado."} tipo={faturamento > 0 && (valorReposicao / faturamento) > 0.60 ? "danger" : "success"} />
               </div>
-
               <div className="kpi-card hover-effect kpi-green">
                 <div className="kpi-info">
                   <div className="kpi-info-header"><span className="kpi-label flex-center-gap">Lucro Bruto <InfoTooltip text="Faturamento menos o CMV."/></span><TrendingDown size={18} className="kpi-icon"/></div>
@@ -382,7 +397,6 @@ const Dashboard = () => {
                 </div>
                 <NanoInsightIA insight={`Margem Bruta de ${faturamento > 0 ? ((lucroBruto / faturamento) * 100).toFixed(1) : 0}%.`} tipo="info" />
               </div>
-
               <div className="kpi-card hover-effect kpi-blue">
                 <div className="kpi-info">
                   <div className="kpi-info-header"><span className="kpi-label flex-center-gap">Total de Vendas <InfoTooltip text="Número de cupons emitidos."/></span><ShoppingBag size={18} className="kpi-icon"/></div>
@@ -390,7 +404,6 @@ const Dashboard = () => {
                 </div>
                 <NanoInsightIA insight={vendasQtd < 5 && filtroPeriodo === 'hoje' ? "Fluxo muito lento." : "Volume normalizado."} tipo={vendasQtd < 5 && filtroPeriodo === 'hoje' ? "warning" : "info"} />
               </div>
-
               <div className="kpi-card hover-effect kpi-purple">
                 <div className="kpi-info">
                   <div className="kpi-info-header"><span className="kpi-label flex-center-gap">Ticket Médio <InfoTooltip text="Gasto médio por cliente."/></span><CreditCard size={18} className="kpi-icon"/></div>
@@ -398,7 +411,6 @@ const Dashboard = () => {
                 </div>
                 <NanoInsightIA insight={ticketMedio < 40 && faturamento > 0 ? "Oportunidade de Cross-sell." : "Valor saudável."} tipo={ticketMedio < 40 && faturamento > 0 ? "warning" : "success"} />
               </div>
-
               <div className="kpi-card hover-effect kpi-orange">
                 <div className="kpi-info">
                   <div className="kpi-info-header"><span className="kpi-label flex-center-gap">Itens por Cesta <InfoTooltip text="Média de itens por cupom."/></span><Package size={18} className="kpi-icon"/></div>
@@ -406,7 +418,6 @@ const Dashboard = () => {
                 </div>
                 <NanoInsightIA insight={produtosDistintos <= 1.2 && vendasQtd > 0 ? "Maioria leva só 1 item." : "Venda casada OK."} tipo={produtosDistintos <= 1.2 && vendasQtd > 0 ? "warning" : "success"} />
               </div>
-
               <div className="kpi-card hover-effect kpi-red">
                 <div className="kpi-info">
                   <div className="kpi-info-header"><span className="kpi-label flex-center-gap">Descontos <InfoTooltip text="Soma de abatimentos."/></span><Tag size={18} className="kpi-icon"/></div>
@@ -414,7 +425,6 @@ const Dashboard = () => {
                 </div>
                 <NanoInsightIA insight={percentualDesconto > 8 ? `Cedeu ${percentualDesconto.toFixed(1)}%. Risco.` : "Descontos normais."} tipo={percentualDesconto > 8 ? "danger" : "success"} />
               </div>
-
               <div className="kpi-card hover-effect kpi-rose">
                 <div className="kpi-info">
                   <div className="kpi-info-header"><span className="kpi-label flex-center-gap">Retenção <InfoTooltip text="Clientes que retornaram."/></span><HeartHandshake size={18} className="kpi-icon"/></div>
@@ -424,81 +434,156 @@ const Dashboard = () => {
               </div>
             </div>
 
-            <div className="chart-box main-chart hover-effect" ref={chartContainerRef}>
-                <div className="box-header">
-                    <h3 className="flex-center-gap"><Activity size={18}/> Evolução {filtroPeriodo === 'hoje' ? 'Hoje' : 'Diária'} <InfoTooltip text="Acompanhamento gráfico das receitas."/></h3>
-                    <NanoInsightIA insight={gerarInsightEvolucao()} />
+            <div className="chart-box main-chart hover-effect mt-6" ref={chartContainerRef}>
+                <div className="box-header flex-between">
+                    <div><h3 className="flex-center-gap"><TrendingUp size={18}/> Receita vs. Custo (CMV) <InfoTooltip text="Linha rosa representa o Faturamento. A área azul representa o Custo dos Produtos Vendidos."/></h3></div>
+                    <div style={{ display: 'flex', gap: '16px' }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{width: '10px', height: '10px', background: '#ec4899', borderRadius: '50%'}}></div> Faturamento</span>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{width: '10px', height: '10px', background: '#3b82f6', borderRadius: '50%'}}></div> CMV</span>
+                    </div>
                 </div>
-                <div className="chart-content mt-3">
+                <div className="chart-content mt-4">
                   {graficoEvolucao.length > 0 ? (
-                    <AreaChart width={chartWidth || 800} height={250} data={graficoEvolucao}>
-                      <defs><linearGradient id="colorFat" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ec4899" stopOpacity={0.3}/><stop offset="95%" stopColor="#ec4899" stopOpacity={0}/></linearGradient></defs>
+                    <AreaChart width={chartWidth || 800} height={300} data={graficoEvolucao} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <defs>
+                          <linearGradient id="colorFat" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ec4899" stopOpacity={0.4}/><stop offset="95%" stopColor="#ec4899" stopOpacity={0}/></linearGradient>
+                          <linearGradient id="colorCusto" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient>
+                      </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="dia" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#94a3b8'}}/>
-                      <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#94a3b8'}} tickFormatter={(v) => `R$${v}`}/>
-                      <TooltipChart formatter={(val) => [formatCurrency(val), 'Faturamento']} />
-                      <Area type="monotone" dataKey="total" stroke="#ec4899" strokeWidth={3} fill="url(#colorFat)" />
+                      <XAxis dataKey="dia" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#94a3b8'}} dy={10} />
+                      <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#94a3b8'}} tickFormatter={(v) => `R$${v>1000 ? (v/1000).toFixed(0)+'k' : v}`}/>
+                      <TooltipChart contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)' }} formatter={(value, name) => [formatCurrency(value), name === 'faturamento' ? 'Faturamento' : 'Custo (CMV)']} />
+                      <Area type="monotone" dataKey="faturamento" stroke="#ec4899" strokeWidth={4} fill="url(#colorFat)" activeDot={{ r: 6, fill: '#ec4899', stroke: '#fff', strokeWidth: 2 }} />
+                      <Area type="monotone" dataKey="custo" stroke="#3b82f6" strokeWidth={3} fill="url(#colorCusto)" />
                     </AreaChart>
-                  ) : <div className="empty-state">Sem fluxo neste período.</div>}
+                  ) : <div className="empty-state" style={{ height: '250px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Sem dados de fluxo para este período.</div>}
                 </div>
             </div>
         </section>
       )}
 
-      {/* ABA 2: INTELIGÊNCIA COMERCIAL */}
+      {/* 🔥 ABA 2: INTELIGÊNCIA COMERCIAL (ESTADO DA ARTE) 🔥 */}
       {abaAtiva === 'comercial' && (
         <section className="dash-block animate-fade-in">
+
+          {/* LINHA 1: Mapa de Calor (Visão de Tráfego por Hora) */}
+          <div className="box-card hover-effect mb-4 w-full">
+              <div className="box-header flex-between">
+                  <h3 className="flex-center-gap"><Clock size={18} className="text-primary"/> Mapa de Calor (Vendas por Hora) <InfoTooltip text="Identifique os horários de pico para reforçar o atendimento no balcão."/></h3>
+                  <span className="ia-badge primary">Tráfego</span>
+              </div>
+              <div className="chart-content mt-4" style={{ height: '240px' }}>
+                  {mapaDeCalor.length > 0 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={mapaDeCalor} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis dataKey="hora" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#94a3b8'}} />
+                              <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#94a3b8'}} />
+                              <TooltipChart cursor={{fill: '#f8fafc'}} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }} formatter={(val) => [val, 'Vendas (Qtd)']} />
+                              <Bar dataKey="qtd" fill="#3b82f6" radius={[4, 4, 0, 0]}>
+                                  {mapaDeCalor.map((entry, index) => (
+                                      <Cell key={`cell-${index}`} fill={entry.qtd > (vendasQtd / Math.max(1, mapaDeCalor.length)) * 1.5 ? '#ec4899' : '#3b82f6'} />
+                                  ))}
+                              </Bar>
+                          </BarChart>
+                      </ResponsiveContainer>
+                  ) : <div className="empty-state flex-center h-full">Sem dados de horário para este período.</div>}
+              </div>
+              <div className="mt-2 text-center"><span style={{fontSize:'0.85rem', color:'#64748b'}}>* Barras em <b style={{color:'#ec4899'}}>rosa</b> indicam horários de pico intenso (fluxo acima da média).</span></div>
+          </div>
+
+          {/* LINHA 2: Categorias e Métodos de Pagamento */}
+          <div className="dash-charts-grid split-2" style={{ marginBottom: '24px' }}>
+
+              {/* Top Categorias */}
+              <div className="box-card hover-effect">
+                  <div className="box-header">
+                      <h3 className="flex-center-gap"><ShoppingBag size={18} className="text-orange"/> Top Categorias <InfoTooltip text="As famílias de produtos que mais atraem clientes."/></h3>
+                  </div>
+                  <div className="mt-4 d-flex-col gap-3">
+                      {topCategorias.length > 0 ? topCategorias.map((cat, i) => {
+                          const perc = faturamento > 0 ? (cat.valor / faturamento) * 100 : 0;
+                          return (
+                              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', fontWeight: 'bold', color: '#1e293b' }}>
+                                      <span>{i + 1}. {cat.nome}</span>
+                                      <span>{formatCurrency(cat.valor)}</span>
+                                  </div>
+                                  <div style={{ width: '100%', height: '8px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
+                                      <div style={{ width: `${Math.max(2, perc)}%`, background: i === 0 ? '#f59e0b' : '#cbd5e1', height: '100%', borderRadius: '4px' }}></div>
+                                  </div>
+                              </div>
+                          );
+                      }) : <p className="empty-state">Nenhuma categoria com faturamento.</p>}
+                  </div>
+              </div>
+
+              {/* Pagamentos Donut */}
+              <div className="chart-box hover-effect">
+                <div className="box-header">
+                    <h3 className="flex-center-gap"><PieChartIcon size={18} className="text-emerald"/> Preferência de Pagamento</h3>
+                </div>
+                <div className="chart-content flex-center relative" style={{flexDirection: 'column', height: '240px'}}>
+                   <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        {/* Agora é um Donut Chart para ser mais elegante */}
+                        <Pie data={formasPagamento} cx="50%" cy="50%" labelLine={false} innerRadius={60} outerRadius={85} paddingAngle={5} dataKey="value">
+                          {formasPagamento.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} stroke="transparent" />)}
+                        </Pie>
+                        <TooltipChart formatter={(value) => formatCurrency(value)} contentStyle={{borderRadius:'8px', border:'none', boxShadow:'0 4px 10px rgba(0,0,0,0.1)'}}/>
+                        <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                      </PieChart>
+                   </ResponsiveContainer>
+                   {/* Centro do Donut */}
+                   <div style={{ position: 'absolute', top: '42%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
+                       <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>TOTAL</span><br/>
+                       <span style={{ fontSize: '1.1rem', color: '#0f172a', fontWeight: '900' }}>{formatCurrency(faturamento)}</span>
+                   </div>
+                </div>
+              </div>
+          </div>
+
+          {/* LINHA 3: Equipa e ROI IA */}
           <div className="dash-charts-grid split-2">
-
-            <div className="chart-box hover-effect" style={{ paddingBottom: '30px' }}>
-              <div className="box-header">
-                  <h3 className="flex-center-gap"><PieChartIcon size={18}/> Caixa e Liquidez <InfoTooltip text="Quais os métodos de pagamento preferidos."/></h3>
-              </div>
-              <div className="chart-content flex-center" style={{flexDirection: 'column'}}>
-                 <ResponsiveContainer width="100%" height={260}>
-                    <PieChart>
-                      <Pie data={formasPagamento} cx="50%" cy="45%" labelLine={false} label={renderCustomizedLabel} innerRadius={55} outerRadius={90} paddingAngle={4} dataKey="value">
-                        {formasPagamento.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
-                      </Pie>
-                      <TooltipChart formatter={(value) => formatCurrency(value)} />
-                      <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '13px', paddingTop: '15px' }} />
-                    </PieChart>
-                 </ResponsiveContainer>
-                 <div className="w-full mt-2">
-                    <NanoInsightIA insight={gerarInsightPagamento()} tipo="info" icon={DollarSign} />
-                 </div>
-              </div>
-            </div>
-
-            <div className="dash-charts-grid split-1" style={{ gap: '20px' }}>
-                <div className="box-card hover-effect">
-                  <div className="box-header"><h3 className="flex-center-gap"><Target size={18} className="icon-blue"/> Performance da Equipa <InfoTooltip text="Ranking de vendedores no período selecionado."/></h3></div>
-                  <div className="ranking-list compact">
+              {/* Pódio de Vendedores */}
+              <div className="box-card hover-effect">
+                  <div className="box-header"><h3 className="flex-center-gap"><Target size={18} className="text-blue"/> Pódio da Equipe <InfoTooltip text="Ranking de vendedores por faturamento e conversão."/></h3></div>
+                  <div className="ranking-list mt-3">
                     {performanceVendedores.length > 0 ? performanceVendedores.map((vend, i) => (
-                      <div key={i} className={`ranking-item-operator ${i === 0 ? 'top-seller' : ''}`}>
-                        <div className={`operator-avatar ${i === 0 ? 'top-avatar' : 'neutral-avatar'}`}>{vend.nome ? vend.nome.charAt(0).toUpperCase() : 'U'}</div>
-                        <div className="operator-info">
-                          <div className="operator-text"><span className="operator-name">{vend.nome || 'Usuário'}</span><span className="operator-val">{formatCurrency(vend.vendas)}</span></div>
-                          <span className="operator-sub">{vend.converteu} vendas feitas</span>
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: i === 0 ? '#eff6ff' : '#f8fafc', borderRadius: '8px', border: i === 0 ? '1px solid #bfdbfe' : '1px solid transparent', marginBottom: '8px' }}>
+                        <div style={{ fontSize: '1.5rem', width: '30px', textAlign: 'center' }}>
+                            {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}º`}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <strong style={{ display: 'block', color: i === 0 ? '#1d4ed8' : '#334155', fontSize: '1rem' }}>{vend.nome || 'Usuário'}</strong>
+                          <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{vend.converteu} clientes atendidos</span>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                            <strong style={{ display: 'block', color: '#0f172a', fontSize: '1.1rem' }}>{formatCurrency(vend.vendas)}</strong>
+                            <span style={{ fontSize: '0.75rem', color: '#10b981', fontWeight: 'bold', background: '#d1fae5', padding: '2px 6px', borderRadius: '4px' }}>TM: {formatCurrency(vend.vendas / Math.max(1, vend.converteu))}</span>
                         </div>
                       </div>
-                    )) : <p className="empty-state">Sem atividade registada.</p>}
+                    )) : <p className="empty-state">Sem atividade registada da equipa.</p>}
                   </div>
-                </div>
+              </div>
 
-                <div className="box-card hover-effect ia-roi-card">
+              {/* ROI IA */}
+              <div className="box-card hover-effect ia-roi-card" style={{ background: 'linear-gradient(135deg, #f3e8ff 0%, #e0e7ff 100%)', border: '1px solid #e9d5ff' }}>
                   <div className="box-header flex-between">
-                    <h3 className="flex-center-gap"><Sparkles size={18} className="icon-purple"/> Receita Extra via IA <InfoTooltip text="Valor faturado através das sugestões de Cross-Sell no PDV."/></h3>
-                    <span className="ia-badge purple">Operacional</span>
+                    <h3 className="flex-center-gap"><Sparkles size={18} className="text-purple"/> Impacto da IA (Cross-Sell)</h3>
+                    <span className="ia-badge purple" style={{ background: 'white' }}>Conversão</span>
                   </div>
-                  <div className="roi-ia-panel">
-                      <span className="roi-label">Valor Adicional Capturado</span>
-                      <strong className="roi-val">{formatCurrency(roiIAValor)}</strong>
-                      <span className="roi-sub">{roiIAItens} itens vendidos a mais sugeridos pelo sistema.</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 'calc(100% - 50px)', textAlign: 'center', padding: '20px' }}>
+                      <div style={{ background: 'rgba(255,255,255,0.6)', padding: '20px', borderRadius: '50%', marginBottom: '16px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.05)' }}>
+                          <Zap size={40} color="#9333ea" />
+                      </div>
+                      <span style={{ fontSize: '0.9rem', color: '#6b21a8', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px' }}>Receita Adicional Gerada</span>
+                      <strong style={{ fontSize: '2.5rem', color: '#4c1d95', margin: '10px 0', lineHeight: '1' }}>{formatCurrency(roiIAValor)}</strong>
+                      <p style={{ fontSize: '0.95rem', color: '#581c87', margin: 0, backgroundColor: 'rgba(255,255,255,0.5)', padding: '8px 16px', borderRadius: '20px' }}>
+                          <b>{roiIAItens} itens</b> adicionados aos carrinhos usando a Sugestão Inteligente.
+                      </p>
                   </div>
-                </div>
-            </div>
-
+              </div>
           </div>
         </section>
       )}
@@ -506,66 +591,102 @@ const Dashboard = () => {
       {/* ABA 3: OPERAÇÃO E GESTÃO DE ESTOQUE */}
       {abaAtiva === 'operacao' && (
         <section className="dash-block animate-fade-in">
-          <div className="dash-bottom-grid split-3">
-            <div className="box-card hover-effect span-1">
+
+          <div className="dash-top-grid triple" style={{ marginBottom: '24px' }}>
+
+            <div className="box-card hover-effect">
               <div className="box-header">
-                 <h3 className="flex-center-gap"><ArchiveX size={18} className="icon-danger"/> Alertas de Estoque <InfoTooltip text="Problemas urgentes a resolver na prateleira."/></h3>
+                 <h3 className="flex-center-gap"><CalendarClock size={18} className="text-warning"/> Capital Imobilizado</h3>
               </div>
-              <div className="risk-alerts-container">
-                 <div className="risk-item warning-glow clickable" onClick={() => setModalDrillDown('vencimento')}>
-                    <div className="risk-icon"><CalendarClock size={20} className="icon-danger"/></div>
-                    <div className="risk-info">
-                       <span className="risk-title">Vencendo nos próximos 60 dias</span>
-                       <div className="risk-data"><span className="risk-qtd">{produtosVencendo.itens} SKUs</span><strong className="risk-val text-danger">{formatCurrency(produtosVencendo.valorRisco)}</strong></div>
-                    </div>
-                 </div>
-                 <div className="risk-item warning-glow mt-3 clickable" onClick={() => setModalDrillDown('curvac')}>
+              <div className="risk-item warning-glow clickable mt-2" onClick={() => setModalDrillDown('curvac')}>
                     <div className="risk-icon"><Package size={20} className="icon-warning"/></div>
                     <div className="risk-info">
-                       <span className="risk-title">Estoque Obsoleto (Parado &gt; 90d)</span>
+                       <span className="risk-title">Estoque Obsoleto (&gt; 90 dias)</span>
                        <div className="risk-data"><span className="risk-qtd">{estoqueCurvaC.itens} SKUs</span><strong className="risk-val text-warning">{formatCurrency(estoqueCurvaC.valorImobilizado)}</strong></div>
                     </div>
-                 </div>
-                 <div className="risk-item warning-glow mt-3 lost-sales-item">
-                    <div className="risk-icon"><TrendingDown size={20} className="icon-danger"/></div>
+              </div>
+            </div>
+
+            <div className="box-card hover-effect">
+              <div className="box-header">
+                 <h3 className="flex-center-gap"><TrendingDown size={18} className="text-danger"/> Riscos Iminentes</h3>
+              </div>
+              <div className="risk-item warning-glow clickable mt-2" onClick={() => setModalDrillDown('vencimento')} style={{ borderLeftColor: '#ef4444' }}>
+                    <div className="risk-icon" style={{background: '#fef2f2'}}><CalendarClock size={20} className="text-danger"/></div>
                     <div className="risk-info">
-                       <span className="risk-title">Ruptura (Cliente pediu mas faltou)</span>
-                       <div className="risk-data"><span className="risk-qtd">{vendasPerdidas.quantidade} ocorrências</span><strong className="risk-val text-danger">{formatCurrency(vendasPerdidas.valorEstimado)}</strong></div>
+                       <span className="risk-title">Vencendo em 60 dias</span>
+                       <div className="risk-data"><span className="risk-qtd">{produtosVencendo.itens} SKUs</span><strong className="risk-val text-danger">{formatCurrency(produtosVencendo.valorRisco)}</strong></div>
                     </div>
-                 </div>
+              </div>
+              <div className="risk-item warning-glow mt-2 lost-sales-item" style={{ borderLeftColor: '#ef4444' }}>
+                    <div className="risk-icon" style={{background: '#fef2f2'}}><ArchiveX size={20} className="text-danger"/></div>
+                    <div className="risk-info">
+                       <span className="risk-title">Ruptura (Vendas Perdidas)</span>
+                       <div className="risk-data"><span className="risk-qtd">{vendasPerdidas.quantidade} Vezes</span><strong className="risk-val text-danger">{formatCurrency(vendasPerdidas.valorEstimado)}</strong></div>
+                    </div>
               </div>
             </div>
 
-            <div className="box-card hover-effect span-1">
-              <div className="box-header flex-between">
-                  <h3 className="flex-center-gap"><Layers size={18} className="icon-main"/> Curva ABC ({labelPeriodo}) <InfoTooltip text="Curva A representa 80% do seu faturamento. Nunca deixe faltar."/></h3>
-                  <span className="ia-badge main">Estratégia</span>
-              </div>
-              <div className="ranking-list compact abc-list mt-3">
-                {produtosABC.length > 0 ? produtosABC.map((prod, i) => (
-                    <div key={i} className="ranking-item">
-                      <div className="rank-pos" style={{background: prod.cor, color: 'white', fontWeight: 'bold'}}>{prod.curva}</div>
-                      <div className="rank-info">
-                        <div className="rank-text">
-                            <span className="rank-name" style={{maxWidth: '120px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}} title={prod.nome}>{prod.nome}</span>
-                            <span className="rank-val">{formatCurrency(prod.valor)}</span>
-                        </div>
-                        <div className="progress-bg"><div className="progress-fill" style={{width: `${Math.max(1, prod.percentual)}%`, background: prod.cor}}></div></div>
-                      </div>
-                    </div>
-                )) : <p className="empty-state">Sem faturamento suficiente neste período.</p>}
-              </div>
-            </div>
-
-            <div className="tax-widget hover-effect">
+            <div className="tax-widget hover-effect" style={{ height: '100%', margin: 0 }}>
                <h3 className="flex-center-gap"><Landmark size={18}/> Simulador Tributário <InfoTooltip text="Provisão de Impostos do Período."/></h3>
                <div className="tax-value-box"><h2>{formatCurrency(impostoMes)}</h2><span className="tax-tag">Simples Nacional (4%)</span></div>
                <div className="tax-split-box">
                   <div className="tax-row"><span>DAS Aproximado</span><strong>{formatCurrency(impostoMes)}</strong></div>
                </div>
-               <NanoInsightIA insight="A IA cruzou o NCM dos produtos e verificou os itens faturados." tipo="info" />
+               <NanoInsightIA insight="A IA cruzou o NCM dos produtos faturados." tipo="info" />
             </div>
+
           </div>
+
+          <div className="box-card hover-effect" style={{ width: '100%' }}>
+              <div className="box-header flex-between" style={{ paddingBottom: '16px', borderBottom: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                  <div>
+                      <h3 className="flex-center-gap" style={{ fontSize: '1.25rem' }}>
+                          <Layers size={22} className="icon-main"/> Rentabilidade Curva ABC ({labelPeriodo})
+                          <InfoTooltip text="Produtos classificados por importância no faturamento (A=80%, B=15%, C=5%)."/>
+                      </h3>
+                      <p style={{ margin: '4px 0 0 30px', color: '#64748b', fontSize: '0.9rem' }}>
+                          Total de <b>{produtosABC.length} produtos</b> movimentados. Foco estratégico nos itens classe A.
+                      </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                      <span className="abc-legend" style={{ background: '#fdf2f8', color: '#be185d', padding: '4px 10px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 'bold' }}>A: Foco de Reabastecimento</span>
+                      <span className="abc-legend" style={{ background: '#eff6ff', color: '#1d4ed8', padding: '4px 10px', borderRadius: '6px', fontSize: '0.85rem', fontWeight: 'bold' }}>B: Estabilidade</span>
+                  </div>
+              </div>
+
+              <div className="abc-chart-container" style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '400px', overflowY: 'auto', paddingRight: '10px' }}>
+                {produtosABC.length > 0 ? produtosABC.map((prod, i) => (
+                    <div key={i} className="abc-bar-row" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <div className="abc-badge" style={{ background: prod.cor, color: 'white', width: '30px', height: '30px', borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', fontWeight: '900', fontSize: '1.1rem', flexShrink: 0 }}>
+                          {prod.curva}
+                      </div>
+                      <div style={{ width: '25%', flexShrink: 0 }}>
+                          <h4 style={{ margin: 0, fontSize: '0.95rem', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={prod.nome}>{prod.nome}</h4>
+                          <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Faturamento: {formatCurrency(prod.valor)}</span>
+                      </div>
+                      <div style={{ flex: 1, background: '#f1f5f9', height: '24px', borderRadius: '12px', overflow: 'hidden', position: 'relative' }}>
+                          <div style={{
+                              width: `${Math.max(2, prod.percentual)}%`,
+                              background: `linear-gradient(90deg, ${prod.cor}cc 0%, ${prod.cor} 100%)`,
+                              height: '100%',
+                              borderRadius: '12px',
+                              transition: 'width 1s ease-out'
+                          }}></div>
+                          <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.75rem', fontWeight: 'bold', color: prod.percentual > 10 ? 'white' : '#475569' }}>
+                              {prod.percentual.toFixed(1)}% do Faturamento
+                          </span>
+                      </div>
+                    </div>
+                )) : (
+                    <div className="empty-state" style={{ padding: '40px', textAlign: 'center' }}>
+                        <Layers size={48} color="#cbd5e1" style={{ margin: '0 auto 10px' }} />
+                        <p style={{ fontSize: '1.1rem', color: '#64748b' }}>Sem dados suficientes para processar a Curva ABC neste período.</p>
+                    </div>
+                )}
+              </div>
+          </div>
+
         </section>
       )}
 
