@@ -465,15 +465,46 @@ const PDV = () => {
   // =======================================================================
   // PRODUTOS E ITENS
   // =======================================================================
-  const adicionarProdutoAoCarrinho = useCallback((prod) => {
-      playAudio('success'); setUltimoItemAdicionadoId(null); setTimeout(() => setUltimoItemAdicionadoId(prod.id), 10); setTimeout(() => setUltimoItemAdicionadoId(null), 800);
-      setCarrinho(prev => {
-          const index = prev.findIndex(i => i.id === prod.id);
-          if (index >= 0) { registrarAcaoAuditoria('AUMENTOU_QTD', `Produto: ${prod.descricao} (+1)`); const nc = [...prev]; nc[index] = { ...nc[index], quantidade: nc[index].quantidade + 1 }; return nc; }
-          registrarAcaoAuditoria('ADICIONOU_PRODUTO', `Produto: ${prod.descricao} | Valor: R$ ${prod.precoVenda}`); return [...prev, { ...prod, quantidade: 1, desconto: 0 }];
-      });
-      setBusca(''); setSugestoesProdutos([]); setSelectedIndex(-1); if (inputBuscaRef.current) inputBuscaRef.current.value = '';
-  }, [registrarAcaoAuditoria]);
+  const adicionarProdutoAoCarrinho = useCallback((prod, isCliqueDiretoNaIA = false) => {
+        playAudio('success');
+        setUltimoItemAdicionadoId(null);
+        setTimeout(() => setUltimoItemAdicionadoId(prod.id), 10);
+        setTimeout(() => setUltimoItemAdicionadoId(null), 800);
+
+        setCarrinho(prev => {
+            // 🧠 DETEÇÃO DO EFEITO HALO (INFLUÊNCIA INDIRETA)
+            // Se não foi clicado diretamente na gaveta da IA, vamos checar se a IA
+            // estava sugerindo algo da mesma "família" (Subcategoria) na tela.
+            let tipoInfluencia = 'NENHUMA';
+
+            if (isCliqueDiretoNaIA) {
+                tipoInfluencia = 'DIRETA'; // O Vendedor clicou no botão "➕" rosa da IA
+            } else {
+                // Verifica se a subcategoria do produto bipado/pesquisado está presente
+                // nas sugestões ativas da IA neste momento.
+                const subcategoriasSugeridas = sugestoesCrossSell.map(s => s.subcategoria);
+                if (prod.subcategoria && subcategoriasSugeridas.includes(prod.subcategoria)) {
+                    tipoInfluencia = 'INDIRETA'; // Efeito Halo! A IA abriu a conversa.
+                }
+            }
+
+            const index = prev.findIndex(i => i.id === prod.id);
+            if (index >= 0) {
+                registrarAcaoAuditoria('AUMENTOU_QTD', `Produto: ${prod.descricao} (+1)`);
+                const nc = [...prev];
+                nc[index] = { ...nc[index], quantidade: nc[index].quantidade + 1 };
+                return nc;
+            }
+
+            registrarAcaoAuditoria('ADICIONOU_PRODUTO', `Produto: ${prod.descricao} | Influência: ${tipoInfluencia}`);
+
+            // Adicionamos a tag 'influenciaIA' ao item do carrinho
+            return [...prev, { ...prod, quantidade: 1, desconto: 0, influenciaIA: tipoInfluencia }];
+        });
+
+        setBusca(''); setSugestoesProdutos([]); setSelectedIndex(-1);
+        if (inputBuscaRef.current) inputBuscaRef.current.value = '';
+    }, [registrarAcaoAuditoria, sugestoesCrossSell]); // ⚠️ Importante: adicionar sugestoesCrossSell nas dependências
 
   const processarEAN = async (valorRaw) => {
       const valor = valorRaw.replace(/[^a-zA-Z0-9]/g, ''); if (!valor) return;
@@ -578,7 +609,13 @@ const PDV = () => {
           clienteIe: clienteAvulso.ie || null,
 
           tipoNota: clienteAvulso.modoCadastro === 'PJ' ? 'NFE' : 'NFCE',
-          itens: carrinho.map(i => ({ produtoId: i.id, quantidade: i.quantidade, precoUnitario: i.precoVenda, desconto: i.desconto || 0 })),
+          itens: carrinho.map(i => ({
+              produtoId: i.id,
+              quantidade: i.quantidade,
+              precoUnitario: i.precoVenda,
+              desconto: i.desconto || 0,
+              influenciaIA: i.influenciaIA || 'NENHUMA' //
+          })),
           pagamentos: pagamentos.map(p => ({ formaPagamento: p.tipo, valor: p.valor, parcelas: 1 })),
           logAuditoria: auditLog
       };
@@ -1080,7 +1117,7 @@ const PDV = () => {
                         </div>
                         <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px' }}>
                             {sugestoesCrossSell.map(prod => (
-                                <div key={prod.id} onClick={() => adicionarProdutoAoCarrinho(prod)} style={{
+                                <div key={prod.id} onClick={() => adicionarProdutoAoCarrinho(prod, true)} style={{
                                     background: '#fdf2f8', border: '1px solid #fbcfe8', borderRadius: '8px', padding: '12px 14px',
                                     display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '15px',
                                     cursor: 'pointer', minWidth: '260px', maxWidth: '320px', flexShrink: 0, /* flexShrink 0 garante que o cartão não é esmagado */

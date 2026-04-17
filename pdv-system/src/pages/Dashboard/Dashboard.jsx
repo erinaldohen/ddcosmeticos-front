@@ -519,28 +519,44 @@ const Dashboard = () => {
               </div>
 
               {/* Pagamentos Donut */}
-              <div className="chart-box hover-effect">
-                <div className="box-header">
-                    <h3 className="flex-center-gap"><PieChartIcon size={18} className="text-emerald"/> Preferência de Pagamento</h3>
-                </div>
-                <div className="chart-content flex-center relative" style={{flexDirection: 'column', height: '240px'}}>
-                   <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        {/* Agora é um Donut Chart para ser mais elegante */}
-                        <Pie data={formasPagamento} cx="50%" cy="50%" labelLine={false} innerRadius={60} outerRadius={85} paddingAngle={5} dataKey="value">
-                          {formasPagamento.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} stroke="transparent" />)}
-                        </Pie>
-                        <TooltipChart formatter={(value) => formatCurrency(value)} contentStyle={{borderRadius:'8px', border:'none', boxShadow:'0 4px 10px rgba(0,0,0,0.1)'}}/>
-                        <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-                      </PieChart>
-                   </ResponsiveContainer>
-                   {/* Centro do Donut */}
-                   <div style={{ position: 'absolute', top: '42%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
-                       <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>TOTAL</span><br/>
-                       <span style={{ fontSize: '1.1rem', color: '#0f172a', fontWeight: '900' }}>{formatCurrency(faturamento)}</span>
-                   </div>
-                </div>
-              </div>
+                            <div className="chart-box hover-effect">
+                              <div className="box-header">
+                                  <h3 className="flex-center-gap"><PieChartIcon size={18} className="text-emerald"/> Preferência de Pagamento</h3>
+                              </div>
+                              <div className="chart-content flex-center relative" style={{flexDirection: 'column', height: '240px'}}>
+                                 <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                      <Pie
+                                        data={formasPagamento}
+                                        cx="50%"
+                                        cy="50%"
+                                        labelLine={false}
+                                        label={renderCustomizedLabel} /* 🔥 AQUI: Traz de volta a porcentagem visível nas fatias */
+                                        innerRadius={70} /* 🔥 Anel levemente mais grosso para caber o número */
+                                        outerRadius={100}
+                                        paddingAngle={4}
+                                        dataKey="value"
+                                      >
+                                        {formasPagamento.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} stroke="transparent" />)}
+                                      </Pie>
+
+                                      {/* 🔥 Tooltip mantido: exibe o valor em R$ real ao passar o mouse */}
+                                      <TooltipChart
+                                          formatter={(value) => formatCurrency(value)}
+                                          contentStyle={{borderRadius:'8px', border:'none', boxShadow:'0 4px 10px rgba(0,0,0,0.1)'}}
+                                      />
+
+                                      <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                                    </PieChart>
+                                 </ResponsiveContainer>
+
+                                 {/* Centro do Donut (Valor Total) */}
+                                 <div style={{ position: 'absolute', top: '42%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
+                                     <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 'bold' }}>TOTAL</span><br/>
+                                     <span style={{ fontSize: '1.1rem', color: '#0f172a', fontWeight: '900' }}>{formatCurrency(faturamento)}</span>
+                                 </div>
+                              </div>
+                            </div>
           </div>
 
           {/* LINHA 3: Equipa e ROI IA */}
