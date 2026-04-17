@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-// 🔥 IMPORTANTE: Adicionei a importação do ProdutoForm aqui para o renderizar no Modal
 import ProdutoForm from '../Produtos/ProdutoForm';
 import {
   Package, AlertTriangle, ShoppingCart, Calendar, Search,
@@ -23,7 +22,7 @@ const formatCurrency = (valor) => {
     return (valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 };
 
-// --- NOVOS COMPONENTES VISUAIS (LEGENDAS INTELIGENTES) ---
+// --- COMPONENTES VISUAIS (LEGENDAS INTELIGENTES) ---
 const RenderizarTendencia = ({ tendencia }) => {
     if (tendencia === 'ALTA') return <span className="tendencia-badge alta" data-tooltip="Crescimento de vendas > 20%"><TrendingUp size={14}/> Em Alta</span>;
     if (tendencia === 'QUEDA') return <span className="tendencia-badge queda" data-tooltip="Queda de vendas > 20%"><TrendingDown size={14}/> Em Queda</span>;
@@ -81,32 +80,65 @@ const InventoryIntelligence = ({ produtos, onAcao }) => {
 };
 
 const Inventario = () => {
-  const [produtos, setProdutos] = useState([]);
+  // 🔥 CORREÇÃO: O estado absoluto da base de dados, sem sofrer mutações de filtro
+  const [produtosRaw, setProdutosRaw] = useState([]);
+  const [fornecedoresDb, setFornecedoresDb] = useState([]);
+
   const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState({ total: 0, vencidos: 0, baixoEstoque: 0, sugestoesCompra: 0 });
   const [filtro, setFiltro] = useState({ busca: '', status: 'todos' });
   const [abaAtiva, setAbaAtiva] = useState('MATRIZ');
-  const [fornecedorSelecionado, setFornecedorSelecionado] = useState('TODOS');
 
-  // 🔥 NOVO: Estado para controlar o Modal de Edição de Produto
+  // Controle de Compras Inteligentes
+  const [fornecedorSelecionado, setFornecedorSelecionado] = useState('TODOS');
+  const [ativarSazonalidade, setAtivarSazonalidade] = useState(true);
+
+  // Modal de Edição de Produto
   const [produtoEmEdicaoId, setProdutoEmEdicaoId] = useState(null);
   const [isModalAberto, setIsModalAberto] = useState(false);
 
   const mainRef = useRef(null);
   useEffect(() => { mainRef.current?.focus(); }, []);
 
+  // Busca Fornecedores puros do Banco
+  const carregarFornecedoresDb = async () => {
+      try {
+          const res = await api.get('/fornecedores');
+          const lista = res.data.content || res.data || [];
+          const nomes = lista.map(f => f.nomeFantasia || f.razaoSocial).filter(Boolean);
+          setFornecedoresDb(nomes);
+      } catch (error) {
+          console.warn("Aviso: Não foi possível carregar a lista mestra de fornecedores.", error);
+      }
+  };
+
+  // Busca Estoque puro do Banco
   const carregarInventario = useCallback(async () => {
     const controller = new AbortController();
     setLoading(true);
     try {
       const res = await api.get('/inventario/inteligente', { signal: controller.signal });
-      let dados = res.data || [];
+      setProdutosRaw(res.data || []);
+    } catch (error) {
+      if (error.name !== 'CanceledError') toast.error("Erro ao sincronizar inteligência de estoque.");
+    } finally {
+      setLoading(false);
+    }
+    return () => controller.abort();
+  }, []);
 
+  useEffect(() => {
+    carregarFornecedoresDb();
+    const timeout = setTimeout(() => { carregarInventario(); }, 500);
+    return () => clearTimeout(timeout);
+  }, [carregarInventario]);
+
+  // 🔥 MÓDULO MATRIZ: Cálculos Exclusivos para a Aba de Matriz de Estoque
+  const produtosFiltrados = useMemo(() => {
+      let dados = produtosRaw;
       if (filtro.busca) {
           const termo = filtro.busca.toLowerCase();
           dados = dados.filter(p => (p.descricao || '').toLowerCase().includes(termo) || (p.codigoBarras || '').includes(termo));
       }
-
       const hoje = new Date();
       if (filtro.status === 'vencidos') {
           dados = dados.filter(p => isValidadeAtiva(p.validade) && new Date(p.validade) < hoje);
@@ -115,29 +147,20 @@ const Inventario = () => {
       } else if (filtro.status === 'curva_a') {
           dados = dados.filter(p => p.curvaABC === 'A');
       }
+      return dados;
+  }, [produtosRaw, filtro]);
 
-      setProdutos(dados);
+  const stats = useMemo(() => {
+      const hoje = new Date();
+      return {
+          total: produtosRaw.length,
+          vencidos: produtosRaw.filter(p => isValidadeAtiva(p.validade) && new Date(p.validade) < hoje).length,
+          baixoEstoque: produtosRaw.filter(p => p.quantidade <= (p.estoqueMinimo || 0)).length,
+          sugestoesCompra: produtosRaw.filter(p => p.sugestaoCompra > 0).length
+      };
+  }, [produtosRaw]);
 
-      setStats({
-        total: dados.length,
-        vencidos: dados.filter(p => isValidadeAtiva(p.validade) && new Date(p.validade) < hoje).length,
-        baixoEstoque: dados.filter(p => p.quantidade <= (p.estoqueMinimo || 0)).length,
-        sugestoesCompra: dados.filter(p => p.sugestaoCompra > 0).length
-      });
-
-    } catch (error) {
-      if (error.name !== 'CanceledError') toast.error("Erro ao sincronizar inteligência de estoque.");
-    } finally {
-      setLoading(false);
-    }
-    return () => controller.abort();
-  }, [filtro]);
-
-  useEffect(() => {
-    const timeout = setTimeout(() => { carregarInventario(); }, 500);
-    return () => clearTimeout(timeout);
-  }, [carregarInventario]);
-
+  // Exportação e Navegação
   const handleExport = async () => {
     const toastId = toast.loading("A gerar relatório PDF...");
     try {
@@ -166,34 +189,96 @@ const Inventario = () => {
       }
   };
 
-  // 🔥 CORREÇÃO: Abre o Modal de Edição na mesma página
   const handleAcessoProduto = (produto) => {
       setProdutoEmEdicaoId(produto.id);
       setIsModalAberto(true);
   };
 
-  // Função para fechar o Modal e atualizar o inventário caso tenha havido alterações
   const fecharModal = (houveAlteracao) => {
       setIsModalAberto(false);
       setProdutoEmEdicaoId(null);
       if (houveAlteracao === true) {
-          carregarInventario(); // Recarrega a lista se salvou o produto no modal
+          carregarInventario();
       }
   };
 
-  const todosParaComprar = produtos.filter(p => p.sugestaoCompra > 0).sort((a,b) => a.curvaABC.localeCompare(b.curvaABC));
-  const fornecedoresDisponiveis = [...new Set(todosParaComprar.map(p => p.fornecedorNome))].filter(Boolean);
-  const produtosParaComprar = todosParaComprar.filter(p => fornecedorSelecionado === 'TODOS' || p.fornecedorNome === fornecedorSelecionado);
-  const investimentoSugerido = produtosParaComprar.reduce((acc, p) => acc + (p.sugestaoCompra * (p.precoCusto || 0)), 0);
+  // =======================================================================
+  // 🧠 MOTOR DE SAZONALIDADE E SMART COMPRAS (CALENDÁRIO INTELIGENTE)
+  // =======================================================================
+
+  // Monta o dropdown fundindo todos os fornecedores cadastrados + nomes dos produtos
+  const fornecedoresDisponiveis = useMemo(() => {
+      const nomesDosProdutos = produtosRaw.map(p => p.fornecedorNome || p.fornecedor?.nome || 'Sem Fornecedor');
+      const todosOsNomes = [...nomesDosProdutos, ...fornecedoresDb];
+      return [...new Set(todosOsNomes)].filter(n => n !== 'Sem Fornecedor').sort();
+  }, [produtosRaw, fornecedoresDb]);
+
+  const listaParaExibirNoSelect = ['TODOS', ...fornecedoresDisponiveis, 'Sem Fornecedor'];
+
+  const { produtosDoFornecedor, produtosParaComprar, investimentoSugerido, eventoProximo } = useMemo(() => {
+
+      // 1. Filtra pela Base Absoluta (sem ser afetada pelo status da outra aba) à prova de Case Sensitive
+      const filtradosPorFornecedor = produtosRaw.filter(p => {
+          const nomeProduto = (p.fornecedorNome || p.fornecedor?.nome || '').trim().toUpperCase();
+          const selecionado = fornecedorSelecionado.trim().toUpperCase();
+
+          if (fornecedorSelecionado === 'TODOS') return true;
+          if (fornecedorSelecionado === 'Sem Fornecedor') return !nomeProduto;
+
+          return nomeProduto === selecionado || nomeProduto.includes(selecionado) || selecionado.includes(nomeProduto);
+      });
+
+      // 2. Aplica a Inteligência Sazonal
+      const hoje = new Date();
+      const mesAtual = hoje.getMonth() + 1;
+      let eventoAtivo = null;
+      let listaProcessada = filtradosPorFornecedor;
+
+      if (ativarSazonalidade && (mesAtual === 4 || mesAtual === 5)) {
+          eventoAtivo = { nome: "Dia das Mães", impacto: 1.4, categoriasAlvo: ['Skincare', 'Perfumaria', 'Kits', 'Maquiagem', 'Perfume'] };
+
+          listaProcessada = filtradosPorFornecedor.map(p => {
+              const strAlvo = (p.categoria || '') + ' ' + (p.descricao || '');
+              const isProdutoAlvo = eventoAtivo.categoriasAlvo.some(cat => strAlvo.toLowerCase().includes(cat.toLowerCase()));
+
+              if (isProdutoAlvo) {
+                  const novaSugestao = Math.ceil((p.sugestaoCompra || 0) * eventoAtivo.impacto);
+                  const sugestaoFinal = (novaSugestao < 6 && (p.curvaABC === 'A' || p.curvaABC === 'B')) ? 6 : novaSugestao;
+                  return { ...p, sugestaoCompra: Math.max(p.sugestaoCompra || 0, sugestaoFinal), alertaSazonal: `🎁 Impulso ${eventoAtivo.nome}` };
+              }
+              return p;
+          });
+      }
+
+      // 3. Ordenação Inteligente
+      const listaOrdenada = listaProcessada.sort((a, b) => {
+          const aPrecisa = a.sugestaoCompra > 0 ? 1 : 0;
+          const bPrecisa = b.sugestaoCompra > 0 ? 1 : 0;
+          if (aPrecisa !== bPrecisa) return bPrecisa - aPrecisa;
+          return (a.curvaABC || 'C').localeCompare(b.curvaABC || 'C');
+      });
+
+      // 4. Separação para orçamento
+      const listaFinalParaComprar = listaOrdenada.filter(p => p.sugestaoCompra > 0);
+      const investimento = listaFinalParaComprar.reduce((acc, p) => acc + (p.sugestaoCompra * (p.precoCusto || 0)), 0);
+
+      return {
+          produtosDoFornecedor: listaOrdenada,
+          produtosParaComprar: listaFinalParaComprar,
+          investimentoSugerido: investimento,
+          eventoProximo: eventoAtivo
+      };
+  }, [produtosRaw, fornecedorSelecionado, ativarSazonalidade]);
 
   const handleGerarPedidoWhatsApp = () => {
-      if (produtosParaComprar.length === 0) return toast.info("Não há produtos sugeridos para o fornecedor selecionado.");
+      if (produtosParaComprar.length === 0) return toast.info("Não há itens com necessidade de compra para este fornecedor.");
 
       const nomeFornecedor = fornecedorSelecionado === 'TODOS' ? 'Diversos' : fornecedorSelecionado;
       let texto = `*📋 PEDIDO DE COMPRAS - DD COSMÉTICOS*\nFornecedor: ${nomeFornecedor}\nData: ${new Date().toLocaleDateString('pt-BR')}\n\n`;
 
       produtosParaComprar.forEach((p, idx) => {
-          texto += `*${idx + 1}.* ${p.descricao}\n`;
+          const avisoSazonal = p.alertaSazonal ? ` _(${p.alertaSazonal})_` : '';
+          texto += `*${idx + 1}.* ${p.descricao}${avisoSazonal}\n`;
           texto += `   ↳ EAN: ${p.codigoBarras || 'S/N'}\n`;
           texto += `   ↳ *Qtd Solicitada: ${p.sugestaoCompra} un*\n\n`;
       });
@@ -228,13 +313,13 @@ const Inventario = () => {
           </div>
           <div className="stat-pill stat-success">
             <ShoppingCart size={18} color="#059669"/>
-            <span><strong>{stats.sugestoesCompra}</strong> Pedidos Sugeridos</span>
+            <span><strong>{stats.sugestoesCompra}</strong> Pedidos Base</span>
           </div>
         </div>
       </header>
 
       <section className="inv-ai-section">
-         <InventoryIntelligence produtos={produtos} onAcao={handleAcaoIA} />
+         <InventoryIntelligence produtos={produtosRaw} onAcao={handleAcaoIA} />
       </section>
 
       <section className="inv-toolbar-wrapper">
@@ -244,7 +329,7 @@ const Inventario = () => {
             </button>
             <button className={`inv-tab ${abaAtiva === 'COMPRAS' ? 'active' : ''}`} onClick={() => setAbaAtiva('COMPRAS')}>
                 <ClipboardList size={18}/> Smart Compras
-                {stats.sugestoesCompra > 0 && <span className="tab-badge">{stats.sugestoesCompra}</span>}
+                {produtosParaComprar.length > 0 && <span className="tab-badge">{produtosParaComprar.length}</span>}
             </button>
         </div>
 
@@ -275,7 +360,7 @@ const Inventario = () => {
       {abaAtiva === 'MATRIZ' && (
           <section className="inv-content-area">
             {loading ? ( <div className="loading-state"><RefreshCw className="spin" size={32}/><p>Sincronizando dados...</p></div>
-            ) : produtos.length === 0 ? (
+            ) : produtosFiltrados.length === 0 ? (
               <div className="empty-state-full">
                 <Package size={64} opacity={0.1} />
                 <h3>Nenhum produto atende aos filtros</h3>
@@ -294,7 +379,7 @@ const Inventario = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {produtos.map((p) => {
+                    {produtosFiltrados.map((p) => {
                         const isVencido = isValidadeAtiva(p.validade) && new Date(p.validade) < new Date();
                         return (
                         <tr key={p.id}>
@@ -339,30 +424,52 @@ const Inventario = () => {
           </section>
       )}
 
-      {/* TELA 2: SMART COMPRAS (SUGESTÕES POR FORNECEDOR) */}
+      {/* TELA 2: SMART COMPRAS (PANORAMA DO FORNECEDOR) */}
       {abaAtiva === 'COMPRAS' && (
           <section className="smart-compras-area animate-fade">
+
+              {/* BANNER SAZONAL */}
+              {eventoProximo && ativarSazonalidade && (
+                  <div style={{ background: 'linear-gradient(135deg, #fdf2f8 0%, #fce7f3 100%)', border: '1px solid #fbcfe8', borderRadius: '12px', padding: '16px 24px', marginBottom: '20px', display: 'flex', gap: '16px', alignItems: 'center', boxShadow: '0 4px 6px -1px rgba(236, 72, 153, 0.1)' }}>
+                      <div style={{ background: '#ec4899', color: 'white', padding: '12px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Sparkles size={24} />
+                      </div>
+                      <div>
+                          <h4 style={{ margin: '0 0 4px 0', color: '#be185d', fontSize: '1.1rem', fontWeight: '800' }}>ALERTA SAZONAL: {eventoProximo.nome}</h4>
+                          <p style={{ margin: 0, color: '#831843', fontSize: '0.95rem' }}>O motor de IA reajustou as sugestões de compra para <strong>{eventoProximo.categoriasAlvo.join(', ')}</strong>. O volume foi impulsionado estrategicamente para evitar ruturas de estoque na data.</p>
+                      </div>
+                  </div>
+              )}
+
               <div className="compras-header-alert">
                   <div className="compras-header-text">
                       <div className="icon-circle"><ShoppingCart size={24} color="#059669"/></div>
                       <div>
                           <h3>Inteligência de Compras</h3>
-                          <p>Selecione o fornecedor que está a atender no momento para gerar a lista filtrada.</p>
+                          <p>Selecione o fornecedor que está a atender no momento para analisar todo o portfólio dele.</p>
                       </div>
                   </div>
 
                   <div className="compras-header-actions">
-                      <div className="fornecedor-selector" data-tooltip="Visão Isolada de Compras">
+                      <div className="toggle-sazonalidade" style={{ display: 'flex', alignItems: 'center', gap: '8px', background: ativarSazonalidade ? '#fdf2f8' : '#f1f5f9', padding: '8px 12px', borderRadius: '8px', border: `1px solid ${ativarSazonalidade ? '#fbcfe8' : '#e2e8f0'}`, cursor: 'pointer', transition: 'all 0.2s' }} onClick={() => setAtivarSazonalidade(!ativarSazonalidade)}>
+                          {ativarSazonalidade ? <Sparkles size={18} color="#ec4899" className="pulse-animation"/> : <Calendar size={18} color="#64748b"/>}
+                          <span style={{ fontSize: '0.85rem', fontWeight: 'bold', color: ativarSazonalidade ? '#be185d' : '#475569' }}>
+                              {ativarSazonalidade ? 'IA Sazonal: ON' : 'IA Sazonal: OFF'}
+                          </span>
+                      </div>
+
+                      <div className="fornecedor-selector" data-tooltip="Filtrar por Fornecedor">
                           <Truck size={18} color="#64748b"/>
                           <select value={fornecedorSelecionado} onChange={(e) => setFornecedorSelecionado(e.target.value)}>
-                              <option value="TODOS">Todos os Fornecedores</option>
-                              {fornecedoresDisponiveis.map(f => (
-                                  <option key={f} value={f}>{f}</option>
+                              {listaParaExibirNoSelect.map(f => (
+                                  <option key={f} value={f === 'Sem Fornecedor' ? '' : f}>
+                                      {f}
+                                  </option>
                               ))}
                           </select>
                       </div>
 
-                      <div className="investimento-badge">
+                      <div className="investimento-badge" data-tooltip="Custo total dos itens sugeridos para compra">
                           <span>Capital Necessário</span>
                           <strong>{formatCurrency(investimentoSugerido)}</strong>
                       </div>
@@ -372,31 +479,52 @@ const Inventario = () => {
                   </div>
               </div>
 
-              {produtosParaComprar.length === 0 ? (
+              {produtosDoFornecedor.length === 0 ? (
                   <div className="empty-state-full">
-                    <Sparkles size={64} color="#10b981" opacity={0.2} />
-                    <h3>Nenhum pedido pendente</h3>
-                    <p>O seu estoque para este fornecedor está perfeitamente alinhado com as vendas.</p>
+                    <Package size={64} color="#94a3b8" opacity={0.3} />
+                    <h3>Nenhum produto encontrado</h3>
+                    <p>Não há produtos vinculados a este fornecedor no sistema.</p>
                   </div>
               ) : (
                   <div className="compras-grid">
-                      {produtosParaComprar.map(p => (
-                          <div key={p.id} className={`compra-card curva-${p.curvaABC.toLowerCase()}`}>
-                              <div className="compra-card-head">
+                      {produtosDoFornecedor.map(p => {
+                          const precisaComprar = p.sugestaoCompra > 0;
+
+                          return (
+                          <div key={p.id}
+                               className={`compra-card curva-${p.curvaABC.toLowerCase()}`}
+                               style={!precisaComprar ? { opacity: 0.75, filter: 'grayscale(0.4)' } : { border: '2px solid #3b82f6', transform: 'scale(1.02)', zIndex: 1 }}>
+
+                              <div className="compra-card-head" style={{ position: 'relative' }}>
                                   <RenderizarCurvaABC curva={p.curvaABC} />
-                                  <span className="sugestao-num">Pedir: {p.sugestaoCompra} un</span>
+                                  {precisaComprar ? (
+                                      <span className="sugestao-num" style={{ background: '#3b82f6', color: 'white', boxShadow: '0 2px 4px rgba(59, 130, 246, 0.3)' }}>
+                                          Pedir: {p.sugestaoCompra} un
+                                      </span>
+                                  ) : (
+                                      <span className="sugestao-num" style={{ background: '#10b981', color: 'white' }}>
+                                          <CheckCircle size={14} style={{ marginRight: '4px' }}/> Estoque OK
+                                      </span>
+                                  )}
                               </div>
+
                               <div className="compra-card-body">
                                   <h4 title={p.descricao}>{p.descricao.length > 40 ? p.descricao.substring(0, 40) + '...' : p.descricao}</h4>
-                                  <p className="fornecedor-label">🏭 {p.fornecedorNome}</p>
+                                  <p className="fornecedor-label">🏭 {p.fornecedorNome || p.fornecedor?.nome || 'Sem Fornecedor'}</p>
+
+                                  {p.alertaSazonal && precisaComprar && (
+                                      <div style={{ background: '#fce7f3', color: '#be185d', padding: '4px 8px', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 'bold', display: 'inline-block', marginBottom: '10px' }}>
+                                          {p.alertaSazonal}
+                                      </div>
+                                  )}
 
                                   <div className="compra-math">
                                       <div className="math-box">
-                                          <span>Estoque Físico</span>
-                                          <strong>{p.quantidade} un</strong>
+                                          <span>Estoque / Mín.</span>
+                                          <strong>{p.quantidade} / {p.estoqueMinimo || 0}</strong>
                                       </div>
                                       <div className="math-box">
-                                          <span>Giro</span>
+                                          <span>Giro Médio</span>
                                           <strong style={{display:'flex', gap:'4px', alignItems:'center', justifyContent:'center'}}>
                                               {p.giroDiario >= 2.0 ? <Flame size={14} color="#ef4444"/> : (p.giroDiario >= 0.5 ? <Zap size={14} color="#f59e0b"/> : <Snowflake size={14} color="#3b82f6"/>)}
                                               {p.giroDiario.toFixed(1)}/dia
@@ -405,18 +533,18 @@ const Inventario = () => {
                                   </div>
 
                                   <div className="compra-cost">
-                                      <span>Custo Estimado</span>
-                                      <strong>{formatCurrency(p.sugestaoCompra * (p.precoCusto || 0))}</strong>
+                                      <span>{precisaComprar ? 'Custo Estimado' : 'Custo da Reposição Futura'}</span>
+                                      <strong>{formatCurrency((p.sugestaoCompra || 0) * (p.precoCusto || 0))}</strong>
                                   </div>
                               </div>
                           </div>
-                      ))}
+                      )})}
                   </div>
               )}
           </section>
       )}
 
-      {/* 🔥 ATUALIZADO: MODAL FLUTUANTE COM CHAVE ÚNICA (KEY) */}
+      {/* MODAL FLUTUANTE COM CHAVE ÚNICA (KEY) */}
             {isModalAberto && produtoEmEdicaoId && (
               <div className="modal-overlay" onClick={() => fecharModal(false)}>
                   <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -425,9 +553,6 @@ const Inventario = () => {
                           <button className="btn-close-modal" onClick={() => fecharModal(false)}><X size={24} /></button>
                       </div>
                       <div className="modal-body-scroll">
-                          {/* A prop 'key' é o segredo: toda vez que o 'produtoEmEdicaoId' mudar,
-                            o React limpa o formulário anterior e carrega o novo produto.
-                          */}
                           <ProdutoForm
                               key={produtoEmEdicaoId}
                               id={produtoEmEdicaoId}
@@ -437,9 +562,8 @@ const Inventario = () => {
                   </div>
               </div>
             )}
+    </main>
+  );
+};
 
-          </main>
-        );
-      };
-
-      export default Inventario;
+export default Inventario;

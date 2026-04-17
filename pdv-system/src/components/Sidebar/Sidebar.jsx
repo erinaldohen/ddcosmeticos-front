@@ -5,7 +5,7 @@ import {
   Settings, LogOut, ChevronLeft, X,
   ShieldCheck, Truck, History, Clock,
   Wallet, TrendingDown, Store, ClipboardList, ShoppingBag,
-  BarChart3, HeartHandshake, TrendingUp
+  BarChart3, HeartHandshake, TrendingUp, FileText
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -44,15 +44,16 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
           { path: '/pdv', icon: <ShoppingCart size={20} />, label: 'Caixa (PDV)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA', 'ROLE_USUARIO'] },
           { path: '/caixa', icon: <Store size={20} />, label: 'Abrir / Fechar Caixa', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA', 'ROLE_USUARIO'] },
           { path: '/fiado', icon: <Wallet size={20} />, label: 'Fiado / Crediário', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO', 'ROLE_CAIXA'] },
-          { path: '/vendas/historico', icon: <ShoppingBag size={20} />, label: 'Histórico de Notas', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA'] },
+          { path: '/vendas/historico', icon: <ShoppingBag size={20} />, label: 'Histórico de Vendas', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_CAIXA'] },
         ]
       },
       {
         title: 'Estoque',
         items: [
           { path: '/produtos', icon: <Package size={20} />, label: 'Produtos', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
-          { path: '/estoque/entrada', icon: <Truck size={20} />, label: 'Entrada de Notas', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
-          { path: '/inventario', icon: <ClipboardList size={20} />, label: 'Inventário', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
+          { path: '/estoque/entrada', icon: <Truck size={20} />, label: 'Importar XML', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
+          { path: '/historico-notas', icon: <FileText size={20} />, label: 'Histórico XML', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
+          { path: '/inventario', icon: <ClipboardList size={20} />, label: 'Inventário (IA)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/fornecedores', icon: <Users size={20} />, label: 'Fornecedores', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
         ]
       },

@@ -26,12 +26,24 @@ api.interceptors.response.use(
     }
 
     const status = error.response.status;
-    const originalRequest = error.config;
-    const url = originalRequest.url || '';
+    const config = error.config;
+    const url = config.url || '';
 
-    // Rotas de IA e Pesquisa que não devem causar spam de erros na tela
-    const isSilentSearch = url.includes('/ncm/sugestoes') || url.includes('/fiscal/validar') || (url.includes('/produtos') && url.includes('termo='));
+    // 🔥 REGRA ABSOLUTA DE CURTO-CIRCUITO: Se o componente pediu silêncio, ignora TUDO
+    if (config.silent) {
+        console.warn(`[Silent API] Ignorando erro ${status} na rota: ${url}`);
+        return Promise.reject(error);
+    }
 
+    // Rotas de IA, Validação e Rotas Novas que não devem causar Logout
+    const isSilentSearch =
+        url.includes('/ncm/sugestoes') ||
+        url.includes('/fiscal/validar') ||
+        (url.includes('/produtos') && url.includes('termo=')) ||
+        url.includes('/produtos/cross-sell') ||
+        url.includes('/fornecedores/buscar-por-cnpj');
+
+    // Se for 404 de busca silenciosa, só rejeita
     if (status === 404 && isSilentSearch) {
         return Promise.reject(error);
     }
@@ -56,9 +68,6 @@ api.interceptors.response.use(
           return Promise.reject(error);
       }
 
-      // 🔥 CORREÇÃO DE ARQUITETURA: Blindagem contra o falso 401/403 do Spring Boot
-      // Se a rota não existir no Backend, o Spring reencaminha para /error e devolve 403.
-      // Jamais deslogamos o utilizador por causa de um endpoint de IA/Fiscal que falhou ou não foi criado.
       if (isSilentSearch) {
           console.warn(`[Segurança] Rota ${url} bloqueada pelo backend (${status}). Ignorando redirecionamento de login.`);
           return Promise.reject(error);

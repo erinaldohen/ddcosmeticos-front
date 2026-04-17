@@ -87,71 +87,106 @@ const FornecedorForm = ({ isModal = false, onSuccess }) => {
     }
   };
 
-  // --- CORREÇÃO PRINCIPAL: CONSULTA HÍBRIDA ---
+  // =========================================================================
+  // 🔥 CORREÇÃO: CONSULTA RICA (CNPJ.WS PRIMEIRO, BRASIL API COMO FALLBACK)
+  // =========================================================================
   const consultarCNPJ = async () => {
       const cnpjLimpo = unmask(formData.cnpj);
       if (cnpjLimpo.length !== 14) return toast.warning("CNPJ incompleto.");
 
       setLoadingCnpj(true);
 
+      // 1. Verifica duplicidade no Backend
+      if (!isEdit) {
+          try {
+              const check = await api.get(`/fornecedores/buscar-por-cnpj/${cnpjLimpo}`);
+              if (check.data && check.data.id) {
+                  if (isModal) {
+                      toast.success("Fornecedor localizado no sistema!");
+                      if (onSuccess) onSuccess(check.data);
+                      setLoadingCnpj(false);
+                      return;
+                  } else {
+                      toast.warning("Atenção: Este CNPJ já está cadastrado no sistema.");
+                  }
+              }
+          } catch (error) {
+              if (error.response && error.response.status !== 404) {
+                  console.error("Erro no backend:", error);
+              }
+          }
+      }
+
       try {
-        // 1. Verifica duplicidade no Backend (AGORA VAI FUNCIONAR)
-        if (!isEdit) {
-            try {
-                const check = await api.get(`/fornecedores/buscar-por-cnpj/${cnpjLimpo}`);
+          // 2. Tentativa Primária: CNPJ.ws (Traz Inscrição Estadual, Contatos Ricos)
+          const resPrincipal = await fetch(`https://publica.cnpj.ws/cnpj/${cnpjLimpo}`);
 
-                // Se chegou aqui, é status 200 (Encontrou no banco)
-                if (check.data && check.data.id) {
-                    if (isModal) {
-                        toast.success("Fornecedor localizado no sistema!");
-                        if (onSuccess) onSuccess(check.data);
-                        setLoadingCnpj(false);
-                        return;
-                    } else {
-                        toast.warning("Atenção: Este CNPJ já está cadastrado no sistema.");
-                        // Não para a execução, permite que o usuário veja os dados se quiser
-                    }
-                }
-            } catch (error) {
-                // Se der 404, significa que NÃO existe no banco. Isso é BOM para um cadastro novo.
-                // Então apenas ignoramos o erro 404 e seguimos para a BrasilAPI.
-                if (error.response && error.response.status !== 404) {
-                    console.error("Erro no backend:", error); // Loga erros reais (500, 403)
-                }
-            }
-        }
+          if (resPrincipal.ok) {
+              const data = await resPrincipal.json();
+              const est = data.estabelecimento;
 
-        // 2. Consulta API Externa (BrasilAPI) para preencher o formulário
-        const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
+              // Busca a IE Ativa
+              let ieEncontrada = 'ISENTO';
+              if (est.inscricoes_estaduais && est.inscricoes_estaduais.length > 0) {
+                  const ieAtiva = est.inscricoes_estaduais.find(i => i.ativa);
+                  ieEncontrada = ieAtiva ? ieAtiva.inscricao_estadual : est.inscricoes_estaduais[0].inscricao_estadual;
+              }
 
-        if (!res.ok) throw new Error('CNPJ não encontrado na Receita.');
+              // Monta Telefone e E-mail
+              const telCompleto = (est.ddd1 && est.telefone1) ? `${est.ddd1}${est.telefone1}` : '';
+              const emailCnpj = est.email || '';
 
-        const dados = await res.json();
+              setFormData(prev => ({
+                  ...prev,
+                  razaoSocial: data.razao_social?.toUpperCase() || '',
+                  nomeFantasia: (est.nome_fantasia || data.razao_social)?.toUpperCase() || '',
+                  inscricaoEstadual: ieEncontrada,
+                  email: emailCnpj.toLowerCase(),
+                  telefone: maskPhone(telCompleto),
+                  cep: maskCEP(est.cep || ''),
+                  logradouro: est.logradouro?.toUpperCase() || '',
+                  numero: est.numero || 'SN',
+                  complemento: est.complemento?.toUpperCase() || '',
+                  bairro: est.bairro?.toUpperCase() || '',
+                  cidade: est.cidade?.nome?.toUpperCase() || '',
+                  uf: est.estado?.sigla?.toUpperCase() || ''
+              }));
 
-        setFormData(prev => ({
-          ...prev,
-          razaoSocial: dados.razao_social?.toUpperCase(),
-          nomeFantasia: (dados.nome_fantasia || dados.razao_social)?.toUpperCase(),
-          email: dados.email?.toLowerCase() || prev.email,
-          inscricaoEstadual: prev.inscricaoEstadual,
-          logradouro: dados.logradouro?.toUpperCase(),
-          numero: dados.numero || '',
-          complemento: dados.complemento?.toUpperCase() || '',
-          bairro: dados.bairro?.toUpperCase(),
-          cidade: dados.municipio?.toUpperCase(),
-          uf: dados.uf?.toUpperCase(),
-          cep: maskCEP(dados.cep),
-          telefone: maskPhone(dados.ddd_telefone_1 || dados.telefone)
-        }));
+              toast.success("Dados completos importados com sucesso! 🏢");
+              setLoadingCnpj(false);
+              return; // Sai da função, não precisa da BrasilAPI
+          }
+      } catch (e) {
+          console.warn("CNPJ.ws falhou, tentando fallback na BrasilAPI...");
+      }
 
-        toast.success("Dados importados da Receita! 🏢");
+      // 3. Fallback: BrasilAPI (Rápida, mas com menos dados)
+      try {
+          const resFallback = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
+          if (!resFallback.ok) throw new Error('CNPJ não encontrado na Receita.');
+          const dados = await resFallback.json();
 
+          setFormData(prev => ({
+            ...prev,
+            razaoSocial: dados.razao_social?.toUpperCase() || '',
+            nomeFantasia: (dados.nome_fantasia || dados.razao_social)?.toUpperCase() || '',
+            email: dados.email?.toLowerCase() || prev.email,
+            telefone: maskPhone(dados.ddd_telefone_1 || dados.telefone || prev.telefone),
+            cep: maskCEP(dados.cep || ''),
+            logradouro: dados.logradouro?.toUpperCase() || '',
+            numero: dados.numero || 'SN',
+            complemento: dados.complemento?.toUpperCase() || '',
+            bairro: dados.bairro?.toUpperCase() || '',
+            cidade: dados.municipio?.toUpperCase() || '',
+            uf: dados.uf?.toUpperCase() || ''
+            // IE omitida propositadamente no fallback pois a BrasilAPI não garante precisão
+          }));
+
+          toast.success("Dados importados! Preencha a I.E. manualmente.");
       } catch (error) {
-        console.error(error);
-        // Só avisa se for erro de conexão ou API externa, não erro de duplicidade
-        toast.error("Não foi possível buscar dados automáticos. Preencha manualmente.");
+          toast.error("Não foi possível buscar dados automáticos. Preencha manualmente.");
       } finally {
-        setLoadingCnpj(false);
+          setLoadingCnpj(false);
       }
     };
 
@@ -183,7 +218,6 @@ const FornecedorForm = ({ isModal = false, onSuccess }) => {
         }
       }
     } catch (error) {
-      // Tratamento genérico caso o backend não retorne mensagem
       toast.error(error.response?.data?.message || "Erro ao salvar. Verifique campos obrigatórios.");
     } finally {
       setLoading(false);
