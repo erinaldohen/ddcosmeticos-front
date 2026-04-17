@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Search, Trash2, Plus, Minus, ArrowLeft, X, UserCheck, ArrowRight, Banknote, Smartphone,
-  CreditCard, Tag, ShoppingBag, CheckCircle2, TrendingDown, Sparkles, // 🔥 Sparkles adicionado aqui
+  CreditCard, Tag, ShoppingBag, CheckCircle2, TrendingDown, Sparkles,
   Printer, MessageCircle, AlertTriangle, PauseCircle, PlayCircle, Clock, FileText, Building2, MapPin, WifiOff, Wifi, Mail
 } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -110,8 +110,12 @@ const PDV = () => {
   const [sugestoesProdutos, setSugestoesProdutos] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [ultimoItemAdicionadoId, setUltimoItemAdicionadoId] = useState(null);
+
+  // 🔥 IA Cross-Sell e Efeito Halo (Janela Temporal)
   const [sugestoesCrossSell, setSugestoesCrossSell] = useState([]);
   const [loadingCrossSell, setLoadingCrossSell] = useState(false);
+  const [showPreCheckoutModal, setShowPreCheckoutModal] = useState(false);
+  const [tempoExposicaoIA, setTempoExposicaoIA] = useState(0); // Timestamp do momento em que a IA iniciou um diálogo
 
   const [showClienteModal, setShowClienteModal] = useState(false);
   const [showDescontoModal, setShowDescontoModal] = useState(false);
@@ -133,40 +137,34 @@ const PDV = () => {
   const [valorInputRaw, setValorInputRaw] = useState('');
 
   // =======================================================================
-    // 🔥 MOTOR DE INTELIGÊNCIA: CROSS-SELL AUTOMÁTICO
-    // =======================================================================
-    useEffect(() => {
-        // Só busca sugestões se houver itens e a venda não estiver finalizada
-        if (carrinho.length === 0 || mobileViewState !== 'SCAN' || vendaFinalizada) {
-            setSugestoesCrossSell([]);
-            return;
-        }
+  // MOTOR DE INTELIGÊNCIA: CROSS-SELL AUTOMÁTICO (MACHINE LEARNING)
+  // =======================================================================
+  useEffect(() => {
+      if (carrinho.length === 0 || mobileViewState !== 'SCAN' || vendaFinalizada) {
+          setSugestoesCrossSell([]);
+          return;
+      }
 
-        // Pega o ID do último produto adicionado para guiar a IA
-        const ultimoProduto = carrinho[carrinho.length - 1];
+      const ultimoProduto = carrinho[carrinho.length - 1];
 
-        const buscarSugestoesIA = async () => {
-            if (!isOnline) return; // Cross-sell requer internet
-            setLoadingCrossSell(true);
-            try {
-                // Chama o endpoint de inteligência da DD Cosméticos
-                const { data } = await api.get(`/produtos/cross-sell?produtoBaseId=${ultimoProduto.id}&limite=3`);
+      const buscarSugestoesIA = async () => {
+          if (!isOnline) return;
+          setLoadingCrossSell(true);
+          try {
+              const { data } = await api.get(`/produtos/cross-sell?produtoBaseId=${ultimoProduto.id}&limite=3`);
+              const sugestoesFiltradas = data.filter(sugestao => !carrinho.some(item => item.id === sugestao.id));
+              setSugestoesCrossSell(sugestoesFiltradas);
+          } catch (error) {
+              console.warn("IA de Cross-sell indisponível no momento.");
+              setSugestoesCrossSell([]);
+          } finally {
+              setLoadingCrossSell(false);
+          }
+      };
 
-                // Filtra para não sugerir o que já está no carrinho
-                const sugestoesFiltradas = data.filter(sugestao => !carrinho.some(item => item.id === sugestao.id));
-                setSugestoesCrossSell(sugestoesFiltradas);
-            } catch (error) {
-                console.warn("IA de Cross-sell indisponível no momento.");
-                setSugestoesCrossSell([]);
-            } finally {
-                setLoadingCrossSell(false);
-            }
-        };
-
-        // Pequeno delay para não sobrecarregar a API caso o operador passe muitos itens rápido
-        const timer = setTimeout(buscarSugestoesIA, 800);
-        return () => clearTimeout(timer);
-    }, [carrinho.length, isOnline, mobileViewState, vendaFinalizada]);
+      const timer = setTimeout(buscarSugestoesIA, 800);
+      return () => clearTimeout(timer);
+  }, [carrinho.length, isOnline, mobileViewState, vendaFinalizada]);
 
   // =======================================================================
   // INICIALIZAÇÃO E OBTENÇÃO DA LOGO
@@ -257,11 +255,12 @@ const PDV = () => {
 
   useEffect(() => {
       const handleKeyDown = (e) => {
-          const isModalOpen = showExitModal || showCancelVendaModal || showClienteModal || showDescontoModal || showRupturaModal || showPausadasModal || showZapModal || showEmailModal || vendaFinalizada || alertaCrediario;
+          const isModalOpen = showExitModal || showCancelVendaModal || showClienteModal || showDescontoModal || showRupturaModal || showPausadasModal || showZapModal || showEmailModal || vendaFinalizada || alertaCrediario || showPreCheckoutModal;
 
           if (e.key === 'Escape') {
               e.preventDefault();
               if (alertaCrediario) { setAlertaCrediario(null); return; }
+              if (showPreCheckoutModal) { setShowPreCheckoutModal(false); setTempoExposicaoIA(Date.now()); return; }
               if (showZapModal) { setShowZapModal(false); return; }
               if (showEmailModal) { setShowEmailModal(false); return; }
               if (vendaFinalizada) { setVendaFinalizada(null); limparEstadoVenda(); return; }
@@ -285,7 +284,11 @@ const PDV = () => {
                   else if (k === 'T') { e.preventDefault(); setMetodoAtual('DEBITO'); inputValorRef.current?.focus(); }
                   else if (k === 'F') { e.preventDefault(); setMetodoAtual('CREDIARIO'); inputValorRef.current?.focus(); }
               }
+
               if (e.key === 'Enter') {
+                  // 🔥 FIX DO PAGAMENTO DUPLICADO: O input numérico já trata o Enter dele. Ignora aqui.
+                  if (e.target === inputValorRef.current) return;
+
                   e.preventDefault();
                   if (saldoDevedor <= 0.01 && !loading) finalizarVendaReal();
                   else handleAdicionarPagamento();
@@ -298,19 +301,35 @@ const PDV = () => {
           if (e.key === 'F4') { e.preventDefault(); handleShowDesconto(); }
           if (e.key === 'F5') { e.preventDefault(); handlePausarVenda(); }
           if (e.key === 'F6') { e.preventDefault(); handleShowPausadas(); }
-          if (e.key === 'F8') { e.preventDefault(); handleIrParaPagamento(); }
+          if (e.key === 'F8') { e.preventDefault(); handlePreCheckout(); }
           if (e.key === 'F9') { e.preventDefault(); setShowRupturaModal(true); }
           if (e.key === 'Delete' && e.target.tagName !== 'INPUT') { e.preventDefault(); handleCancelarVenda(); }
       };
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [mobileViewState, carrinho.length, showClienteModal, showDescontoModal, showExitModal, showCancelVendaModal, showRupturaModal, showPausadasModal, showZapModal, showEmailModal, vendaFinalizada, alertaCrediario, saldoDevedor, metodoAtual, loading]);
+  }, [mobileViewState, carrinho.length, showClienteModal, showDescontoModal, showExitModal, showCancelVendaModal, showRupturaModal, showPausadasModal, showZapModal, showEmailModal, vendaFinalizada, alertaCrediario, saldoDevedor, metodoAtual, loading, showPreCheckoutModal]);
 
   // =======================================================================
   // AÇÕES DO CARRINHO E VENDA
   // =======================================================================
   const handleShowDesconto = () => { if (carrinho.length === 0) return toast.warn("Adicione produtos antes de dar desconto."); setShowDescontoModal(true); };
-  const handleIrParaPagamento = () => { if (carrinho.length === 0) return toast.warn("O carrinho está vazio."); setMobileView('PAYMENT'); setValorInputRaw(Math.round(saldoDevedor * 100).toString()); setTimeout(()=> inputValorRef.current?.focus(), 100); };
+
+  const handleIrParaPagamento = () => {
+      if (carrinho.length === 0) return toast.warn("O carrinho está vazio.");
+      setMobileView('PAYMENT');
+      setValorInputRaw(Math.round(saldoDevedor * 100).toString());
+      setTimeout(()=> inputValorRef.current?.focus(), 100);
+  };
+
+  const handlePreCheckout = () => {
+      if (carrinho.length === 0) return toast.warn("O carrinho está vazio.");
+      if (sugestoesCrossSell.length > 0) {
+          setShowPreCheckoutModal(true);
+      } else {
+          handleIrParaPagamento();
+      }
+  };
+
   const handleCancelarVenda = () => { if (carrinho.length === 0) return toast.warn("Não há nada para cancelar."); setShowCancelVendaModal(true); };
 
   const handlePausarVenda = () => {
@@ -336,7 +355,11 @@ const PDV = () => {
 
   const confirmarCancelamentoVenda = () => { limparEstadoVenda(); setShowCancelVendaModal(false); toast.info("Venda cancelada."); };
 
-  const limparEstadoVenda = () => { setCarrinho([]); setPagamentos([]); setClienteAvulso({ nome: '', telefone: '', documento: '', email: '', isPj: false, ie: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '', modoCadastro: 'PF' }); setDescontoTotalRaw(0); setMobileView('SCAN'); setBusca(''); setAuditLog([]); };
+  const limparEstadoVenda = () => {
+      setCarrinho([]); setPagamentos([]); setDescontoTotalRaw(0); setMobileView('SCAN'); setBusca(''); setAuditLog([]); setTempoExposicaoIA(0);
+      setClienteAvulso({ nome: '', telefone: '', documento: '', email: '', isPj: false, ie: '', cep: '', logradouro: '', numero: '', bairro: '', cidade: '', uf: '', modoCadastro: 'PF' });
+  };
+
   const handleSairPdv = () => { if(carrinho.length > 0) setShowExitModal(true); else navigate('/dashboard'); };
 
   // =======================================================================
@@ -420,7 +443,7 @@ const PDV = () => {
                     let novoDoc = clienteAvulso.documento;
                     let docBanco = cleanNumeric(data.documento);
 
-                    // Proteção contra dados legados (CPF == Telefone)
+                    // Proteção contra dados legados
                     if (docBanco && docBanco !== cleanTel) {
                         if (docBanco.length === 11) novoDoc = mascaraDocumento(docBanco);
                         if (docBanco.length === 14) novoDoc = mascaraDocumento(docBanco);
@@ -463,7 +486,7 @@ const PDV = () => {
   };
 
   // =======================================================================
-  // PRODUTOS E ITENS
+  // PRODUTOS, ITENS E RASTREAMENTO DO EFEITO HALO TEMPORAL
   // =======================================================================
   const adicionarProdutoAoCarrinho = useCallback((prod, isCliqueDiretoNaIA = false) => {
         playAudio('success');
@@ -472,20 +495,15 @@ const PDV = () => {
         setTimeout(() => setUltimoItemAdicionadoId(null), 800);
 
         setCarrinho(prev => {
-            // 🧠 DETEÇÃO DO EFEITO HALO (INFLUÊNCIA INDIRETA)
-            // Se não foi clicado diretamente na gaveta da IA, vamos checar se a IA
-            // estava sugerindo algo da mesma "família" (Subcategoria) na tela.
             let tipoInfluencia = 'NENHUMA';
 
+            // 🔥 A NOVA REGRA DO EFEITO HALO:
             if (isCliqueDiretoNaIA) {
-                tipoInfluencia = 'DIRETA'; // O Vendedor clicou no botão "➕" rosa da IA
-            } else {
-                // Verifica se a subcategoria do produto bipado/pesquisado está presente
-                // nas sugestões ativas da IA neste momento.
-                const subcategoriasSugeridas = sugestoesCrossSell.map(s => s.subcategoria);
-                if (prod.subcategoria && subcategoriasSugeridas.includes(prod.subcategoria)) {
-                    tipoInfluencia = 'INDIRETA'; // Efeito Halo! A IA abriu a conversa.
-                }
+                tipoInfluencia = 'DIRETA';
+            } else if (tempoExposicaoIA > 0 && (Date.now() - tempoExposicaoIA < 120000)) {
+                // Se a IA gerou uma conversa e o operador bipou QUALQUER produto em até 2 minutos,
+                // a IA recebe o crédito pela influência indireta (Padrão Oculto Descoberto)
+                tipoInfluencia = 'INDIRETA';
             }
 
             const index = prev.findIndex(i => i.id === prod.id);
@@ -497,14 +515,12 @@ const PDV = () => {
             }
 
             registrarAcaoAuditoria('ADICIONOU_PRODUTO', `Produto: ${prod.descricao} | Influência: ${tipoInfluencia}`);
-
-            // Adicionamos a tag 'influenciaIA' ao item do carrinho
             return [...prev, { ...prod, quantidade: 1, desconto: 0, influenciaIA: tipoInfluencia }];
         });
 
         setBusca(''); setSugestoesProdutos([]); setSelectedIndex(-1);
         if (inputBuscaRef.current) inputBuscaRef.current.value = '';
-    }, [registrarAcaoAuditoria, sugestoesCrossSell]); // ⚠️ Importante: adicionar sugestoesCrossSell nas dependências
+    }, [registrarAcaoAuditoria, tempoExposicaoIA]);
 
   const processarEAN = async (valorRaw) => {
       const valor = valorRaw.replace(/[^a-zA-Z0-9]/g, ''); if (!valor) return;
@@ -614,7 +630,7 @@ const PDV = () => {
               quantidade: i.quantidade,
               precoUnitario: i.precoVenda,
               desconto: i.desconto || 0,
-              influenciaIA: i.influenciaIA || 'NENHUMA' //
+              influenciaIA: i.influenciaIA || 'NENHUMA'
           })),
           pagamentos: pagamentos.map(p => ({ formaPagamento: p.tipo, valor: p.valor, parcelas: 1 })),
           logAuditoria: auditLog
@@ -1108,43 +1124,6 @@ const PDV = () => {
           </div>
           )}
 
-      {/* 🔥 NOVO: PAINEL DE SUGESTÕES INTELIGENTES (CROSS-SELL) */}
-                {sugestoesCrossSell.length > 0 && (!isMobile || mobileViewState === 'SCAN') && (
-                    <div className="cross-sell-panel animate-fade-in-down" style={{ padding: '0 20px', marginBottom: '15px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-                            <Sparkles size={16} color="#ec4899" className="pulse-animation" />
-                            <span style={{ fontSize: '0.85rem', fontWeight: '800', color: '#be185d', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sugestão Inteligente (Complementos)</span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px' }}>
-                            {sugestoesCrossSell.map(prod => (
-                                <div key={prod.id} onClick={() => adicionarProdutoAoCarrinho(prod, true)} style={{
-                                    background: '#fdf2f8', border: '1px solid #fbcfe8', borderRadius: '8px', padding: '12px 14px',
-                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '15px',
-                                    cursor: 'pointer', minWidth: '260px', maxWidth: '320px', flexShrink: 0, /* flexShrink 0 garante que o cartão não é esmagado */
-                                    transition: '0.2s', boxShadow: '0 2px 4px rgba(236, 72, 153, 0.05)'
-                                }} className="hover-scale">
-                                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-
-                                        {/* 🔥 CORREÇÃO: Descrição quebra de linha automaticamente e mostra tudo */}
-                                        <strong style={{
-                                            fontSize: '0.85rem', color: '#831843', lineHeight: '1.3',
-                                            marginBottom: '6px', display: 'block', wordBreak: 'break-word'
-                                        }}>
-                                            {prod.descricao}
-                                        </strong>
-
-                                        <span style={{ fontSize: '0.95rem', fontWeight: '900', color: '#be185d' }}>R$ {prod.precoVenda.toFixed(2)}</span>
-                                    </div>
-                                    <div style={{ background: '#ec4899', color: 'white', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', justifyContent: 'center', alignItems: 'center', flexShrink: 0 }}>
-                                        <Plus size={18} />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-                {/* 🔥 FIM DO PAINEL CROSS-SELL */}
-
           <div className="pos-cart-body">
               {carrinho.length === 0 ? (
                   <div className="cart-empty"><ShoppingBag size={50} strokeWidth={1} /><h3>Nenhum produto no momento</h3><p>Utilize o leitor de código de barras ou a pesquisa manual.</p></div>
@@ -1175,7 +1154,7 @@ const PDV = () => {
               <div className="summary-row text-muted"><span>Qtd. Itens: <strong className="text-dark">{totalQuantidade}</strong></span><span>Subtotal: R$ {subtotalItens.toFixed(2)}</span></div>
               {descontoTotalRaw > 0 && <div className="summary-row text-pink"><span>Desconto Aplicado</span><span>- R$ {descontoTotalRaw.toFixed(2)}</span></div>}
               <div className="summary-row grand-total"><span>Total a Pagar</span><span className="total-highlight">R$ {totalPagar.toFixed(2)}</span></div>
-              {isMobile && mobileViewState === 'CART' && (<button className="btn-primary-block mt-4" onClick={handleIrParaPagamento}>Ir para Pagamento <ArrowRight size={24}/></button>)}
+              {isMobile && mobileViewState === 'CART' && (<button className="btn-primary-block mt-4" onClick={handlePreCheckout}>Ir para Pagamento <ArrowRight size={24}/></button>)}
           </footer>
           )}
       </section>
@@ -1240,7 +1219,7 @@ const PDV = () => {
                       </button>
                   </div>
 
-                  <button className="btn-checkout-giant" disabled={!carrinho.length} onClick={handleIrParaPagamento}>
+                  <button className="btn-checkout-giant" disabled={!carrinho.length} onClick={handlePreCheckout}>
                       <div className="checkout-info"><span>Finalizar Compra</span><kbd className="hide-mobile">F8</kbd></div>
                       <div className="checkout-arrow"><ArrowRight size={28}/></div>
                   </button>
@@ -1269,7 +1248,20 @@ const PDV = () => {
                       <label>VALOR RECEBIDO ({metodoAtual})</label>
                       <div className="pay-input-wrapper">
                           <span className="currency">R$</span>
-                          <input ref={inputValorRef} inputMode="numeric" value={getValorFormatado(valorInputRaw)} onChange={e => setValorInputRaw(formatCurrencyInput(e.target.value))} onKeyDown={e => e.key === 'Enter' && handleAdicionarPagamento()} placeholder="0,00" />
+                          <input
+                              ref={inputValorRef}
+                              inputMode="numeric"
+                              value={getValorFormatado(valorInputRaw)}
+                              onChange={e => setValorInputRaw(formatCurrencyInput(e.target.value))}
+                              onKeyDown={e => {
+                                  // 🔥 O Input lida com o seu próprio Enter (isola do escopo global)
+                                  if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      handleAdicionarPagamento();
+                                  }
+                              }}
+                              placeholder="0,00"
+                          />
                           <button className="btn-add-pay" onClick={handleAdicionarPagamento}><CheckCircle2 size={24}/></button>
                       </div>
                   </div>
@@ -1293,6 +1285,81 @@ const PDV = () => {
               </div>
           )}
       </section>
+      )}
+
+      {/* ========================================================== */}
+      {/* MODAL DE PRÉ-CHECKOUT INTELIGENTE (IA CROSS-SELL)          */}
+      {/* ========================================================== */}
+      {showPreCheckoutModal && (
+          <div className="modal-glass z-max">
+              <div className="modal-glass-card fade-in" style={{ maxWidth: '600px', padding: '30px' }}>
+
+                  {/* Cabeçalho */}
+                  <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                      <div style={{ background: '#fdf2f8', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '0 auto 15px' }}>
+                          <Sparkles size={32} color="#ec4899" className="pulse-animation" />
+                      </div>
+                      <h2 style={{ color: '#831843', margin: 0, fontSize: '1.5rem', fontWeight: '900' }}>Padrão de Compra Detetado</h2>
+                      <p style={{ color: '#be185d', fontSize: '1rem', marginTop: '8px' }}>
+                          Com base no histórico da loja, clientes com esta cesta geralmente levam:
+                      </p>
+                  </div>
+
+                  {/* Lista de Sugestões */}
+                  <div style={{ display: 'grid', gap: '12px', marginBottom: '30px', maxHeight: '300px', overflowY: 'auto', paddingRight: '10px' }}>
+                      {sugestoesCrossSell.map(prod => (
+                          <div key={prod.id} style={{
+                              background: 'white', border: '2px solid #fbcfe8', borderRadius: '12px', padding: '15px 20px',
+                              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                              boxShadow: '0 4px 6px rgba(236, 72, 153, 0.05)'
+                          }}>
+                              <div>
+                                  <strong style={{ display: 'block', fontSize: '1.1rem', color: '#0f172a', marginBottom: '4px' }}>{prod.descricao}</strong>
+                                  <span style={{ fontSize: '1rem', fontWeight: 'bold', color: '#10b981' }}>+ R$ {prod.precoVenda.toFixed(2)}</span>
+                              </div>
+                              <button
+                                  onClick={() => {
+                                      adicionarProdutoAoCarrinho(prod, true);
+                                      setSugestoesCrossSell(prev => prev.filter(p => p.id !== prod.id));
+                                  }}
+                                  style={{
+                                      background: '#ec4899', color: 'white', border: 'none', padding: '10px 20px',
+                                      borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', transition: '0.2s'
+                                  }}
+                              >
+                                  <Plus size={18} /> Adicionar
+                              </button>
+                          </div>
+                      ))}
+
+                      {sugestoesCrossSell.length === 0 && (
+                          <p style={{textAlign: 'center', color: '#10b981', fontWeight: 'bold', padding: '20px'}}>Todos os complementos adicionados com sucesso!</p>
+                      )}
+                  </div>
+
+                  {/* Botões de Ação Final */}
+                  <div style={{ display: 'flex', gap: '15px', borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
+                      <button
+                          onClick={() => {
+                              setShowPreCheckoutModal(false);
+                              setTempoExposicaoIA(Date.now()); // 🔥 Inicia o "cronómetro" do Efeito Halo temporal
+                          }}
+                          style={{ flex: 1, padding: '15px', background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer' }}
+                      >
+                          Voltar ao Caixa
+                      </button>
+                      <button
+                          onClick={() => {
+                              setShowPreCheckoutModal(false);
+                              handleIrParaPagamento();
+                          }}
+                          style={{ flex: 2, padding: '15px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+                      >
+                          Ir para Pagamento <ArrowRight size={20} />
+                      </button>
+                  </div>
+              </div>
+          </div>
       )}
 
       {/* ========================================================== */}
