@@ -29,11 +29,13 @@ const Auditoria = lazy(() => import('./pages/Auditoria/Auditoria'));
 const ContasPagar = lazy(() => import('./pages/Financeiro/ContasPagar'));
 const Fiado = lazy(() => import('./pages/Fiado/Fiado'));
 
-// 🌟 TELA SECUNDÁRIA: Monitor do Cliente (Customer Display)
+// 🔥 A NOSSA TELA NOVA DE AUDITORIA
+const HistoricoNotas = lazy(() => import('./pages/HistoricoNotas/HistoricoNotas'));
+
 const CustomerDisplay = lazy(() => import('./pages/PDV/CustomerDisplay'));
 
 // =========================================================================
-// 🛡️ SEGURANÇA: Prevenção contra "Tela Branca" (ChunkLoadError)
+// 🛡️ SEGURANÇA: ErrorBoundary (Proteção contra Ecrã Branco)
 // =========================================================================
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -46,21 +48,23 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    if (error.name === 'ChunkLoadError' || String(error).includes('Failed to fetch dynamically imported module')) {
-      console.warn("⚠️ Atualização detetada ou falha de rede. Recarregando módulo...");
-      window.location.reload();
-    } else {
-      console.error("Erro crítico na interface:", error, errorInfo);
+    try {
+      console.error("UI Crash Interceptado:", error);
+      const msg = error?.message || "";
+      if (msg.includes('ChunkLoadError') || msg.includes('module')) {
+        window.location.reload();
+      }
+    } catch(e) {
+      console.error("Falha ao registar erro:", e);
     }
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f8fafc', color: '#334155' }}>
-          <h2 style={{ marginBottom: '10px' }}>Ops! Erro de comunicação.</h2>
-          <p>Tente recarregar a página.</p>
-          <button onClick={() => window.location.reload()} style={{ marginTop: '20px', padding: '10px 20px', background: '#ec4899', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f8fafc' }}>
+          <h2>Ops! Erro de comunicação ou de interface.</h2>
+          <button onClick={() => window.location.reload()} style={{ marginTop: '20px', padding: '10px 20px', background: '#ec4899', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
             Recarregar Sistema
           </button>
         </div>
@@ -85,25 +89,33 @@ const PrivateRoute = ({ children }) => {
   return user ? children : <Navigate to="/login" replace />;
 };
 
+// 🔥 CORREÇÃO CIRÚRGICA: Leitura Segura de Perfis Complexos
 const AdminRoute = ({ children }) => {
   const user = getUser();
   if (!user) return <Navigate to="/login" replace />;
 
-  const rawRole = String(user.perfilDoUsuario || user.perfil || user.role || 'USUARIO').toUpperCase();
-  const roleClean = rawRole.replace('ROLE_', '');
+  let roleStr = '';
+
+  try {
+    if (typeof user.perfilDoUsuario === 'string') roleStr = user.perfilDoUsuario;
+    else if (typeof user.perfil === 'string') roleStr = user.perfil;
+    else if (typeof user.role === 'string') roleStr = user.role;
+    else if (Array.isArray(user.roles)) roleStr = user.roles[0]?.authority || user.roles[0]?.nome || '';
+    else if (Array.isArray(user.authorities)) roleStr = user.authorities[0]?.authority || '';
+  } catch (e) {
+    console.warn("Formato de permissão não reconhecido.");
+  }
+
+  const role = roleStr.toUpperCase().replace('ROLE_', '');
   const allowed = ['ADMIN', 'GERENTE', 'ESTOQUISTA', 'FINANCEIRO'];
 
-  if (!allowed.includes(roleClean)) {
-    return <Navigate to="/pdv" replace />;
-  }
-  return children;
+  return allowed.includes(role) ? children : <Navigate to="/pdv" replace />;
 };
 
 const SuspenseLoader = () => (
-  <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#f1f5f9' }}>
-    <div style={{ width: '40px', height: '40px', border: '4px solid #cbd5e1', borderTopColor: '#ec4899', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '16px' }}></div>
-    <span style={{ color: '#64748b', fontWeight: '600', letterSpacing: '0.5px' }}>Abrindo módulo...</span>
-    <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#f1f5f9' }}>
+    <div className="spinner"></div>
+    <style>{`.spinner { width: 40px; height: 40px; border: 4px solid #cbd5e1; border-top-color: #ec4899; borderRadius: 50%; animation: spin 1s linear infinite; } @keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
   </div>
 );
 
@@ -117,15 +129,9 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
 
-            {/* ======================================================= */}
-            {/* ROTAS SEM MENU LATERAL (TELA CHEIA)                     */}
-            {/* ======================================================= */}
             <Route path="/pdv" element={<PrivateRoute><PDV /></PrivateRoute>} />
             <Route path="/pdv/display" element={<PrivateRoute><CustomerDisplay /></PrivateRoute>} />
 
-            {/* ======================================================= */}
-            {/* ROTAS GERENCIAIS (COM MENU LATERAL)                     */}
-            {/* ======================================================= */}
             <Route element={<MainLayout />}>
                 <Route path="/dashboard" element={<AdminRoute><Dashboard /></AdminRoute>} />
                 <Route path="/relatorios" element={<AdminRoute><Relatorios /></AdminRoute>} />
@@ -140,6 +146,10 @@ export default function App() {
                 <Route path="/produtos/historico/:id" element={<AdminRoute><HistoricoProduto /></AdminRoute>} />
                 <Route path="/estoque" element={<AdminRoute><ProdutoList /></AdminRoute>} />
                 <Route path="/estoque/entrada" element={<AdminRoute><EntradaEstoque /></AdminRoute>} />
+
+                {/* 🔥 A TELA DE HISTÓRICO SEGURA */}
+                <Route path="/historico-notas" element={<AdminRoute><HistoricoNotas /></AdminRoute>} />
+
                 <Route path="/inventario" element={<AdminRoute><Inventario /></AdminRoute>} />
                 <Route path="/fornecedores" element={<AdminRoute><FornecedorList /></AdminRoute>} />
                 <Route path="/fornecedores/novo" element={<AdminRoute><FornecedorForm /></AdminRoute>} />

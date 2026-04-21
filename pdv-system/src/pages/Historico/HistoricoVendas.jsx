@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Eye, X, FileText, Package, CreditCard, ChevronLeft, ChevronRight, User, Hash, Printer, MessageCircle, Calendar, Download } from 'lucide-react';
-import api from '../../../services/api';
+import api from '../../services/api';
 import { toast } from 'react-toastify';
 import './HistoricoVendas.css';
 
