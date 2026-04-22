@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  FileText, Search, Calendar, Eye,
-  CheckCircle, RefreshCw, Box, X, DownloadCloud
+  FileText, Search, Calendar, Eye, CheckCircle, RefreshCw,
+  Box, X, DownloadCloud, Building2, Briefcase, Hash, Package, DollarSign
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
@@ -17,6 +17,13 @@ const formatDate = (dataStr) => {
         day: '2-digit', month: '2-digit', year: 'numeric',
         hour: '2-digit', minute: '2-digit'
     });
+};
+
+const formatarCNPJ = (cnpj) => {
+    if (!cnpj) return '---';
+    const apenasNumeros = cnpj.toString().replace(/\D/g, '');
+    if (apenasNumeros.length !== 14) return cnpj;
+    return apenasNumeros.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
 };
 
 const HistoricoNotas = () => {
@@ -52,7 +59,8 @@ const HistoricoNotas = () => {
           const nome = (n.fornecedorNome || n.fornecedor?.nomeFantasia || n.fornecedor?.razaoSocial || '').toLowerCase();
           const numero = (n.numeroNota || '').toLowerCase();
           const chave = (n.chaveAcesso || '').toLowerCase();
-          return nome.includes(termo) || numero.includes(termo) || chave.includes(termo);
+          const cnpj = (n.fornecedorCnpj || n.fornecedor?.cnpj || '').toLowerCase();
+          return nome.includes(termo) || numero.includes(termo) || chave.includes(termo) || cnpj.includes(termo);
       });
   }, [notas, busca]);
 
@@ -107,16 +115,16 @@ const HistoricoNotas = () => {
 
       <header className="hn-header">
         <div className="hn-hero-left">
-          <div className="hn-icon-box"><FileText size={32} /></div>
+          <div className="hn-icon-box"><FileText size={28} strokeWidth={2.5} /></div>
           <div>
             <h1>Histórico de Notas (XML)</h1>
-            <p>Auditoria e rastreabilidade de todas as entradas de mercadoria.</p>
+            <p>Auditoria e rastreabilidade de entradas de mercadoria.</p>
           </div>
         </div>
         <div className="hn-stats">
-            <div style={{ background: 'white', padding: '10px 16px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <Box size={20} color="#10b981"/>
-                <span style={{color: '#475569', fontWeight: 600}}>Notas Processadas: <strong style={{color: '#0f172a', fontSize: '1.1rem'}}>{notas.length}</strong></span>
+            <div className="hn-stat-badge">
+                <CheckCircle size={20} color="#10b981"/>
+                <span>Notas Processadas: <strong>{notas.length}</strong></span>
             </div>
         </div>
       </header>
@@ -126,166 +134,194 @@ const HistoricoNotas = () => {
               <Search size={20} className="hn-search-icon" />
               <input
                   type="text"
-                  placeholder="Pesquisar por Fornecedor, Nº ou Chave..."
+                  placeholder="Pesquisar por Fornecedor, CNPJ, Nº da Nota ou Chave de Acesso..."
                   value={busca}
                   onChange={(e) => setBusca(e.target.value)}
               />
           </div>
-          <button onClick={carregarNotas} style={{ background: 'white', border: '1px solid #cbd5e1', padding: '12px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-              <RefreshCw size={20} color="#475569" className={loading ? 'spin' : ''} />
+          <button className="hn-btn-refresh" onClick={carregarNotas} title="Atualizar Lista">
+              <RefreshCw size={20} className={loading ? 'spin' : ''} />
           </button>
       </div>
 
       <section className="hn-table-card">
-          <table className="hn-table">
-              <thead>
-                  <tr>
-                      <th style={{width: '20%'}}>Data Entrada</th>
-                      <th style={{width: '15%'}}>Nº NFe / Série</th>
-                      <th style={{width: '35%'}}>Fornecedor</th>
-                      <th style={{width: '10%', textAlign: 'center'}}>Qtd. Itens</th>
-                      <th style={{width: '10%', textAlign: 'right'}}>Valor Total</th>
-                      <th style={{width: '10%', textAlign: 'center'}}>Ação</th>
-                  </tr>
-              </thead>
-              <tbody>
-                  {loading ? (
-                      <tr><td colSpan="6" className="empty-state"><RefreshCw className="spin" size={32}/> Carregando notas...</td></tr>
-                  ) : notasFiltradas.length === 0 ? (
-                      <tr><td colSpan="6" className="empty-state"><FileText size={48} opacity={0.2}/> Nenhuma nota encontrada.</td></tr>
-                  ) : (
-                      notasFiltradas.map((nota) => {
-                          const nomeFornecedor = nota.fornecedorNome || 'Fornecedor Desconhecido';
-                          const cnpjFornecedor = nota.fornecedorCnpj || '---';
-                          const qtd = nota.qtdItens || 0;
-                          const dataListagem = nota.dataEntrada;
+          <div className="hn-table-responsive">
+              <table className="hn-table">
+                  <thead>
+                      <tr>
+                          <th style={{width: '15%'}}>Data Entrada</th>
+                          <th style={{width: '15%'}}>Nº Nota / Série</th>
+                          <th style={{width: '35%'}}>Fornecedor</th>
+                          <th style={{width: '10%', textAlign: 'center'}}>Qtd. Itens</th>
+                          <th style={{width: '15%', textAlign: 'right'}}>Valor Total</th>
+                          <th style={{width: '10%', textAlign: 'center'}}>Visualizar</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      {loading ? (
+                          <tr><td colSpan="6" className="empty-state"><RefreshCw className="spin" size={32}/> <p>Sincronizando dados...</p></td></tr>
+                      ) : notasFiltradas.length === 0 ? (
+                          <tr><td colSpan="6" className="empty-state"><FileText size={48} opacity={0.2}/> <p>Nenhuma nota encontrada nos filtros.</p></td></tr>
+                      ) : (
+                          notasFiltradas.map((nota) => {
+                              const nomeFornecedor = nota.fornecedorNome || nota.fornecedor?.nomeFantasia || nota.fornecedor?.razaoSocial || 'Fornecedor Desconhecido';
+                              const cnpjFornecedor = formatarCNPJ(nota.fornecedorCnpj || nota.fornecedor?.cnpj);
+                              const qtd = nota.qtdItens || 0;
 
-                          return (
-                              <tr key={nota.numeroNota} onClick={() => abrirDetalhes(nota)}>
-                                  <td>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#475569', fontWeight: 500 }}>
-                                          <Calendar size={16} /> {formatDate(dataListagem)}
-                                      </div>
-                                  </td>
-                                  <td>
-                                      <strong style={{ color: '#0f172a' }}>{nota.numeroNota || 'S/N'}</strong>
-                                      <span style={{ display: 'block', fontSize: '0.8rem', color: '#64748b' }}>Série: {nota.serieNota || '1'}</span>
-                                  </td>
-                                  <td>
-                                      <div className="hn-forn-cell">
-                                          <strong>{nomeFornecedor}</strong>
-                                          <span>CNPJ: {cnpjFornecedor}</span>
-                                      </div>
-                                  </td>
-                                  <td style={{ textAlign: 'center' }}>
-                                      <span style={{ background: '#f1f5f9', padding: '4px 10px', borderRadius: '12px', fontWeight: 700, color: '#475569' }}>
-                                          {qtd} un
-                                      </span>
-                                  </td>
-                                  <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a' }}>
-                                      {formatCurrency(nota.valorTotal)}
-                                  </td>
-                                  <td style={{ textAlign: 'center' }}>
-                                      <button style={{ background: 'transparent', border: 'none', color: '#3b82f6', cursor: 'pointer', padding: '8px' }}>
-                                          <Eye size={20} />
-                                      </button>
-                                  </td>
-                              </tr>
-                          )
-                      })
-                  )}
-              </tbody>
-          </table>
+                              return (
+                                  <tr key={nota.numeroNota || nota.id} onClick={() => abrirDetalhes(nota)} className="hn-table-row">
+                                      <td style={{ whiteSpace: 'nowrap' }}>
+                                          <div className="hn-date-cell">
+                                              <Calendar size={16} /> <span>{formatDate(nota.dataEntrada)}</span>
+                                          </div>
+                                      </td>
+                                      <td style={{ whiteSpace: 'nowrap' }}>
+                                          <span className="hn-nota-numero">{nota.numeroNota || 'S/N'}</span>
+                                          <span className="hn-nota-serie">Série: {nota.serieNota || '1'}</span>
+                                      </td>
+                                      <td>
+                                          <div className="hn-forn-cell">
+                                              <strong>{nomeFornecedor}</strong>
+                                              <span style={{ whiteSpace: 'nowrap' }}>{cnpjFornecedor}</span>
+                                          </div>
+                                      </td>
+                                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                          <span className="hn-badge-qtd">{qtd} un</span>
+                                      </td>
+                                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                          <span className="hn-valor-total">{formatCurrency(nota.valorTotal)}</span>
+                                      </td>
+                                      <td style={{ textAlign: 'center' }}>
+                                          <button className="hn-btn-view">
+                                              <Eye size={20} />
+                                          </button>
+                                      </td>
+                                  </tr>
+                              )
+                          })
+                      )}
+                  </tbody>
+              </table>
+          </div>
       </section>
 
       {notaSelecionada && (
-          <div className="hn-modal-overlay" onClick={() => setNotaSelecionada(null)}>
-              <div className="hn-modal-content" onClick={e => e.stopPropagation()}>
+          <div className="hn-modal-overlay animate-fade-in" onClick={() => setNotaSelecionada(null)}>
+              <div className="hn-modal-content animate-slide-up" onClick={e => e.stopPropagation()}>
+
                   <div className="hn-modal-header">
-                      <div className="hn-modal-title">
-                          <h2><FileText size={24} color="#10b981"/> Detalhes da Nota Fiscal</h2>
-                          <p>Chave: <span style={{fontFamily: 'monospace'}}>{notaSelecionada.chaveAcesso || 'Não disponível na Base'}</span></p>
+                      <div className="hn-modal-title-group">
+                          <div className="hn-modal-icon-bg">
+                              <FileText size={28} color="#10b981" strokeWidth={2.5}/>
+                          </div>
+                          <div className="hn-modal-title-text">
+                              <h2>Detalhes da Nota Fiscal</h2>
+                              <div className="hn-chave-badge">
+                                  <Hash size={14}/>
+                                  <span>{notaSelecionada.chaveAcesso || 'Chave não registrada na Base'}</span>
+                              </div>
+                          </div>
                       </div>
 
-                      <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                      <div className="hn-modal-actions">
                           <button
                               onClick={baixarDanfeOficial}
                               disabled={baixandoDanfe || !notaSelecionada.numeroNota}
-                              style={{
-                                  display: 'flex', alignItems: 'center', gap: '8px',
-                                  padding: '8px 16px', background: '#0f172a', color: 'white',
-                                  border: 'none', borderRadius: '8px', cursor: baixandoDanfe ? 'not-allowed' : 'pointer',
-                                  fontWeight: 600, opacity: baixandoDanfe ? 0.7 : 1
-                              }}
+                              className={`hn-btn-danfe ${baixandoDanfe ? 'loading' : ''}`}
                           >
                               {baixandoDanfe ? <RefreshCw size={18} className="spin" /> : <DownloadCloud size={18} />}
-                              Baixar DANFE 2ª Via
+                              <span>Baixar DANFE</span>
                           </button>
-                          <button className="hn-modal-close" onClick={() => setNotaSelecionada(null)}><X size={24}/></button>
+                          <button className="hn-btn-close" onClick={() => setNotaSelecionada(null)}>
+                              <X size={24}/>
+                          </button>
                       </div>
                   </div>
 
                   <div className="hn-modal-body">
-                      <div className="hn-info-grid">
-                          <div className="hn-info-box">
-                              <span>Fornecedor</span>
-                              <strong>{notaSelecionada.fornecedorNome || 'N/A'}</strong>
-                          </div>
-                          <div className="hn-info-box">
-                              <span>Nº da Nota</span>
-                              <strong>{notaSelecionada.numeroNota || 'N/A'}</strong>
-                          </div>
-                          <div className="hn-info-box">
-                              <span>Data de Entrada</span>
-                              <strong>{formatDate(notaSelecionada.dataEntrada)}</strong>
-                          </div>
-                          <div className="hn-info-box">
-                              <span>Qtd. de Itens</span>
-                              <strong>{notaSelecionada.qtdItens || 0} Produtos</strong>
-                          </div>
-                          <div className="hn-info-box">
-                              <span>Valor Total</span>
-                              <strong style={{color: '#10b981'}}>{formatCurrency(notaSelecionada.valorTotal)}</strong>
-                          </div>
-                      </div>
+                      <div className="hn-info-cards-grid">
+                                                {/* PRIMEIRA LINHA */}
+                                                <div className="hn-info-card forn-card">
+                                                    <div className="hn-card-icon"><Building2 size={20}/></div>
+                                                    <div className="hn-card-data">
+                                                        <label>Fornecedor</label>
+                                                        <strong>{notaSelecionada.fornecedorNome || notaSelecionada.fornecedor?.nomeFantasia || notaSelecionada.fornecedor?.razaoSocial || 'N/A'}</strong>
+                                                    </div>
+                                                </div>
+                                                <div className="hn-info-card cnpj-card">
+                                                    <div className="hn-card-icon"><Briefcase size={20}/></div>
+                                                    <div className="hn-card-data">
+                                                        <label>CNPJ Fornecedor</label>
+                                                        <strong style={{ whiteSpace: 'nowrap' }}>{formatarCNPJ(notaSelecionada.fornecedorCnpj || notaSelecionada.fornecedor?.cnpj)}</strong>
+                                                    </div>
+                                                </div>
 
-                      <div className="hn-items-list">
-                          <h3>Produtos Importados ({itensDetalhados.length})</h3>
-                          <table className="hn-table">
-                              <thead>
-                                  <tr>
-                                      <th>Descrição</th>
-                                      <th style={{textAlign: 'right'}}>Qtd</th>
-                                      <th style={{textAlign: 'right'}}>Custo Unit.</th>
-                                      <th style={{textAlign: 'right'}}>Total</th>
-                                  </tr>
-                              </thead>
-                              <tbody>
-                                  {loadingDetalhes ? (
-                                      <tr><td colSpan="4" className="empty-state"><RefreshCw className="spin"/> Buscando produtos...</td></tr>
-                                  ) : itensDetalhados.length === 0 ? (
-                                      <tr><td colSpan="4" className="empty-state">Nenhum item encontrado.</td></tr>
-                                  ) : (
-                                      itensDetalhados.map((item, idx) => {
-                                          // 🔥 FALLBACKS SEGUROS: Lê de qualquer formato que o Java envie
-                                          const qtdItem = item.quantidadeMovimentada ?? item.quantidade ?? 1;
-                                          const custoItem = item.custoMovimentado ?? item.valorUnitario ?? item.custoUnitario ?? 0;
-                                          const totalItem = qtdItem * custoItem;
-                                          const descItem = item.produto?.descricao ?? item.produtoDescricao ?? item.observacao ?? 'Produto Indefinido';
-                                          const idItem = item.produto?.id ?? item.produtoId ?? '---';
+                                                {/* SEGUNDA LINHA */}
+                                                <div className="hn-info-card date-card">
+                                                    <div className="hn-card-icon"><Calendar size={20}/></div>
+                                                    <div className="hn-card-data">
+                                                        <label>Data de Entrada</label>
+                                                        <strong style={{ whiteSpace: 'nowrap' }}>{formatDate(notaSelecionada.dataEntrada)}</strong>
+                                                    </div>
+                                                </div>
+                                                <div className="hn-info-card vol-card">
+                                                    <div className="hn-card-icon"><Package size={20}/></div>
+                                                    <div className="hn-card-data">
+                                                        <label>Volume</label>
+                                                        <strong style={{ whiteSpace: 'nowrap' }}>{notaSelecionada.qtdItens || 0} Itens</strong>
+                                                    </div>
+                                                </div>
+                                                <div className="hn-info-card highlight val-card">
+                                                    <div className="hn-card-icon"><DollarSign size={20}/></div>
+                                                    <div className="hn-card-data">
+                                                        <label>Valor Total</label>
+                                                        <strong style={{ whiteSpace: 'nowrap' }}>{formatCurrency(notaSelecionada.valorTotal)}</strong>
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                                          return (
-                                              <tr key={idx}>
-                                                  <td style={{fontWeight: 600, color: '#0f172a'}}>{descItem}</td>
-                                                  <td style={{textAlign: 'right', fontWeight: 600}}>{qtdItem}</td>
-                                                  <td style={{textAlign: 'right'}}>{formatCurrency(custoItem)}</td>
-                                                  <td style={{textAlign: 'right', fontWeight: 700}}>{formatCurrency(totalItem)}</td>
-                                              </tr>
-                                          )
-                                      })
-                                  )}
-                              </tbody>
-                          </table>
+                      <div className="hn-items-section">
+                          <div className="hn-items-header">
+                              <h3>Produtos Listados na XML</h3>
+                              <span className="hn-items-count">{itensDetalhados.length} Registos</span>
+                          </div>
+
+                          <div className="hn-modal-table-wrapper">
+                              <table className="hn-modal-table">
+                                  <thead>
+                                      <tr>
+                                          {/* LARGURAS FIXAS ADICIONADAS AQUI PARA ALINHAMENTO PERFEITO */}
+                                          <th style={{ width: '45%' }}>Descrição do Produto</th>
+                                          <th style={{ textAlign: 'center', width: '15%' }}>Qtd</th>
+                                          <th style={{ textAlign: 'right', width: '20%' }}>Custo Unit.</th>
+                                          <th style={{ textAlign: 'right', width: '20%' }}>Custo Total</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody>
+                                      {loadingDetalhes ? (
+                                          <tr><td colSpan="4" className="empty-state"><RefreshCw className="spin"/> Buscando produtos...</td></tr>
+                                      ) : itensDetalhados.length === 0 ? (
+                                          <tr><td colSpan="4" className="empty-state">Nenhum item decodificado no XML.</td></tr>
+                                      ) : (
+                                          itensDetalhados.map((item, idx) => {
+                                              const qtdItem = item.quantidadeMovimentada ?? item.quantidade ?? 1;
+                                              const custoItem = item.custoMovimentado ?? item.valorUnitario ?? item.custoUnitario ?? 0;
+                                              const totalItem = qtdItem * custoItem;
+                                              const descItem = item.produto?.descricao ?? item.produtoDescricao ?? item.observacao ?? 'Produto Indefinido';
+
+                                              return (
+                                                  <tr key={idx}>
+                                                      <td className="hn-product-desc">{descItem}</td>
+                                                      <td style={{textAlign: 'center', whiteSpace: 'nowrap'}}><span className="hn-badge-qtd-small">{qtdItem}</span></td>
+                                                      <td style={{textAlign: 'right', color: '#64748b', whiteSpace: 'nowrap'}}>{formatCurrency(custoItem)}</td>
+                                                      <td style={{textAlign: 'right', fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap'}}>{formatCurrency(totalItem)}</td>
+                                                  </tr>
+                                              )
+                                          })
+                                      )}
+                                  </tbody>
+                              </table>
+                          </div>
                       </div>
                   </div>
               </div>
