@@ -4,7 +4,7 @@ import {
   CheckCircle, RefreshCw, Box, X, DownloadCloud
 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import api from '../services/api';
+import api from '../../services/api';
 import './HistoricoNotas.css';
 
 const formatCurrency = (valor) => {
@@ -73,7 +73,6 @@ const HistoricoNotas = () => {
       }
   };
 
-  // 🔥 INTEGRAÇÃO API: Pede o PDF Oficial ao Backend Java
   const baixarDanfeOficial = async () => {
       if (!notaSelecionada || !notaSelecionada.numeroNota) return;
 
@@ -82,15 +81,14 @@ const HistoricoNotas = () => {
 
       try {
           const res = await api.get(`/estoque/historico-entradas/${notaSelecionada.numeroNota}/danfe-oficial`, {
-              responseType: 'blob', // Obrigatório para lidar com ficheiros (byte[])
+              responseType: 'blob',
               silent: true
           });
 
-          // Converte o byte[] do Java num PDF transferível
           const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
           const link = document.createElement('a');
           link.href = url;
-          link.setAttribute('download', `DANFE_${notaSelecionada.numeroNota}.pdf`);
+          link.setAttribute('download', `DANFE_Entrada_${notaSelecionada.numeroNota}.pdf`);
           document.body.appendChild(link);
           link.click();
           link.remove();
@@ -159,8 +157,6 @@ const HistoricoNotas = () => {
                       notasFiltradas.map((nota) => {
                           const nomeFornecedor = nota.fornecedorNome || 'Fornecedor Desconhecido';
                           const cnpjFornecedor = nota.fornecedorCnpj || '---';
-
-                          // 🔥 Lendo Exatamente como o DTO do Java definiu
                           const qtd = nota.qtdItens || 0;
                           const dataListagem = nota.dataEntrada;
 
@@ -202,7 +198,6 @@ const HistoricoNotas = () => {
           </table>
       </section>
 
-      {/* Modal de Detalhes da Nota */}
       {notaSelecionada && (
           <div className="hn-modal-overlay" onClick={() => setNotaSelecionada(null)}>
               <div className="hn-modal-content" onClick={e => e.stopPropagation()}>
@@ -259,7 +254,7 @@ const HistoricoNotas = () => {
                           <table className="hn-table">
                               <thead>
                                   <tr>
-                                      <th>Produto / Descrição</th>
+                                      <th>Descrição</th>
                                       <th style={{textAlign: 'right'}}>Qtd</th>
                                       <th style={{textAlign: 'right'}}>Custo Unit.</th>
                                       <th style={{textAlign: 'right'}}>Total</th>
@@ -271,14 +266,23 @@ const HistoricoNotas = () => {
                                   ) : itensDetalhados.length === 0 ? (
                                       <tr><td colSpan="4" className="empty-state">Nenhum item encontrado.</td></tr>
                                   ) : (
-                                      itensDetalhados.map((item, idx) => (
-                                          <tr key={idx}>
-                                              <td style={{fontWeight: 600, color: '#0f172a'}}>ID {item.produtoId} - {item.produtoDescricao || item.observacao || 'Produto Indefinido'}</td>
-                                              <td style={{textAlign: 'right', fontWeight: 600}}>{item.quantidadeMovimentada}</td>
-                                              <td style={{textAlign: 'right'}}>{formatCurrency(item.custoMovimentado)}</td>
-                                              <td style={{textAlign: 'right', fontWeight: 700}}>{formatCurrency((item.custoMovimentado || 0) * (item.quantidadeMovimentada || 0))}</td>
-                                          </tr>
-                                      ))
+                                      itensDetalhados.map((item, idx) => {
+                                          // 🔥 FALLBACKS SEGUROS: Lê de qualquer formato que o Java envie
+                                          const qtdItem = item.quantidadeMovimentada ?? item.quantidade ?? 1;
+                                          const custoItem = item.custoMovimentado ?? item.valorUnitario ?? item.custoUnitario ?? 0;
+                                          const totalItem = qtdItem * custoItem;
+                                          const descItem = item.produto?.descricao ?? item.produtoDescricao ?? item.observacao ?? 'Produto Indefinido';
+                                          const idItem = item.produto?.id ?? item.produtoId ?? '---';
+
+                                          return (
+                                              <tr key={idx}>
+                                                  <td style={{fontWeight: 600, color: '#0f172a'}}>{descItem}</td>
+                                                  <td style={{textAlign: 'right', fontWeight: 600}}>{qtdItem}</td>
+                                                  <td style={{textAlign: 'right'}}>{formatCurrency(custoItem)}</td>
+                                                  <td style={{textAlign: 'right', fontWeight: 700}}>{formatCurrency(totalItem)}</td>
+                                              </tr>
+                                          )
+                                      })
                                   )}
                               </tbody>
                           </table>

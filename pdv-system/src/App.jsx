@@ -19,19 +19,20 @@ const ProdutoList = lazy(() => import('./pages/Produtos/ProdutoList'));
 const ProdutoForm = lazy(() => import('./pages/Produtos/ProdutoForm'));
 const HistoricoProduto = lazy(() => import('./pages/Produtos/HistoricoProduto'));
 const EntradaEstoque = lazy(() => import('./pages/Estoque/EntradaEstoque'));
+const CaixaEntradaNotas = lazy(() => import('./pages/Estoque/CaixaEntradaNotas'));
 const Inventario = lazy(() => import('./pages/Inventario/Inventario'));
 const FornecedorList = lazy(() => import('./pages/Fornecedores/FornecedorList'));
 const FornecedorForm = lazy(() => import('./pages/Fornecedores/FornecedorForm'));
 const GerenciamentoCaixa = lazy(() => import('./pages/Caixa/GerenciamentoCaixa'));
 const HistoricoCaixa = lazy(() => import('./pages/Caixa/HistoricoCaixa'));
-const HistoricoVendas = lazy(() => import('./pages/Vendas/Historico/HistoricoVendas'));
+
+// 🔥 CORREÇÕES DE CAMINHOS AQUI:
+const HistoricoVendas = lazy(() => import('./pages/Historico/HistoricoVendas'));
+const HistoricoNotas = lazy(() => import('./pages/HistoricoNotas/HistoricoNotas'));
+
 const Auditoria = lazy(() => import('./pages/Auditoria/Auditoria'));
 const ContasPagar = lazy(() => import('./pages/Financeiro/ContasPagar'));
 const Fiado = lazy(() => import('./pages/Fiado/Fiado'));
-
-// 🔥 A NOSSA TELA NOVA DE AUDITORIA
-const HistoricoNotas = lazy(() => import('./pages/HistoricoNotas/HistoricoNotas'));
-
 const CustomerDisplay = lazy(() => import('./pages/PDV/CustomerDisplay'));
 
 // =========================================================================
@@ -52,7 +53,8 @@ class ErrorBoundary extends React.Component {
       console.error("UI Crash Interceptado:", error);
       const msg = error?.message || "";
       if (msg.includes('ChunkLoadError') || msg.includes('module')) {
-        window.location.reload();
+        // Recarregamento comentado temporariamente para evitar loop infinito
+        // window.location.reload();
       }
     } catch(e) {
       console.error("Falha ao registar erro:", e);
@@ -89,7 +91,6 @@ const PrivateRoute = ({ children }) => {
   return user ? children : <Navigate to="/login" replace />;
 };
 
-// 🔥 CORREÇÃO CIRÚRGICA: Leitura Segura de Perfis Complexos
 const AdminRoute = ({ children }) => {
   const user = getUser();
   if (!user) return <Navigate to="/login" replace />;
@@ -146,6 +147,7 @@ export default function App() {
                 <Route path="/produtos/historico/:id" element={<AdminRoute><HistoricoProduto /></AdminRoute>} />
                 <Route path="/estoque" element={<AdminRoute><ProdutoList /></AdminRoute>} />
                 <Route path="/estoque/entrada" element={<AdminRoute><EntradaEstoque /></AdminRoute>} />
+                <Route path="/estoque/sefaz" element={<AdminRoute><CaixaEntradaNotas /></AdminRoute>} />
 
                 {/* 🔥 A TELA DE HISTÓRICO SEGURA */}
                 <Route path="/historico-notas" element={<AdminRoute><HistoricoNotas /></AdminRoute>} />

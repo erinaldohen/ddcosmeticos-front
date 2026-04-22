@@ -5,7 +5,7 @@ import {
   Settings, LogOut, ChevronLeft, X,
   ShieldCheck, Truck, History, Clock,
   Wallet, TrendingDown, Store, ClipboardList, ShoppingBag,
-  BarChart3, HeartHandshake, TrendingUp, FileText
+  BarChart3, HeartHandshake, TrendingUp, FileText, Inbox
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -35,7 +35,7 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
   }, []);
 
   // =========================================================================
-  // MENU REESTRUTURADO (Nomes curtos, intuitivos e diretos ao ponto)
+  // MENU REESTRUTURADO
   // =========================================================================
   const menuGroups = [
       {
@@ -51,6 +51,8 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
         title: 'Estoque',
         items: [
           { path: '/produtos', icon: <Package size={20} />, label: 'Produtos', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
+          // 🔥 ADICIONADO: O novo robô da SEFAZ
+          { path: '/estoque/sefaz', icon: <Inbox size={20} />, label: 'Caixa de Entrada SEFAZ', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/estoque/entrada', icon: <Truck size={20} />, label: 'Importar XML', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/historico-notas', icon: <FileText size={20} />, label: 'Histórico XML', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/inventario', icon: <ClipboardList size={20} />, label: 'Inventário (IA)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
@@ -136,7 +138,13 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
                     onClick={() => isMobileOpen && toggleMobile()}
                     title={isCollapsed ? item.label : null}
                   >
-                    <span className="nav-icon">{item.icon}</span>
+                    <span className="nav-icon">
+                       {item.icon}
+                       {/* 🔥 Feedback Visual na Caixa de Entrada SEFAZ */}
+                       {item.path === '/estoque/sefaz' && !isCollapsed && (
+                           <span style={{ position:'absolute', top:'8px', left:'26px', background:'#ef4444', width:'8px', height:'8px', borderRadius:'50%' }}></span>
+                       )}
+                    </span>
                     <span className="nav-label">{item.label}</span>
                     {location.pathname === item.path && !isCollapsed && <div className="active-indicator" />}
                   </NavLink>
