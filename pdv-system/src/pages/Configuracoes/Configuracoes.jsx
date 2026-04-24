@@ -2,12 +2,15 @@ import React, { useState, useEffect, useCallback, memo, useRef } from 'react';
 import {
   Store, Save, Upload, Search, Palette, FileText, Server, Download, RefreshCw, Trash2,
   Eye, EyeOff, DollarSign, Printer, FileCheck, CheckCircle2, AlertTriangle, Moon, Sun,
-  X, Info, Database, AlertCircle, QrCode, Check, Menu, TrendingUp, Clock, Settings, Mail, Link
+  X, Info, Database, AlertCircle, QrCode, Check, Menu, TrendingUp, Mail, Link
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
 import './Configuracoes.css';
 
+// ==========================================
+// FUNÇÕES UTILITÁRIAS E CONSTANTES GLOBAIS
+// ==========================================
 const clean = (v) => v ? String(v).replace(/\D/g, '') : '';
 
 const sanitizarDados = (obj) => {
@@ -59,6 +62,58 @@ const registrarAuditoria = async (acao, detalhes) => {
     try { await api.post('/auditoria', { acao, operador: getUserRole(), dataHora: new Date().toISOString(), detalhes }); } catch (e) {}
 };
 
+// Configuração das Abas movida para fora para não recriar a cada render
+const TABS_CONFIG = [
+    { id: 'loja', icon: Store, label: 'Identidade e Empresa' },
+    { id: 'fiscal', icon: FileText, label: 'Fiscal e Tributos' },
+    { id: 'financeiro', icon: DollarSign, label: 'Caixa e Financeiro' },
+    { id: 'vendas', icon: Printer, label: 'Operação de Vendas' },
+    { id: 'comissoes', icon: TrendingUp, label: 'Comissões e Metas' },
+    { id: 'email', icon: Mail, label: 'E-mail (SMTP)' },
+    { id: 'integracoes', icon: Link, label: 'Integrações e APIs' },
+    { id: 'sistema', icon: Server, label: 'Sistema e Segurança' },
+];
+
+const BASE_FORM = {
+    id: null,
+    smtpHost: '', smtpPort: 587, smtpUsername: '', smtpPassword: '',
+    gatewayPagamento: 'MANUAL', infinitepayClientId: '', infinitepayClientSecret: '', infinitepayWalletId: '',
+    loja: {
+        razaoSocial: '', nomeFantasia: '', cnpj: '', ie: '', im: '', cnae: '', email: '',
+        telefone: '', whatsapp: '', site: '', instagram: '', slogan: '', corDestaque: '#ec4899',
+        isMatriz: true, horarioAbre: '', horarioFecha: '', toleranciaMinutos: 0,
+        bloqueioForaHorario: false, taxaEntregaPadrao: 0, tempoEntregaMin: 30, logoUrl: ''
+    },
+    endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '' },
+    fiscal: {
+        ambiente: 'HOMOLOGACAO', regime: '1', tokenHomologacao: '', cscIdHomologacao: '', serieHomologacao: 1, nfeHomologacao: 1,
+        tokenProducao: '', cscIdProducao: '', serieProducao: 1, nfeProducao: 1, caminhoCertificado: '', senhaCert: '',
+        csrtId: '', csrtHash: '', ibptToken: '', naturezaPadrao: '5.102', emailContabil: '', enviarXmlAutomatico: true,
+        aliquotaInterna: 18.00, modoContingencia: false, priorizarMonofasico: true, obsPadraoCupom: ''
+    },
+    financeiro: {
+        comissaoProdutos: 0, comissaoServicos: 0, alertaSangria: 500.00, fundoTrocoPadrao: 0, metaDiaria: 0,
+        taxaDebito: 0, taxaCredito: 0, descCaixa: 5.00, descGerente: 20.00, descExtraPix: false, bloquearAbaixoCusto: true,
+        pixTipo: 'CNPJ', pixChave: '', aceitaDinheiro: true, aceitaPix: true, aceitaCredito: true, aceitaDebito: true,
+        aceitaCrediario: false, jurosMensal: 0, multaAtraso: 0, diasCarencia: 0, fechamentoCego: true
+    },
+    vendas: {
+        comportamentoCpf: 'PERGUNTAR', bloquearEstoque: true, layoutCupom: '', imprimirVendedor: false,
+        imprimirTicketTroca: false, autoEnterScanner: false, fidelidadeAtiva: false, pontosPorReal: 0,
+        usarBalanca: false, agruparItens: false, metaMensal: 0
+    },
+    sistema: {
+        impressaoAuto: true, larguraPapel: '80MM', backupAuto: true, backupHora: '23:00', rodape: '',
+        tema: 'light', backupNuvem: false, senhaGerenteCancelamento: true, nomeTerminal: 'CAIXA 01', imprimirLogoCupom: true
+    },
+    comissoes: {
+        tipoCalculo: 'GERAL', percentualGeral: 0, comissionarSobre: 'LUCRO', descontarTaxasCartao: false
+    }
+};
+
+// ==========================================
+// COMPONENTES MENORES (MEMOIZADOS)
+// ==========================================
 const Field = memo(({ label, value, onChange, onBlur, type="text", prefix, suffix, placeholder, options=[], error, disabled, actionIcon, onAction }) => (
     <div className="cfg-field-group">
         <label className="cfg-field-label">{label}</label>
@@ -87,7 +142,7 @@ const Field = memo(({ label, value, onChange, onBlur, type="text", prefix, suffi
     </div>
 ));
 
-const ToggleSwitch = ({ label, description, checked, onChange, danger }) => (
+const ToggleSwitch = memo(({ label, description, checked, onChange, danger }) => (
     <label className={`cfg-toggle-wrapper ${danger ? 'cfg-danger-zone' : ''}`}>
         <div className="cfg-toggle-info">
             <strong className={danger ? 'cfg-text-red' : ''}>{label}</strong>
@@ -98,7 +153,7 @@ const ToggleSwitch = ({ label, description, checked, onChange, danger }) => (
             <span className="cfg-slider"></span>
         </div>
     </label>
-);
+));
 
 const DangerModal = ({ isOpen, onClose, onConfirm, keyword }) => {
     const [input, setInput] = useState('');
@@ -116,23 +171,12 @@ const DangerModal = ({ isOpen, onClose, onConfirm, keyword }) => {
 
                     <div className="cfg-highlight-box border-red cfg-mt-4">
                         <p>Para confirmar, digite a palavra <strong className="cfg-text-red">{keyword}</strong> abaixo:</p>
-                        <input
-                            type="text"
-                            className="cfg-danger-input"
-                            value={input}
-                            onChange={(e) => setInput(e.target.value.toUpperCase())}
-                            placeholder={`Digite ${keyword}`}
-                            autoFocus
-                        />
+                        <input type="text" className="cfg-danger-input" value={input} onChange={(e) => setInput(e.target.value.toUpperCase())} placeholder={`Digite ${keyword}`} autoFocus />
                     </div>
                 </div>
                 <footer className="cfg-modal-footer">
                     <button className="cfg-btn-cancel" onClick={onClose}>Cancelar Ação</button>
-                    <button
-                        className="cfg-btn-danger-confirm"
-                        disabled={input !== keyword}
-                        onClick={() => { onConfirm(); setInput(''); }}
-                    >
+                    <button className="cfg-btn-danger-confirm" disabled={input !== keyword} onClick={() => { onConfirm(); setInput(''); }}>
                         <Trash2 size={18} /> Executar Formatação
                     </button>
                 </footer>
@@ -141,6 +185,9 @@ const DangerModal = ({ isOpen, onClose, onConfirm, keyword }) => {
     );
 };
 
+// ==========================================
+// COMPONENTE PRINCIPAL
+// ==========================================
 const Configuracoes = () => {
   const [activeTab, setActiveTab] = useState('loja');
   const [isSaving, setIsSaving] = useState(false);
@@ -161,45 +208,7 @@ const Configuracoes = () => {
   const lastCepRef = useRef('');
   const lastCnpjRef = useRef('');
 
-  // 🚨 BASE ATUALIZADA: TODOS OS CAMPOS NOVOS (E-MAIL E INFINITEPAY) FICAM NA RAIZ
-  const baseForm = {
-      id: null,
-      smtpHost: '', smtpPort: 587, smtpUsername: '', smtpPassword: '',
-      gatewayPagamento: 'MANUAL', infinitepayClientId: '', infinitepayClientSecret: '', infinitepayWalletId: '',
-      loja: {
-      razaoSocial: '', nomeFantasia: '', cnpj: '', ie: '', im: '', cnae: '', email: '',
-      telefone: '', whatsapp: '', site: '', instagram: '', slogan: '', corDestaque: '#ec4899',
-      isMatriz: true, horarioAbre: '', horarioFecha: '', toleranciaMinutos: 0,
-      bloqueioForaHorario: false, taxaEntregaPadrao: 0, tempoEntregaMin: 30, logoUrl: ''
-    },
-    endereco: { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '' },
-    fiscal: {
-      ambiente: 'HOMOLOGACAO', regime: '1', tokenHomologacao: '', cscIdHomologacao: '', serieHomologacao: 1, nfeHomologacao: 1,
-      tokenProducao: '', cscIdProducao: '', serieProducao: 1, nfeProducao: 1, caminhoCertificado: '', senhaCert: '',
-      csrtId: '', csrtHash: '', ibptToken: '', naturezaPadrao: '5.102', emailContabil: '', enviarXmlAutomatico: true,
-      aliquotaInterna: 18.00, modoContingencia: false, priorizarMonofasico: true, obsPadraoCupom: ''
-    },
-    financeiro: {
-      comissaoProdutos: 0, comissaoServicos: 0, alertaSangria: 500.00, fundoTrocoPadrao: 0, metaDiaria: 0,
-      taxaDebito: 0, taxaCredito: 0, descCaixa: 5.00, descGerente: 20.00, descExtraPix: false, bloquearAbaixoCusto: true,
-      pixTipo: 'CNPJ', pixChave: '', aceitaDinheiro: true, aceitaPix: true, aceitaCredito: true, aceitaDebito: true,
-      aceitaCrediario: false, jurosMensal: 0, multaAtraso: 0, diasCarencia: 0, fechamentoCego: true
-    },
-    vendas: {
-      comportamentoCpf: 'PERGUNTAR', bloquearEstoque: true, layoutCupom: '', imprimirVendedor: false,
-      imprimirTicketTroca: false, autoEnterScanner: false, fidelidadeAtiva: false, pontosPorReal: 0,
-      usarBalanca: false, agruparItens: false, metaMensal: 0
-    },
-    sistema: {
-      impressaoAuto: true, larguraPapel: '80MM', backupAuto: true, backupHora: '23:00', rodape: '',
-      tema: 'light', backupNuvem: false, senhaGerenteCancelamento: true, nomeTerminal: 'CAIXA 01', imprimirLogoCupom: true
-    },
-    comissoes: {
-      tipoCalculo: 'GERAL', percentualGeral: 0, comissionarSobre: 'LUCRO', descontarTaxasCartao: false
-    }
-  };
-
-  const [form, setForm] = useState(baseForm);
+  const [form, setForm] = useState(BASE_FORM);
   const [initialFormState, setInitialFormState] = useState(null);
 
   useEffect(() => {
@@ -208,18 +217,16 @@ const Configuracoes = () => {
           const { data } = await api.get('/configuracoes');
           if (data) {
             const dadosLimpos = sanitizarDados(data);
-
             const formMontado = {
-                ...baseForm,
+                ...BASE_FORM,
                 ...dadosLimpos,
-                loja: { ...baseForm.loja, ...(dadosLimpos.loja || {}) },
-                endereco: { ...baseForm.endereco, ...(dadosLimpos.endereco || {}) },
-                fiscal: { ...baseForm.fiscal, ...(dadosLimpos.fiscal || {}), senhaCert: '' },
-                financeiro: { ...baseForm.financeiro, ...(dadosLimpos.financeiro || {}) },
-                vendas: { ...baseForm.vendas, ...(dadosLimpos.vendas || {}) },
-                sistema: { ...baseForm.sistema, ...(dadosLimpos.sistema || {}) },
-                comissoes: { ...baseForm.comissoes, ...(dadosLimpos.comissoes || {}) },
-                // Garante que a senha no formulário comece vazia (proteção visual), só envia se o usuário digitar algo.
+                loja: { ...BASE_FORM.loja, ...(dadosLimpos.loja || {}) },
+                endereco: { ...BASE_FORM.endereco, ...(dadosLimpos.endereco || {}) },
+                fiscal: { ...BASE_FORM.fiscal, ...(dadosLimpos.fiscal || {}), senhaCert: '' },
+                financeiro: { ...BASE_FORM.financeiro, ...(dadosLimpos.financeiro || {}) },
+                vendas: { ...BASE_FORM.vendas, ...(dadosLimpos.vendas || {}) },
+                sistema: { ...BASE_FORM.sistema, ...(dadosLimpos.sistema || {}) },
+                comissoes: { ...BASE_FORM.comissoes, ...(dadosLimpos.comissoes || {}) },
                 smtpPassword: ''
             };
 
@@ -247,14 +254,13 @@ const Configuracoes = () => {
             if (draft) setHasDraft(true);
           }
         } catch (error) {
-            console.error("Erro invisível capturado:", error);
             toast.error("Falha ao carregar configurações do banco.");
         }
         finally { setIsLoading(false); }
       };
 
       loadConfig();
-    }, []);
+  }, []);
 
   useEffect(() => {
     if (isDirty && !isLoading) localStorage.setItem('@dd:config_draft', JSON.stringify(form));
@@ -272,55 +278,142 @@ const Configuracoes = () => {
   };
   const discardDraft = () => { localStorage.removeItem('@dd:config_draft'); setHasDraft(false); };
 
+  // ==========================================
+  // CALLBACKS OTIMIZADOS (Evitam Re-renders)
+  // ==========================================
   const update = useCallback((section, field, value) => {
-    setIsDirty(true); setErrors(prev => ({ ...prev, [`${section}.${field}`]: null }));
-    if (section === 'raiz') {
-       setForm(prev => ({ ...prev, [field]: value }));
-    } else {
-       setForm(prev => ({ ...prev, [section]: { ...prev[section], [field]: value } }));
-    }
+    setIsDirty(true);
+    setErrors(prev => ({ ...prev, [`${section}.${field}`]: null }));
+    setForm(prev => {
+        if (section === 'raiz') {
+            return { ...prev, [field]: value };
+        }
+        return { ...prev, [section]: { ...prev[section], [field]: value } };
+    });
   }, []);
 
-  const updateMask = useCallback((section, field, value, type) => { update(section, field, masks[type](value)); }, [update]);
+  const updateMask = useCallback((section, field, value, type) => {
+      update(section, field, masks[type](value));
+  }, [update]);
 
-  const updateMoney = (section, field, value) => {
+  const updateMoney = useCallback((section, field, value) => {
       const raw = String(value).replace(/\D/g, '');
       const valFinal = raw ? Number(raw) / 100 : 0;
-      if (section === 'raiz') update('raiz', field, valFinal);
-      else update(section, field, valFinal);
-  };
+      update(section, field, valFinal);
+  }, [update]);
 
-  const updateFiscalEnv = (baseField, value) => {
-    const sulfix = form.fiscal.ambiente === 'PRODUCAO' ? 'Producao' : 'Homologacao';
-    const fieldName = baseField + sulfix;
-    setForm(prev => { setIsDirty(true); return { ...prev, fiscal: { ...prev.fiscal, [fieldName]: value } }; });
-  };
+  const updateFiscalEnv = useCallback((baseField, value) => {
+    setForm(prev => {
+        setIsDirty(true);
+        const sulfix = prev.fiscal.ambiente === 'PRODUCAO' ? 'Producao' : 'Homologacao';
+        const fieldName = baseField + sulfix;
+        return { ...prev, fiscal: { ...prev.fiscal, [fieldName]: value } };
+    });
+  }, []);
 
-  const handlePayment = (key) => {
+  const handlePayment = useCallback((key) => {
     setForm(prev => {
       setIsDirty(true);
       return { ...prev, financeiro: { ...prev.financeiro, [key]: !prev.financeiro[key] } };
     });
-  };
+  }, []);
 
+  // ==========================================
+  // ACTIONS E API (COM A CONSULTA FULL RECEITA)
+  // ==========================================
   const searchCNPJ = async () => {
     const doc = clean(form.loja.cnpj);
     if (doc.length !== 14 || doc === lastCnpjRef.current) return;
     setIsSearching(true);
     try {
-      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${doc}`);
-      const data = await res.json();
-      if(data.message) throw new Error();
-      lastCnpjRef.current = doc;
-      setIsDirty(true); setErrors(prev => ({ ...prev, 'loja.cnpj': null, 'loja.razaoSocial': null }));
-      setForm(prev => ({
-        ...prev,
-        loja: { ...prev.loja, razaoSocial: data.razao_social, nomeFantasia: data.nome_fantasia || data.razao_social, telefone: masks.phone(data.ddd_telefone_1 || ''), email: data.email || prev.loja.email, cnae: data.cnae_fiscal || '' },
-        endereco: { ...prev.endereco, cep: masks.cep(data.cep), logradouro: data.logradouro, numero: data.numero, bairro: data.bairro, cidade: data.municipio, uf: data.uf, complemento: data.complemento || '' }
-      }));
-      toast.success("Dados preenchidos via Receita Federal!");
-    } catch { setErrors(prev => ({ ...prev, 'loja.cnpj': 'CNPJ não encontrado' })); }
-    finally { setIsSearching(false); }
+        let dadosEncontrados = null;
+
+        try {
+            // 1. Tenta a API Principal Completa (CNPJ.ws)
+            const resPrincipal = await fetch(`https://publica.cnpj.ws/cnpj/${doc}`);
+            if (resPrincipal.ok) {
+                const data = await resPrincipal.json();
+                const est = data.estabelecimento;
+                let ieEncontrada = 'ISENTO';
+                if (est.inscricoes_estaduais?.length > 0) {
+                    const ieAtiva = est.inscricoes_estaduais.find(i => i.ativa);
+                    ieEncontrada = ieAtiva ? ieAtiva.inscricao_estadual : est.inscricoes_estaduais[0].inscricao_estadual;
+                }
+                dadosEncontrados = {
+                    razaoSocial: data.razao_social?.toUpperCase() || '',
+                    nomeFantasia: (est.nome_fantasia || data.razao_social)?.toUpperCase() || '',
+                    ie: ieEncontrada,
+                    email: est.email?.toLowerCase() || '',
+                    telefone: (est.ddd1 && est.telefone1) ? masks.phone(`${est.ddd1}${est.telefone1}`) : '',
+                    cnae: est.atividade_principal?.id || '',
+                    cep: masks.cep(est.cep || ''),
+                    logradouro: est.logradouro?.toUpperCase() || '',
+                    numero: est.numero || 'SN',
+                    bairro: est.bairro?.toUpperCase() || '',
+                    cidade: est.cidade?.nome?.toUpperCase() || '',
+                    uf: est.estado?.sigla?.toUpperCase() || '',
+                    complemento: est.complemento?.toUpperCase() || ''
+                };
+            } else { throw new Error("Fallback para BrasilAPI"); }
+        } catch (e) {
+            // 2. Fallback para Brasil API (Menos dados)
+            const resFallback = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${doc}`);
+            if (resFallback.ok) {
+                const data = await resFallback.json();
+                dadosEncontrados = {
+                    razaoSocial: data.razao_social?.toUpperCase() || '',
+                    nomeFantasia: (data.nome_fantasia || data.razao_social)?.toUpperCase() || '',
+                    ie: '',
+                    email: data.email?.toLowerCase() || '',
+                    telefone: data.ddd_telefone_1 ? masks.phone(data.ddd_telefone_1) : '',
+                    cnae: data.cnae_fiscal || '',
+                    cep: masks.cep(data.cep || ''),
+                    logradouro: data.logradouro?.toUpperCase() || '',
+                    numero: data.numero || 'SN',
+                    bairro: data.bairro?.toUpperCase() || '',
+                    cidade: data.municipio?.toUpperCase() || '',
+                    uf: data.uf?.toUpperCase() || '',
+                    complemento: data.complemento?.toUpperCase() || ''
+                };
+            } else {
+                throw new Error("CNPJ não encontrado");
+            }
+        }
+
+        // Se encontrou dados em qualquer uma das APIs, atualiza
+        if (dadosEncontrados) {
+            lastCnpjRef.current = doc;
+            setIsDirty(true);
+            setErrors(prev => ({ ...prev, 'loja.cnpj': null, 'loja.razaoSocial': null }));
+            setForm(prev => ({
+                ...prev,
+                loja: {
+                    ...prev.loja,
+                    razaoSocial: dadosEncontrados.razaoSocial,
+                    nomeFantasia: dadosEncontrados.nomeFantasia,
+                    ie: dadosEncontrados.ie || prev.loja.ie, // Preserva a IE se a API de Fallback não trouxer
+                    email: dadosEncontrados.email || prev.loja.email,
+                    telefone: dadosEncontrados.telefone || prev.loja.telefone,
+                    cnae: dadosEncontrados.cnae || prev.loja.cnae
+                },
+                endereco: {
+                    ...prev.endereco,
+                    cep: dadosEncontrados.cep,
+                    logradouro: dadosEncontrados.logradouro,
+                    numero: dadosEncontrados.numero,
+                    bairro: dadosEncontrados.bairro,
+                    cidade: dadosEncontrados.cidade,
+                    uf: dadosEncontrados.uf,
+                    complemento: dadosEncontrados.complemento
+                }
+            }));
+            toast.success("Dados preenchidos via Receita Federal!");
+        }
+    } catch (error) {
+        setErrors(prev => ({ ...prev, 'loja.cnpj': 'CNPJ não encontrado' }));
+    } finally {
+        setIsSearching(false);
+    }
   };
 
   const searchCEP = async () => {
@@ -378,7 +471,7 @@ const Configuracoes = () => {
                  toast.success(`Certificado lido com sucesso! Válido até ${certResp.data.validade}.`);
              }
              setCertFile(null);
-             form.fiscal.senhaCert = '';
+             setForm(prev => ({ ...prev, fiscal: { ...prev.fiscal, senhaCert: '' } }));
          } catch (e) {
              setIsSaving(false); setActiveTab('fiscal');
              return toast.error("Falha: Senha incorreta ou arquivo .PFX corrompido.");
@@ -413,7 +506,7 @@ const Configuracoes = () => {
           vendas: { ...form.vendas, ...(dadosLimpos.vendas || {}) },
           sistema: { ...form.sistema, ...(dadosLimpos.sistema || {}) },
           comissoes: { ...form.comissoes, ...(dadosLimpos.comissoes || {}) },
-          smtpPassword: '' // Mantém o campo limpo após salvar com sucesso
+          smtpPassword: ''
       };
 
       setForm(formAtualizado);
@@ -436,6 +529,7 @@ const Configuracoes = () => {
       const toastId = toast.loading("Otimizando banco de dados...");
       try { await api.post('/configuracoes/manutencao/otimizar'); toast.update(toastId, { render: "Banco otimizado!", type: "success", isLoading: false, autoClose: 3000 }); } catch (e) { toast.update(toastId, { render: "Falha ao otimizar banco.", type: "error", isLoading: false, autoClose: 3000 }); }
   };
+
   const handleBackup = async () => {
       const toastId = toast.loading("Preparando backup de segurança...");
       try {
@@ -447,6 +541,7 @@ const Configuracoes = () => {
           toast.update(toastId, { render: "Download em andamento!", type: "success", isLoading: false, autoClose: 3000 });
       } catch (e) { toast.update(toastId, { render: "Erro de permissão no backup.", type: "error", isLoading: false, autoClose: 3000 }); }
   };
+
   const executeFactoryReset = async () => {
       setShowResetModal(false);
       const toastId = toast.loading("Formatando sistema...");
@@ -464,18 +559,6 @@ const Configuracoes = () => {
   const cNfe = isProd ? form.fiscal.nfeProducao : form.fiscal.nfeHomologacao;
   const cToken = isProd ? form.fiscal.tokenProducao : form.fiscal.tokenHomologacao;
   const cCscId = isProd ? form.fiscal.cscIdProducao : form.fiscal.cscIdHomologacao;
-
-  // 🚨 O MENU LATERAL AGORA POSSUI A ABA "INTEGRAÇÕES E APIS" E A ABA DE "E-MAIL"
-  const tabs = [
-      { id: 'loja', icon: <Store size={18}/>, label: 'Identidade e Empresa' },
-      { id: 'fiscal', icon: <FileText size={18}/>, label: 'Fiscal e Tributos' },
-      { id: 'financeiro', icon: <DollarSign size={18}/>, label: 'Caixa e Financeiro' },
-      { id: 'vendas', icon: <Printer size={18}/>, label: 'Operação de Vendas' },
-      { id: 'comissoes', icon: <TrendingUp size={18}/>, label: 'Comissões e Metas' },
-      { id: 'email', icon: <Mail size={18}/>, label: 'E-mail (SMTP)' },
-      { id: 'integracoes', icon: <Link size={18}/>, label: 'Integrações e APIs' },
-      { id: 'sistema', icon: <Server size={18}/>, label: 'Sistema e Segurança' },
-  ];
 
   return (
     <div className="cfg-page-container cfg-animate-fade">
@@ -515,7 +598,7 @@ const Configuracoes = () => {
               <div className="cfg-mobile-select-wrapper">
                   <Menu size={18} className="cfg-mobile-select-icon"/>
                   <select value={activeTab} onChange={(e) => setActiveTab(e.target.value)}>
-                      {tabs.map(tab => (
+                      {TABS_CONFIG.map(tab => (
                           <option key={tab.id} value={tab.id}>{tab.label}</option>
                       ))}
                   </select>
@@ -524,47 +607,50 @@ const Configuracoes = () => {
 
           <aside className="cfg-sidebar">
               <nav className="cfg-nav">
-                  {tabs.map(tab => (
-                      <button key={tab.id} className={`cfg-nav-item ${activeTab === tab.id ? 'active' : ''} ${Object.keys(errors).some(k => k.startsWith(tab.id)) ? 'has-error' : ''}`} onClick={() => setActiveTab(tab.id)}>
-                          {tab.icon} <span>{tab.label}</span>
-                      </button>
-                  ))}
+                  {TABS_CONFIG.map(tab => {
+                      const Icon = tab.icon;
+                      return (
+                          <button key={tab.id} className={`cfg-nav-item ${activeTab === tab.id ? 'active' : ''} ${Object.keys(errors).some(k => k.startsWith(tab.id)) ? 'has-error' : ''}`} onClick={() => setActiveTab(tab.id)}>
+                              <Icon size={18}/> <span>{tab.label}</span>
+                          </button>
+                      );
+                  })}
               </nav>
           </aside>
 
           <main className={`cfg-content-area ${isSaving ? 'cfg-fade-out' : ''}`}>
 
               {activeTab === 'loja' && (
-                                <div className="cfg-panel cfg-animate-fade">
-                                    <h2 className="cfg-panel-title">Identidade Visual e Informações</h2>
-                                    <div className="cfg-card cfg-mb-5">
-                                        <div className="cfg-grid-col-2 cfg-items-center">
-                                            {/* LADO ESQUERDO: LOGO */}
-                                            <div className="cfg-logo-uploader">
-                                                <div className="cfg-logo-box" style={{ width: '120px', height: '120px', borderRadius: '12px', background: '#f1f5f9', border: '2px dashed #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
-                                                    {logoPreview ? <img src={logoPreview} alt="Logo" style={{width: '100%', height: '100%', objectFit: 'contain'}}/> : <Store size={48} color="var(--text-muted)"/>}
-                                                </div>
-                                                <div className="cfg-logo-controls">
-                                                    <h3>Logo da Empresa</h3>
-                                                    <p>Usada no PDV e Impressão de Cupons.</p>
-                                                    <div className="cfg-flex cfg-mt-2 cfg-flex-wrap">
-                                                        <label className="cfg-btn-outline cfg-btn-sm"><Upload size={16}/> {logoFile ? "Imagem Escolhida" : "Enviar Arquivo"}<input type="file" hidden accept="image/*" onChange={(e) => { if(e.target.files[0]) { setLogoFile(e.target.files[0]); setLogoPreview(URL.createObjectURL(e.target.files[0])); setIsDirty(true); } }}/></label>
-                                                        {(logoPreview || logoFile) && <button className="cfg-btn-link cfg-text-red" onClick={() => {setLogoPreview(null); setLogoFile(null); update('loja', 'logoUrl', '');}}>Remover</button>}
-                                                    </div>
-                                                </div>
-                                            </div>
+                  <div className="cfg-panel cfg-animate-fade">
+                      <h2 className="cfg-panel-title">Identidade Visual e Informações</h2>
+                      <div className="cfg-card cfg-mb-5">
+                          <div className="cfg-grid-col-2 cfg-items-center">
+                              {/* LADO ESQUERDO: LOGO */}
+                              <div className="cfg-logo-uploader">
+                                  <div className="cfg-logo-box" style={{ width: '120px', height: '120px', borderRadius: '12px', background: '#f1f5f9', border: '2px dashed #cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+                                      {logoPreview ? <img src={logoPreview} alt="Logo" style={{width: '100%', height: '100%', objectFit: 'contain'}}/> : <Store size={48} color="var(--text-muted)"/>}
+                                  </div>
+                                  <div className="cfg-logo-controls">
+                                      <h3>Logo da Empresa</h3>
+                                      <p>Usada no PDV e Impressão de Cupons.</p>
+                                      <div className="cfg-flex cfg-mt-2 cfg-flex-wrap">
+                                          <label className="cfg-btn-outline cfg-btn-sm"><Upload size={16}/> {logoFile ? "Imagem Escolhida" : "Enviar Arquivo"}<input type="file" hidden accept="image/*" onChange={(e) => { if(e.target.files[0]) { setLogoFile(e.target.files[0]); setLogoPreview(URL.createObjectURL(e.target.files[0])); setIsDirty(true); } }}/></label>
+                                          {(logoPreview || logoFile) && <button className="cfg-btn-link cfg-text-red" onClick={() => {setLogoPreview(null); setLogoFile(null); update('loja', 'logoUrl', '');}}>Remover</button>}
+                                      </div>
+                                  </div>
+                              </div>
 
-                                            {/* LADO DIREITO: CONTROLES VISUAIS E MATRIZ */}
-                                            <div className="cfg-visual-controls" style={{ padding: '1.5rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                                <Field label="Cor Primária do Sistema" type="color" value={form.loja.corDestaque} onChange={e => update('loja', 'corDestaque', e.target.value)} />
-                                                <div className="cfg-mt-3">
-                                                    <ToggleSwitch label="Esta Loja é a Matriz" description="Apenas matrizes podem distribuir produtos." checked={form.loja.isMatriz} onChange={e => update('loja', 'isMatriz', e.target.checked)} />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                              {/* LADO DIREITO: CONTROLES VISUAIS E MATRIZ */}
+                              <div className="cfg-visual-controls" style={{ padding: '1.5rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                                  <Field label="Cor Primária do Sistema" type="color" value={form.loja.corDestaque} onChange={e => update('loja', 'corDestaque', e.target.value)} />
+                                  <div className="cfg-mt-3">
+                                      <ToggleSwitch label="Esta Loja é a Matriz" description="Apenas matrizes podem distribuir produtos." checked={form.loja.isMatriz} onChange={e => update('loja', 'isMatriz', e.target.checked)} />
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
 
-                                    <h2 className="cfg-panel-title">Dados Cadastrais e Endereço</h2>
+                      <h2 className="cfg-panel-title">Dados Cadastrais e Endereço</h2>
                       <div className="cfg-card">
                           <div className="cfg-grid-col-3 cfg-mb-4">
                               <Field label="CNPJ" value={form.loja.cnpj} onChange={e => updateMask('loja', 'cnpj', e.target.value, 'cnpj')} onBlur={searchCNPJ} error={errors['loja.cnpj']} actionIcon={isSearching ? <RefreshCw className="cfg-spin" size={18}/> : <Search size={18}/>} onAction={searchCNPJ} placeholder="00.000.000/0000-00" />
@@ -784,7 +870,6 @@ const Configuracoes = () => {
                   </div>
               )}
 
-              {/* 🚨 NOVA ABA: INTEGRAÇÕES COM MAQUININHAS 🚨 */}
               {activeTab === 'integracoes' && (
                   <div className="tab-pane cfg-animate-slide-left">
                       <h2 className="cfg-panel-title">Integração Smart POS (Maquininhas)</h2>

@@ -18,18 +18,17 @@ const Configuracoes = lazy(() => import('./pages/Configuracoes/Configuracoes'));
 const ProdutoList = lazy(() => import('./pages/Produtos/ProdutoList'));
 const ProdutoForm = lazy(() => import('./pages/Produtos/ProdutoForm'));
 const HistoricoProduto = lazy(() => import('./pages/Produtos/HistoricoProduto'));
-const EntradaEstoque = lazy(() => import('./pages/Estoque/EntradaEstoque'));
-const CaixaEntradaNotas = lazy(() => import('./pages/Estoque/CaixaEntradaNotas'));
+
+// 🔥 NOVA PÁGINA: GESTÃO DE NOTAS SEFAZ 🔥
+const GestaoNotasSefaz = lazy(() => import('./pages/Estoque/GestaoNotasSefaz'));
+
 const Inventario = lazy(() => import('./pages/Inventario/Inventario'));
 const FornecedorList = lazy(() => import('./pages/Fornecedores/FornecedorList'));
 const FornecedorForm = lazy(() => import('./pages/Fornecedores/FornecedorForm'));
 const GerenciamentoCaixa = lazy(() => import('./pages/Caixa/GerenciamentoCaixa'));
 const HistoricoCaixa = lazy(() => import('./pages/Caixa/HistoricoCaixa'));
-
-// 🔥 CORREÇÕES DE CAMINHOS AQUI:
 const HistoricoVendas = lazy(() => import('./pages/Historico/HistoricoVendas'));
 const HistoricoNotas = lazy(() => import('./pages/HistoricoNotas/HistoricoNotas'));
-
 const Auditoria = lazy(() => import('./pages/Auditoria/Auditoria'));
 const ContasPagar = lazy(() => import('./pages/Financeiro/ContasPagar'));
 const Fiado = lazy(() => import('./pages/Fiado/Fiado'));
@@ -146,10 +145,10 @@ export default function App() {
                 <Route path="/produtos/editar/:id" element={<AdminRoute><ProdutoForm /></AdminRoute>} />
                 <Route path="/produtos/historico/:id" element={<AdminRoute><HistoricoProduto /></AdminRoute>} />
                 <Route path="/estoque" element={<AdminRoute><ProdutoList /></AdminRoute>} />
-                <Route path="/estoque/entrada" element={<AdminRoute><EntradaEstoque /></AdminRoute>} />
-                <Route path="/estoque/sefaz" element={<AdminRoute><CaixaEntradaNotas /></AdminRoute>} />
 
-                {/* 🔥 A TELA DE HISTÓRICO SEGURA */}
+                {/* 🔥 A TELA DE GESTÃO DA SEFAZ AQUI 🔥 */}
+                <Route path="/estoque/sefaz" element={<AdminRoute><GestaoNotasSefaz /></AdminRoute>} />
+
                 <Route path="/historico-notas" element={<AdminRoute><HistoricoNotas /></AdminRoute>} />
 
                 <Route path="/inventario" element={<AdminRoute><Inventario /></AdminRoute>} />

@@ -51,7 +51,7 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
         title: 'Estoque',
         items: [
           { path: '/produtos', icon: <Package size={20} />, label: 'Produtos', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
-          // 🔥 ADICIONADO: O novo robô da SEFAZ
+          // 🔥 ADICIONADO: A Nova Caixa de Entrada SEFAZ 🔥
           { path: '/estoque/sefaz', icon: <Inbox size={20} />, label: 'Caixa de Entrada SEFAZ', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/estoque/entrada', icon: <Truck size={20} />, label: 'Importar XML', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/historico-notas', icon: <FileText size={20} />, label: 'Histórico XML', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
@@ -140,7 +140,7 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
                   >
                     <span className="nav-icon">
                        {item.icon}
-                       {/* 🔥 Feedback Visual na Caixa de Entrada SEFAZ */}
+                       {/* Ponto Vermelho de Alerta na SEFAZ */}
                        {item.path === '/estoque/sefaz' && !isCollapsed && (
                            <span style={{ position:'absolute', top:'8px', left:'26px', background:'#ef4444', width:'8px', height:'8px', borderRadius:'50%' }}></span>
                        )}
