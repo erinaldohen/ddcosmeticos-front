@@ -567,3 +567,255 @@
     justify-content: center;
   }
 }
+
+/* =========================================================================
+   ESTILOS DO MODAL DE IMPORTAÇÃO (UX PREMIUM)
+   ========================================================================= */
+.modal-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(4px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.import-modal {
+    background: #fff;
+    width: 95%;
+    max-width: 1200px;
+    max-height: 90vh;
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+
+.modal-header-premium {
+    background: #f8fafc;
+    padding: 20px 30px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header-premium h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: #0f172a;
+    font-weight: 800;
+}
+
+.modal-header-premium p {
+    margin: 5px 0 0 0;
+    color: #64748b;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.btn-close-modal {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.btn-close-modal:hover {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+.modal-body-premium {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+    background: #f1f5f9;
+}
+
+.modal-table-area {
+    background: #fff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+}
+
+.modern-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.modern-table th {
+    background: #f8fafc;
+    color: #475569;
+    padding: 15px;
+    text-align: left;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid #e2e8f0;
+}
+
+.modern-table td {
+    padding: 20px 15px;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+}
+
+.tr-vinculado { background-color: #f0fdf4; border-left: 4px solid #10b981; }
+.tr-semelhante { background-color: #fffbeb; border-left: 4px solid #f59e0b; }
+.tr-novo { background-color: #eff6ff; border-left: 4px solid #3b82f6; }
+
+.novo-produto-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.ean-generator {
+    display: flex;
+    gap: 8px;
+}
+
+.produto-leitura strong {
+    color: #0f172a;
+    font-size: 1rem;
+    display: block;
+    margin-bottom: 6px;
+}
+
+.prod-meta {
+    display: flex;
+    gap: 15px;
+    font-size: 0.8rem;
+    color: #64748b;
+}
+
+.prod-meta span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.td-valores {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.qtd-badge {
+    background: #e2e8f0;
+    color: #334155;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 800;
+    align-self: flex-start;
+}
+
+.unit-cost { color: #64748b; font-size: 0.9rem; }
+.total-cost { color: #0f172a; font-size: 1.1rem; }
+
+.card-sugestao-ia {
+    background: #fff;
+    border: 1px solid #fde047;
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.ia-label {
+    display: block;
+    font-size: 0.75rem;
+    color: #b45309;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+
+.card-sugestao-ia strong {
+    display: block;
+    color: #451a03;
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+}
+
+.txt-sucesso-ia {
+    color: #166534;
+    font-size: 0.85rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.txt-info-novo {
+    color: #1e40af;
+    font-size: 0.85rem;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.modal-footer-premium {
+    background: #fff;
+    padding: 20px 30px;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.resumo-financeiro {
+    display: flex;
+    flex-direction: column;
+}
+
+.resumo-financeiro span {
+    font-size: 0.85rem;
+    color: #64748b;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.resumo-financeiro strong {
+    font-size: 1.8rem;
+    color: #0f172a;
+}
+
+.btn-confirmar-gigante {
+    background: #10b981;
+    color: #fff;
+    border: none;
+    padding: 15px 40px;
+    border-radius: 12px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.3);
+}
+
+.btn-confirmar-gigante:hover {
+    background: #059669;
+    transform: translateY(-2px);
+}
+
+/* Animações Modal */
+.fade-in { animation: fadeIn 0.2s ease-out forwards; }
+.bounce-in { animation: bounceIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bounceIn {
+    0% { transform: scale(0.95); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
