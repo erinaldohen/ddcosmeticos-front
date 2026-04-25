@@ -2,14 +2,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
-// Removido 'react-tooltip' em favor do CSS global data-tooltip
+// 🔥 IMPORTAÇÃO DAS MÁSCARAS ADICIONADA
+import { maskCNPJ, maskPhone } from '../../utils/masks';
 import {
   Plus, Search, Edit, Trash2, Truck, X,
   ChevronLeft, ChevronRight, Download
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import ConfirmModal from '../../components/ConfirmModal'; // Importando Modal Seguro
+import ConfirmModal from '../../components/ConfirmModal';
 import './FornecedorList.css';
 
 const FornecedorList = () => {
@@ -20,10 +21,8 @@ const FornecedorList = () => {
   const [totalPaginas, setTotalPaginas] = useState(0);
   const [termoBusca, setTermoBusca] = useState('');
 
-  // Estado para Modal de Exclusão
   const [modalDelete, setModalDelete] = useState({ open: false, id: null, nome: '' });
 
-  // --- LÓGICA DE BUSCA (Mantida Original) ---
   const fetchFornecedores = useCallback(async (termo = '', page = 0) => {
     setLoading(true);
     try {
@@ -52,7 +51,6 @@ const FornecedorList = () => {
     }
   }, [pagina, termoBusca, fetchFornecedores]);
 
-  // --- AÇÃO DE EXCLUSÃO (Com Modal) ---
   const confirmarExclusao = async () => {
     try {
       await api.delete(`/fornecedores/${modalDelete.id}`);
@@ -64,12 +62,10 @@ const FornecedorList = () => {
     }
   };
 
-  // --- GERADOR DE PDF ---
   const gerarRelatorioPDF = () => {
     const doc = new jsPDF();
 
-    // Cabeçalho Marca
-    doc.setFillColor(59, 130, 246); // Azul Primary
+    doc.setFillColor(59, 130, 246);
     doc.rect(0, 0, 210, 20, 'F');
     doc.setFontSize(22); doc.setTextColor(255, 255, 255);
     doc.text("DD Cosméticos", 14, 13);
@@ -82,8 +78,8 @@ const FornecedorList = () => {
 
     const tableBody = fornecedores.map(f => [
       f.nomeFantasia,
-      f.cnpj,
-      f.telefone || '-',
+      maskCNPJ(f.cnpj || ''), // 🔥 MÁSCARA NO PDF
+      maskPhone(f.telefone || '') || '-', // 🔥 MÁSCARA NO PDF
       f.email || '-',
       f.ativo ? 'Ativo' : 'Inativo'
     ]);
@@ -160,12 +156,14 @@ const FornecedorList = () => {
                   <td>
                     <div className="fl-cell-main">
                       <span className="fl-primary-text">{f.nomeFantasia}</span>
-                      <span className="fl-secondary-text">{f.cnpj}</span>
+                      {/* 🔥 MÁSCARA NA LISTAGEM */}
+                      <span className="fl-secondary-text">{maskCNPJ(f.cnpj || '')}</span>
                     </div>
                   </td>
                   <td>
                     <div className="fl-cell-contact">
-                      <span>{f.telefone || 'Sem telefone'}</span>
+                      {/* 🔥 MÁSCARA NA LISTAGEM */}
+                      <span>{maskPhone(f.telefone || '') || 'Sem telefone'}</span>
                       <small>{f.email || 'Sem e-mail'}</small>
                     </div>
                   </td>

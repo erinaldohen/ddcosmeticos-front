@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import produtoService from '../../services/produtoService';
+
+// 🔥 Importações das Máscaras Adicionadas
+import { maskCNPJ, maskPhone, maskCEP } from '../../utils/masks';
 import { toast } from 'react-toastify';
-import { maskCNPJ } from '../../utils/masks';
 import {
   Search, RefreshCw, ArrowRight, CheckCircle,
   FileText, Calendar, DollarSign, Building,
@@ -12,7 +14,7 @@ import {
 } from 'lucide-react';
 
 import FornecedorForm from '../Fornecedores/FornecedorForm';
-import './GestaoNotasSefaz.css';
+import './GestaoNotasSefaz.css'; // Link para o CSS Isolado
 
 // ============================================================================
 // 🧠 HELPERS FISCAIS E I.A.
@@ -94,16 +96,17 @@ const GestaoNotasSefaz = () => {
   const [chaveBusca, setChaveBusca] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
-  const [buscaLocalAtiva, setBuscaLocalAtiva] = useState(false); // Feedback visual
+  const [buscaLocalAtiva, setBuscaLocalAtiva] = useState(false);
 
   // --- ESTADOS DO MODAL DE IMPORTAÇÃO ---
   const [modalAberto, setModalAberto] = useState(false);
   const [notaSelecionada, setNotaSelecionada] = useState(null);
   const [loadingModal, setLoadingModal] = useState(false);
+  const [loadingCardId, setLoadingCardId] = useState(null);
   const [itensImportacao, setItensImportacao] = useState([]);
   const [cabecalhoModal, setCabecalhoModal] = useState({ fornecedorId: '', numeroDocumento: '', dataEmissao: '' });
 
-  // Controle de Cadastro de Fornecedor Manual (Fallback)
+  // Controle de Cadastro Manual (Fallback)
   const [modalFornecedorAberto, setModalFornecedorAberto] = useState(false);
   const [dadosPreForn, setDadosPreForn] = useState(null);
 
@@ -124,7 +127,7 @@ const GestaoNotasSefaz = () => {
     // eslint-disable-next-line
   }, []);
 
-  // 2. PAGINAÇÃO E FILTRO EM TEMPO REAL (O RADAR)
+  // 2. PAGINAÇÃO E FILTRO EM TEMPO REAL (RADAR)
   useEffect(() => {
       if (!Array.isArray(todasNotas)) return;
 
@@ -142,7 +145,6 @@ const GestaoNotasSefaz = () => {
       const fim = inicio + itensPorPagina;
       setNotasExibidas(notasFiltradas.slice(inicio, fim));
   }, [todasNotas, paginaAtual, chaveBusca]);
-
 
   const carregarNotasDoBackend = async () => {
     setLoading(true);
@@ -192,7 +194,6 @@ const GestaoNotasSefaz = () => {
     }
   };
 
-  // BUSCA REMOTA NA SEFAZ
   const buscarNaSefazForcado = async () => {
     const chaveLimpa = chaveBusca.replace(/\D/g, '');
     if (chaveLimpa.length !== 44) return toast.warn("A Chave deve conter 44 números.");
@@ -210,107 +211,112 @@ const GestaoNotasSefaz = () => {
     }
   };
 
-
   // ============================================================================
-  // 🔥 A MÁGICA: O AUTO-CADASTRO SILENCIOSO DO FORNECEDOR
+  // 🔥 MÁGICA 2.0: CADASTRO COM APLICAÇÃO DE MÁSCARAS
   // ============================================================================
-  const buscarFornecedorLocal = (cnpj) => {
-      if (!cnpj) return null;
-      const limpo = cnpj.replace(/\D/g, '');
-      const forn = listaFornecedores.find(f => (f.cnpj || f.documento || '').replace(/\D/g, '') === limpo);
-      return (forn && !forn.razaoSocial?.toUpperCase().includes('FORNECEDOR NOVO')) ? forn : null;
-  };
-
-  const autoCadastrarFornecedor = async (cnpjDescoberto, razaoNome) => {
+  const garantirFornecedorNoBanco = async (cnpjDescoberto, razaoNome) => {
       const docLimpo = cnpjDescoberto.replace(/\D/g, '');
+      if (docLimpo.length !== 14) return null;
 
-      // Monta o payload perfeitinho para a sua API aceitar de primeira
-      let payload = {
-          cnpj: docLimpo,
-          razaoSocial: razaoNome ? razaoNome.substring(0, 200) : `FORNECEDOR ${docLimpo}`,
-          nomeFantasia: razaoNome ? razaoNome.substring(0, 200) : `FORNECEDOR ${docLimpo}`,
-          inscricaoEstadual: "ISENTO",
-          email: "contato@fornecedor.com.br",
-          telefone: "81900000000",
-          cep: "50000000",
-          logradouro: "DADOS IMPORTADOS DA NOTA",
-          numero: "SN",
-          bairro: "CENTRO",
-          cidade: "RECIFE",
-          uf: "PE",
-          ativo: true
-      };
+      let idExistente = null;
 
-      // Tenta enriquecer com dados reais da Receita
       try {
-          const resApi = await fetchWithTimeout(`https://brasilapi.com.br/api/cnpj/v1/${docLimpo}`, { timeout: 3000 });
+          const resLocal = await api.get(`/fornecedores/buscar-por-cnpj/${docLimpo}`);
+          if (resLocal.data?.id && !resLocal.data?.razaoSocial?.includes('FORNECEDOR NOVO')) {
+              return resLocal.data;
+          }
+          if (resLocal.data?.id) idExistente = resLocal.data.id;
+      } catch (e) {}
+
+      // 🔥 Payload Limpo sem os dados de "Fake Recife"
+            let payload = {
+                cnpj: maskCNPJ(docLimpo),
+                razaoSocial: razaoNome ? razaoNome.substring(0, 200) : `FORNECEDOR ${maskCNPJ(docLimpo)}`,
+                nomeFantasia: razaoNome ? razaoNome.substring(0, 200) : `FORNECEDOR ${maskCNPJ(docLimpo)}`,
+                inscricaoEstadual: "ISENTO",
+                email: "",        // Vazio para evitar dados falsos
+                telefone: "",     // Vazio para evitar dados falsos
+                cep: "",          // Vazio
+                logradouro: "DADOS DA NOTA",
+                numero: "S/N",
+                bairro: "",
+                cidade: "",
+                uf: "",
+                ativo: true
+            };
+
+      // Tenta Enriquecer com a Receita Federal (e Mascara os Resultados Novos)
+      try {
+          const resApi = await fetchWithTimeout(`https://publica.cnpj.ws/cnpj/${docLimpo}`, { timeout: 3000 });
           if (resApi.ok) {
               const data = await resApi.json();
               payload.razaoSocial = data.razao_social || payload.razaoSocial;
-              payload.nomeFantasia = data.nome_fantasia || data.razao_social || payload.nomeFantasia;
-              payload.cep = data.cep ? data.cep.replace(/\D/g, '') : payload.cep;
-              payload.logradouro = data.logradouro || payload.logradouro;
-              payload.numero = data.numero || payload.numero;
-              payload.bairro = data.bairro || payload.bairro;
-              payload.cidade = data.municipio || payload.cidade;
-              payload.uf = data.uf || payload.uf;
-              payload.telefone = data.ddd_telefone_1 ? data.ddd_telefone_1.replace(/\D/g, '') : payload.telefone;
+              payload.nomeFantasia = data.estabelecimento?.nome_fantasia || payload.nomeFantasia;
+
+              if (data.estabelecimento?.cep) {
+                  payload.cep = maskCEP(data.estabelecimento.cep);
+              }
+              if (data.estabelecimento?.ddd1 && data.estabelecimento?.telefone1) {
+                  payload.telefone = maskPhone(data.estabelecimento.ddd1 + data.estabelecimento.telefone1);
+              }
+
+              payload.logradouro = data.estabelecimento?.logradouro?.toUpperCase() || payload.logradouro;
+              payload.numero = data.estabelecimento?.numero || payload.numero;
+              payload.bairro = data.estabelecimento?.bairro?.toUpperCase() || payload.bairro;
+              payload.cidade = data.estabelecimento?.cidade?.nome?.toUpperCase() || payload.cidade;
+              payload.uf = data.estabelecimento?.estado?.sigla?.toUpperCase() || payload.uf;
           }
-      } catch (e) {
-          console.log("Integração BrasilAPI lenta, usando dados base da nota.");
-      }
+      } catch (e) {}
 
       try {
-          const result = await api.post('/fornecedores', payload);
-          if (result.data && result.data.id) {
-              setListaFornecedores(prev => [...prev, result.data].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || '')));
-              return result.data.id;
+          let result;
+          if (idExistente) {
+              result = (await api.put(`/fornecedores/${idExistente}`, payload)).data;
+          } else {
+              result = (await api.post('/fornecedores', payload)).data;
           }
-          return null;
+
+          setListaFornecedores(prev => {
+              const newList = prev.filter(p => p.id !== result.id);
+              return [...newList, result].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || ''));
+          });
+          return result;
       } catch(e) {
-          console.error("Falha no Auto-Cadastro (Possível regra de negócio do Backend):", e);
           return null;
       }
   };
 
-  const abrirModalImportacao = async (nota) => {
-      setModalAberto(true);
-      setLoadingModal(true);
-      setNotaSelecionada(nota);
-      setItensImportacao([]);
-      setCabecalhoModal({ fornecedorId: '', numeroDocumento: '', dataEmissao: '' });
-
-      let idTratar = nota.id;
-
-      if (nota.status === 'PENDENTE_MANIFESTACAO') {
-          try {
-              toast.info("Baixando XML completo na SEFAZ...");
-              await api.post(`/estoque/notas-pendentes/${nota.id}/manifestar`);
-          } catch (e) {
-              setModalAberto(false);
-              return toast.error("A SEFAZ não libertou o XML agora. Tente mais tarde.");
-          }
-      }
+  const iniciarProcessamento = async (nota) => {
+      setLoadingCardId(nota.id);
 
       try {
-          const res = await api.get(`/estoque/notas-pendentes/${idTratar}/xml-parse`);
-          const { cnpjFornecedor, razaoSocialFornecedor, itensXml, dataEmissao } = res.data;
+          if (nota.status === 'PENDENTE_MANIFESTACAO') {
+              toast.info("Autorizando download na SEFAZ...");
+              await api.post(`/estoque/notas-pendentes/${nota.id}/manifestar`);
+          }
 
-          // 🔥 A IMPLEMENTAÇÃO EXTRAORDINÁRIA 🔥
-          const fornecedorExistente = buscarFornecedorLocal(cnpjFornecedor);
-          let fornecedorSalvoId = '';
+          const res = await api.get(`/estoque/notas-pendentes/${nota.id}/xml-parse`);
+          const { cnpjFornecedor, razaoSocialFornecedor, itensXml, dataEmissao, fornecedorId } = res.data;
 
-          if (fornecedorExistente) {
-               fornecedorSalvoId = fornecedorExistente.id;
-          } else if (cnpjFornecedor) {
-               // Fornecedor não existe! Auto-Cadastro em ação...
-               const idNovoFornecedor = await autoCadastrarFornecedor(cnpjFornecedor, razaoSocialFornecedor || nota.nomeFornecedor);
-               if (idNovoFornecedor) {
-                   fornecedorSalvoId = idNovoFornecedor;
+          let fornecedorSalvoId = fornecedorId || '';
+
+          // O Bypass: Se não veio do banco Java, o React Auto-Cadastra Mascarado
+          if (!fornecedorSalvoId && cnpjFornecedor) {
+               const fornBackend = await garantirFornecedorNoBanco(cnpjFornecedor, razaoSocialFornecedor || nota.nomeFornecedor);
+               if (fornBackend) {
+                   fornecedorSalvoId = fornBackend.id;
                } else {
-                   // Fallback seguro se o auto-cadastro for bloqueado por alguma regra severa do DB
-                   setDadosPreForn({ cnpj: cnpjFornecedor, razaoSocial: razaoSocialFornecedor });
+                   setDadosPreForn({ cnpj: maskCNPJ(cnpjFornecedor), razaoSocial: razaoSocialFornecedor || nota.nomeFornecedor });
                }
+          }
+
+          // Atualiza a View Imediata
+          if (fornecedorSalvoId && !listaFornecedores.some(f => String(f.id) === String(fornecedorSalvoId))) {
+              setListaFornecedores(prev => [...prev, {
+                  id: fornecedorSalvoId,
+                  razaoSocial: razaoSocialFornecedor || nota.nomeFornecedor,
+                  cnpj: maskCNPJ(cnpjFornecedor)
+              }].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || '')));
           }
 
           const itensProcessados = processarInteligenciaProdutos(itensXml || [], razaoSocialFornecedor || nota.nomeFornecedor);
@@ -320,22 +326,23 @@ const GestaoNotasSefaz = () => {
               numeroDocumento: extrairNumeroNota(nota.chaveAcesso),
               dataEmissao: dataEmissao ? dataEmissao.split('T')[0] : (nota.dataEmissao?.split('T')[0] || new Date().toISOString().split('T')[0])
           });
+
           setItensImportacao(itensProcessados);
+          setNotaSelecionada(nota);
+          setModalAberto(true);
 
       } catch (err) {
-          toast.error("Erro crítico ao ler o XML.");
-          setModalAberto(false);
+          toast.error("Falha ao preparar importação. Verifique a comunicação com a SEFAZ.");
       } finally {
-          setLoadingModal(false);
+          setLoadingCardId(null);
       }
   };
 
-  // Sucesso no Cadastro Manual do Fornecedor (O Fallback)
   const handleFornecedorCriado = (novoForn) => {
       setListaFornecedores(prev => [...prev, novoForn].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || '')));
       setCabecalhoModal(prev => ({ ...prev, fornecedorId: novoForn.id }));
       setModalFornecedorAberto(false);
-      toast.success("Fornecedor vinculado com sucesso!");
+      toast.success("Fornecedor cadastrado com sucesso! Continue a importação.");
   };
 
   const processarInteligenciaProdutos = (itensXml, fornecedorNome) => {
@@ -382,14 +389,14 @@ const GestaoNotasSefaz = () => {
 
   const confirmarEntradaModal = async () => {
       if (!cabecalhoModal.fornecedorId) {
-          toast.warn("O Fornecedor não está selecionado. Preencha antes de continuar.");
+          toast.warn("O campo Fornecedor é obrigatório!");
           document.getElementById('fornecedor-modal-select')?.focus();
           return;
       }
       if (itensImportacao.some(i => i.status === 'semelhante')) return toast.warn("Verifique os itens marcados em ATENÇÃO.");
       if (itensImportacao.some(i => i.status === 'novo' && (!i.codigoBarras || i.codigoBarras.length < 3))) return toast.warn("Produtos novos precisam de um Código EAN.");
 
-      const toastId = toast.loading("Salvando Estoque e Financeiro...");
+      const toastId = toast.loading("A Efetivar Estoque e Financeiro...");
       try {
           await api.post('/estoque/entrada', {
               fornecedorId: cabecalhoModal.fornecedorId,
@@ -446,12 +453,12 @@ const GestaoNotasSefaz = () => {
       {/* ÁREA DE FILTROS E BUSCA */}
       <div className="gns-filters-grid">
           <div className="filter-card">
-            <h3><Search size={18} color="#3b82f6"/> Filtro Inteligente (Local)</h3>
+            <h3><Search size={18} color="#3b82f6"/> Filtro Inteligente (Chave)</h3>
             <div className="form-busca">
               <div className="input-wrapper">
                 <Search size={18} className="icon-busca" />
                 <input
-                    type="text" placeholder="Comece a digitar a chave..."
+                    type="text" placeholder="Cole a chave ou digite..."
                     value={chaveBusca} onChange={(e) => setChaveBusca(e.target.value)}
                     maxLength={44} className="search-input"
                 />
@@ -473,7 +480,7 @@ const GestaoNotasSefaz = () => {
           </div>
       </div>
 
-      {/* 🔥 ALERTA VISUAL DO RADAR (BUSCA INTELIGENTE) 🔥 */}
+      {/* RADAR DE BUSCA */}
       {buscaLocalAtiva && (
           <div className="busca-inteligente-alert fade-in">
               <div className="pulse-dot"></div>
@@ -504,6 +511,7 @@ const GestaoNotasSefaz = () => {
           {notasExibidas.map((nota) => {
             const isImportada = nota.status === 'IMPORTADA' || nota.status === 'CONCLUIDA';
             const isResumo = nota.status === 'PENDENTE_MANIFESTACAO';
+            const isLoadingThis = loadingCardId === nota.id;
 
             return (
               <div key={nota.id} className={`nota-card-ui ${isImportada ? 'importada' : isResumo ? 'resumo' : 'pendente'} ${buscaLocalAtiva ? 'glow-card' : ''}`}>
@@ -544,9 +552,9 @@ const GestaoNotasSefaz = () => {
                         {isImportada ? (
                           <button disabled className="btn-acao disabled"><CheckCircle size={18} /> Cadastrada</button>
                         ) : (
-                          <button onClick={() => abrirModalImportacao(nota)} className={`btn-acao ${isResumo ? 'resumo' : 'importar'}`}>
-                            {isResumo ? <DownloadCloud size={18} /> : <Package size={18} />}
-                            {isResumo ? "Baixar XML Sefaz" : "Processar Entrada"} <ChevronRight size={18} />
+                          <button onClick={() => iniciarProcessamento(nota)} disabled={isLoadingThis} className={`btn-acao ${isResumo ? 'resumo' : 'importar'}`}>
+                            {isLoadingThis ? <RefreshCw size={18} className="animate-spin" /> : isResumo ? <DownloadCloud size={18} /> : <Package size={18} />}
+                            {isLoadingThis ? "A Preparar..." : isResumo ? "Baixar Sefaz" : "Processar Entrada"} <ChevronRight size={18} />
                           </button>
                         )}
                     </div>
@@ -567,7 +575,7 @@ const GestaoNotasSefaz = () => {
       )}
 
       {/* ============================================================================ */}
-      {/* MODAL GIGANTE PREMIUM REFORMULADO (UI/UX) */}
+      {/* MODAL GIGANTE PREMIUM */}
       {/* ============================================================================ */}
       {modalAberto && (
           <div className="modal-overlay fade-in">
@@ -595,9 +603,9 @@ const GestaoNotasSefaz = () => {
                                   <div className="dp-col dp-col-fornecedor">
                                       <div style={{display:'flex', justifyContent:'space-between', alignItems: 'center', marginBottom: '6px'}}>
                                           <label style={{margin:0}}>Fornecedor</label>
-                                          {/* Fallback caso a API da Receita falhe */}
+                                          {/* O Fallback de Segurança Manual */}
                                           {!cabecalhoModal.fornecedorId && (
-                                              <button onClick={() => setModalFornecedorAberto(true)} className="btn-add-forn"><Plus size={12}/> NOVO</button>
+                                              <button onClick={() => setModalFornecedorAberto(true)} className="btn-add-forn"><Plus size={12}/> ADICIONAR MANUALMENTE</button>
                                           )}
                                       </div>
                                       <select
@@ -607,7 +615,7 @@ const GestaoNotasSefaz = () => {
                                           onChange={(e) => setCabecalhoModal({...cabecalhoModal, fornecedorId: e.target.value})}
                                           style={{border: !cabecalhoModal.fornecedorId ? '2px solid #f59e0b' : '1px solid #cbd5e1'}}
                                       >
-                                          <option value="">{cabecalhoModal.fornecedorId ? "Selecione..." : "⚠️ FORNECEDOR AUSENTE - CLIQUE EM NOVO"}</option>
+                                          <option value="">{cabecalhoModal.fornecedorId ? "Selecione..." : "⚠️ FORNECEDOR AUSENTE - CADASTRE PARA CONTINUAR"}</option>
                                           {listaFornecedores.map(f => (
                                               <option key={f.id} value={f.id}>{f.razaoSocial || f.nomeFantasia}</option>
                                           ))}
@@ -709,7 +717,7 @@ const GestaoNotasSefaz = () => {
       )}
 
       {/* ============================================================================ */}
-      {/* MODAL DE CADASTRO MANUAL DE FORNECEDOR (BYPASS SEGURO) */}
+      {/* MODAL DE CADASTRO MANUAL DE FORNECEDOR (FALLBACK) */}
       {/* ============================================================================ */}
       {modalFornecedorAberto && (
           <div className="modal-overlay" style={{zIndex: 99999}}>
@@ -719,7 +727,7 @@ const GestaoNotasSefaz = () => {
                       <button onClick={() => setModalFornecedorAberto(false)} className="btn-close-modal"><X size={20}/></button>
                   </div>
                   <div style={{ padding: '20px' }}>
-                      <p style={{marginBottom: '20px', color: '#64748b'}}>A SEFAZ não devolveu dados completos para Auto-Cadastro. Por favor, confirme os dados para continuar a importação.</p>
+                      <p style={{marginBottom: '20px', color: '#64748b'}}>A SEFAZ não devolveu dados completos. Por favor, confirme o cadastro para continuar a importação.</p>
                       <FornecedorForm
                           isModal={true}
                           prefillData={dadosPreForn}
