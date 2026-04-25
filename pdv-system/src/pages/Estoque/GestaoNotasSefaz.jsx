@@ -2,10 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import produtoService from '../../services/produtoService';
-
-// 🔥 Importações das Máscaras Adicionadas
-import { maskCNPJ, maskPhone, maskCEP } from '../../utils/masks';
 import { toast } from 'react-toastify';
+import { maskCNPJ, maskPhone } from '../../utils/masks'; // 🔥 MÁSCARAS NATIVAS AQUI
 import {
   Search, RefreshCw, ArrowRight, CheckCircle,
   FileText, Calendar, DollarSign, Building,
@@ -14,7 +12,7 @@ import {
 } from 'lucide-react';
 
 import FornecedorForm from '../Fornecedores/FornecedorForm';
-import './GestaoNotasSefaz.css'; // Link para o CSS Isolado
+import './GestaoNotasSefaz.css';
 
 // ============================================================================
 // 🧠 HELPERS FISCAIS E I.A.
@@ -212,77 +210,58 @@ const GestaoNotasSefaz = () => {
   };
 
   // ============================================================================
-  // 🔥 MÁGICA 2.0: CADASTRO COM APLICAÇÃO DE MÁSCARAS
+  // 🔥 MOTOR DE ENRIQUECIMENTO SILENCIOSO (API BRASIL + MÁSCARAS)
   // ============================================================================
-  const garantirFornecedorNoBanco = async (cnpjDescoberto, razaoNome) => {
-      const docLimpo = cnpjDescoberto.replace(/\D/g, '');
-      if (docLimpo.length !== 14) return null;
-
-      let idExistente = null;
+  const enriquecerFornecedorSilenciosamente = async (idForn, cnpjForn) => {
+      if (!idForn || !cnpjForn) return;
+      const docLimpo = cnpjForn.replace(/\D/g, '');
 
       try {
-          const resLocal = await api.get(`/fornecedores/buscar-por-cnpj/${docLimpo}`);
-          if (resLocal.data?.id && !resLocal.data?.razaoSocial?.includes('FORNECEDOR NOVO')) {
-              return resLocal.data;
-          }
-          if (resLocal.data?.id) idExistente = resLocal.data.id;
-      } catch (e) {}
+          // 1. Busca Dados Limpos na API
+          const resApi = await fetchWithTimeout(`https://publica.cnpj.ws/cnpj/${docLimpo}`, { timeout: 4000 });
+          if (!resApi.ok) return;
 
-      // 🔥 Payload Limpo sem os dados de "Fake Recife"
-            let payload = {
-                cnpj: maskCNPJ(docLimpo),
-                razaoSocial: razaoNome ? razaoNome.substring(0, 200) : `FORNECEDOR ${maskCNPJ(docLimpo)}`,
-                nomeFantasia: razaoNome ? razaoNome.substring(0, 200) : `FORNECEDOR ${maskCNPJ(docLimpo)}`,
-                inscricaoEstadual: "ISENTO",
-                email: "",        // Vazio para evitar dados falsos
-                telefone: "",     // Vazio para evitar dados falsos
-                cep: "",          // Vazio
-                logradouro: "DADOS DA NOTA",
-                numero: "S/N",
-                bairro: "",
-                cidade: "",
-                uf: "",
-                ativo: true
-            };
+          const data = await resApi.json();
+          const emailApi = data.estabelecimento?.email?.toLowerCase() || '';
+          const ddd = data.estabelecimento?.ddd1 || '';
+          const tel = data.estabelecimento?.telefone1 || '';
+          const telefoneApi = (ddd && tel) ? maskPhone(ddd + tel) : '';
 
-      // Tenta Enriquecer com a Receita Federal (e Mascara os Resultados Novos)
-      try {
-          const resApi = await fetchWithTimeout(`https://publica.cnpj.ws/cnpj/${docLimpo}`, { timeout: 3000 });
-          if (resApi.ok) {
-              const data = await resApi.json();
-              payload.razaoSocial = data.razao_social || payload.razaoSocial;
-              payload.nomeFantasia = data.estabelecimento?.nome_fantasia || payload.nomeFantasia;
+          // 2. Busca o Fornecedor atual que o Java acabou de criar
+          const resForn = await api.get(`/fornecedores/${idForn}`);
+          const fornAtual = resForn.data;
 
-              if (data.estabelecimento?.cep) {
-                  payload.cep = maskCEP(data.estabelecimento.cep);
-              }
-              if (data.estabelecimento?.ddd1 && data.estabelecimento?.telefone1) {
-                  payload.telefone = maskPhone(data.estabelecimento.ddd1 + data.estabelecimento.telefone1);
-              }
+          let precisaAtualizar = false;
 
-              payload.logradouro = data.estabelecimento?.logradouro?.toUpperCase() || payload.logradouro;
-              payload.numero = data.estabelecimento?.numero || payload.numero;
-              payload.bairro = data.estabelecimento?.bairro?.toUpperCase() || payload.bairro;
-              payload.cidade = data.estabelecimento?.cidade?.nome?.toUpperCase() || payload.cidade;
-              payload.uf = data.estabelecimento?.estado?.sigla?.toUpperCase() || payload.uf;
-          }
-      } catch (e) {}
-
-      try {
-          let result;
-          if (idExistente) {
-              result = (await api.put(`/fornecedores/${idExistente}`, payload)).data;
-          } else {
-              result = (await api.post('/fornecedores', payload)).data;
+          // 3. Aplica o Email se estiver vazio ou com o fake antigo
+          if (!fornAtual.email || fornAtual.email.trim() === '' || fornAtual.email.includes('importacao.xml')) {
+              fornAtual.email = emailApi;
+              precisaAtualizar = true;
           }
 
-          setListaFornecedores(prev => {
-              const newList = prev.filter(p => p.id !== result.id);
-              return [...newList, result].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || ''));
-          });
-          return result;
-      } catch(e) {
-          return null;
+          // 4. Aplica a Máscara no Telefone ou Puxa da API
+          if (!fornAtual.telefone || fornAtual.telefone.trim() === '' || fornAtual.telefone === '81900000000' || !fornAtual.telefone.includes('(')) {
+              fornAtual.telefone = telefoneApi || maskPhone(fornAtual.telefone || '');
+              precisaAtualizar = true;
+          }
+
+          // 5. Aplica a Máscara no CNPJ no Banco
+          if (fornAtual.cnpj && !fornAtual.cnpj.includes('.')) {
+              fornAtual.cnpj = maskCNPJ(fornAtual.cnpj);
+              precisaAtualizar = true;
+          }
+
+          // 6. Atualiza o Banco sem o utilizador perceber
+          if (precisaAtualizar) {
+              const result = await api.put(`/fornecedores/${idForn}`, fornAtual);
+              // Atualiza o select do Modal para mostrar bonitinho
+              setListaFornecedores(prev => {
+                  const newList = prev.filter(p => p.id !== idForn);
+                  return [...newList, result.data].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || ''));
+              });
+          }
+      } catch (e) {
+          console.log("Enriquecimento secundário falhou silenciosamente.", e);
       }
   };
 
@@ -300,17 +279,12 @@ const GestaoNotasSefaz = () => {
 
           let fornecedorSalvoId = fornecedorId || '';
 
-          // O Bypass: Se não veio do banco Java, o React Auto-Cadastra Mascarado
+          // Se a NFe tiver o fornecedor mas o Java falhar por algum motivo, o Frontend assume
           if (!fornecedorSalvoId && cnpjFornecedor) {
-               const fornBackend = await garantirFornecedorNoBanco(cnpjFornecedor, razaoSocialFornecedor || nota.nomeFornecedor);
-               if (fornBackend) {
-                   fornecedorSalvoId = fornBackend.id;
-               } else {
-                   setDadosPreForn({ cnpj: maskCNPJ(cnpjFornecedor), razaoSocial: razaoSocialFornecedor || nota.nomeFornecedor });
-               }
+               setDadosPreForn({ cnpj: maskCNPJ(cnpjFornecedor), razaoSocial: razaoSocialFornecedor || nota.nomeFornecedor });
           }
 
-          // Atualiza a View Imediata
+          // Atualiza View Rápida
           if (fornecedorSalvoId && !listaFornecedores.some(f => String(f.id) === String(fornecedorSalvoId))) {
               setListaFornecedores(prev => [...prev, {
                   id: fornecedorSalvoId,
@@ -331,6 +305,11 @@ const GestaoNotasSefaz = () => {
           setNotaSelecionada(nota);
           setModalAberto(true);
 
+          // 🔥 GATILHO DA MÁGICA EM 2º PLANO 🔥
+          if (fornecedorSalvoId && cnpjFornecedor) {
+              enriquecerFornecedorSilenciosamente(fornecedorSalvoId, cnpjFornecedor);
+          }
+
       } catch (err) {
           toast.error("Falha ao preparar importação. Verifique a comunicação com a SEFAZ.");
       } finally {
@@ -342,7 +321,7 @@ const GestaoNotasSefaz = () => {
       setListaFornecedores(prev => [...prev, novoForn].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || '')));
       setCabecalhoModal(prev => ({ ...prev, fornecedorId: novoForn.id }));
       setModalFornecedorAberto(false);
-      toast.success("Fornecedor cadastrado com sucesso! Continue a importação.");
+      toast.success("Fornecedor cadastrado com sucesso!");
   };
 
   const processarInteligenciaProdutos = (itensXml, fornecedorNome) => {
@@ -388,37 +367,39 @@ const GestaoNotasSefaz = () => {
   };
 
   const confirmarEntradaModal = async () => {
-      if (!cabecalhoModal.fornecedorId) {
-          toast.warn("O campo Fornecedor é obrigatório!");
-          document.getElementById('fornecedor-modal-select')?.focus();
-          return;
-      }
-      if (itensImportacao.some(i => i.status === 'semelhante')) return toast.warn("Verifique os itens marcados em ATENÇÃO.");
-      if (itensImportacao.some(i => i.status === 'novo' && (!i.codigoBarras || i.codigoBarras.length < 3))) return toast.warn("Produtos novos precisam de um Código EAN.");
+        if (!cabecalhoModal.fornecedorId) {
+            toast.warn("O campo Fornecedor é obrigatório!");
+            document.getElementById('fornecedor-modal-select')?.focus();
+            return;
+        }
+        if (itensImportacao.some(i => i.status === 'semelhante')) return toast.warn("Verifique os itens marcados em ATENÇÃO.");
+        if (itensImportacao.some(i => i.status === 'novo' && (!i.codigoBarras || i.codigoBarras.length < 3))) return toast.warn("Produtos novos precisam de um Código EAN.");
 
-      const toastId = toast.loading("A Efetivar Estoque e Financeiro...");
-      try {
-          await api.post('/estoque/entrada', {
-              fornecedorId: cabecalhoModal.fornecedorId,
-              numeroDocumento: cabecalhoModal.numeroDocumento || "S/N",
-              dataVencimento: cabecalhoModal.dataEmissao,
-              itens: itensImportacao.map(i => ({
-                  produtoId: i.idProduto, codigoBarras: i.codigoBarras || "S/N",
-                  descricao: i.descricao, quantidade: i.quantidade || 0, valorUnitario: i.precoCusto || 0,
-                  ncm: i.ncm || "00000000", origem: i.origem || '0', cst: i.fiscal?.csosn || i.cst || '102',
-                  marca: i.marca || 'GENERICA', categoria: i.categoria || 'GERAL', unidade: 'UN'
-              }))
-          });
+        const toastId = toast.loading("Salvando Estoque e Financeiro...");
+        try {
+            // 🔥 A CHAVE AGORA VAI AQUI DENTRO DO POST 🔥
+            await api.post('/estoque/entrada', {
+                fornecedorId: cabecalhoModal.fornecedorId,
+                numeroDocumento: cabecalhoModal.numeroDocumento || "S/N",
+                dataVencimento: cabecalhoModal.dataEmissao,
+                chaveAcesso: notaSelecionada.chaveAcesso, // <- PROTEÇÃO ANTI-DUPLICIDADE
+                itens: itensImportacao.map(i => ({
+                    produtoId: i.idProduto, codigoBarras: i.codigoBarras || "S/N",
+                    descricao: i.descricao, quantidade: i.quantidade || 0, valorUnitario: i.precoCusto || 0,
+                    ncm: i.ncm || "00000000", origem: i.origem || '0', cst: i.fiscal?.csosn || i.cst || '102',
+                    marca: i.marca || 'GENERICA', categoria: i.categoria || 'GERAL', unidade: 'UN'
+                }))
+            });
 
-          await api.post(`/estoque/notas-pendentes/${notaSelecionada.id}/importar`);
+            await api.post(`/estoque/notas-pendentes/${notaSelecionada.id}/importar`);
 
-          toast.update(toastId, { render: "Estoque Atualizado com Sucesso!", type: "success", isLoading: false, autoClose: 2000 });
-          setModalAberto(false);
-          carregarNotasDoBackend();
-      } catch(e) {
-          toast.update(toastId, { render: e.response?.data?.message || "Erro Crítico ao salvar estoque.", type: "error", isLoading: false, autoClose: 5000 });
-      }
-  };
+            toast.update(toastId, { render: "Estoque Atualizado com Sucesso!", type: "success", isLoading: false, autoClose: 2000 });
+            setModalAberto(false);
+            carregarNotasDoBackend();
+        } catch(e) {
+            toast.update(toastId, { render: e.response?.data?.message || "Erro Crítico ao salvar estoque.", type: "error", isLoading: false, autoClose: 5000 });
+        }
+    };
 
   const getStatusBadge = (status) => {
       switch(status) {
@@ -575,7 +556,7 @@ const GestaoNotasSefaz = () => {
       )}
 
       {/* ============================================================================ */}
-      {/* MODAL GIGANTE PREMIUM */}
+      {/* MODAL GIGANTE PREMIUM REFORMULADO (UI/UX) */}
       {/* ============================================================================ */}
       {modalAberto && (
           <div className="modal-overlay fade-in">
@@ -593,7 +574,7 @@ const GestaoNotasSefaz = () => {
                       {loadingModal ? (
                           <div className="state-container loading">
                               <RefreshCw size={40} className="animate-spin" style={{ margin: '0 auto 15px', color: '#3b82f6' }} />
-                              <h3>Lendo Arquivo e Identificando Mercadorias...</h3>
+                              <h3>Descarregando XML e Cruzando Dados...</h3>
                           </div>
                       ) : (
                           <div className="modal-content-wrapper">
@@ -717,7 +698,7 @@ const GestaoNotasSefaz = () => {
       )}
 
       {/* ============================================================================ */}
-      {/* MODAL DE CADASTRO MANUAL DE FORNECEDOR (FALLBACK) */}
+      {/* MODAL DE CADASTRO MANUAL DE FORNECEDOR (BYPASS SEGURO) */}
       {/* ============================================================================ */}
       {modalFornecedorAberto && (
           <div className="modal-overlay" style={{zIndex: 99999}}>
