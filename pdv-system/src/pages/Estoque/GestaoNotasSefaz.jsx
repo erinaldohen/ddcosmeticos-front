@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import produtoService from '../../services/produtoService';
 import { toast } from 'react-toastify';
-import { maskCNPJ, maskPhone } from '../../utils/masks'; // 🔥 MÁSCARAS NATIVAS AQUI
+import { maskCNPJ, maskPhone } from '../../utils/masks';
 import {
-  Search, RefreshCw, ArrowRight, CheckCircle,
-  FileText, Calendar, DollarSign, Building,
+  Search, RefreshCw, CheckCircle,
+  FileText, Calendar, Building,
   DownloadCloud, Filter, Inbox, Package,
   X, AlertTriangle, Link as LinkIcon, Wand2, Save, Barcode, ChevronRight, Plus
 } from 'lucide-react';
@@ -96,6 +96,17 @@ const GestaoNotasSefaz = () => {
   const [dataFim, setDataFim] = useState('');
   const [buscaLocalAtiva, setBuscaLocalAtiva] = useState(false);
 
+  // 🔥 O SEGREDO DE UX: Memória de Cache (Nasce TRUE por padrão) 🔥
+  const [verImportadas, setVerImportadas] = useState(() => {
+      const salvo = localStorage.getItem('ddcosmeticos_ver_importadas');
+      return salvo !== null ? JSON.parse(salvo) : true;
+  });
+
+  // Salva no navegador sempre que você altera a chave
+  useEffect(() => {
+      localStorage.setItem('ddcosmeticos_ver_importadas', JSON.stringify(verImportadas));
+  }, [verImportadas]);
+
   // --- ESTADOS DO MODAL DE IMPORTAÇÃO ---
   const [modalAberto, setModalAberto] = useState(false);
   const [notaSelecionada, setNotaSelecionada] = useState(null);
@@ -125,7 +136,13 @@ const GestaoNotasSefaz = () => {
     // eslint-disable-next-line
   }, []);
 
-  // 2. PAGINAÇÃO E FILTRO EM TEMPO REAL (RADAR)
+  // 2. DISPARA NOVA BUSCA AO MUDAR O TOGGLE
+  useEffect(() => {
+      carregarNotasDoBackend();
+      // eslint-disable-next-line
+  }, [verImportadas]);
+
+  // 3. PAGINAÇÃO E FILTRO EM TEMPO REAL (RADAR)
   useEffect(() => {
       if (!Array.isArray(todasNotas)) return;
 
@@ -147,8 +164,8 @@ const GestaoNotasSefaz = () => {
   const carregarNotasDoBackend = async () => {
     setLoading(true);
     try {
-      let url = `/estoque/notas-pendentes`;
-      if (dataInicio && dataFim) url += `?dataInicio=${dataInicio}&dataFim=${dataFim}`;
+      let url = `/estoque/notas-pendentes?incluirImportadas=${verImportadas}`;
+      if (dataInicio && dataFim) url += `&dataInicio=${dataInicio}&dataFim=${dataFim}`;
 
       const res = await api.get(url);
       let dadosExtraidos = [];
@@ -210,14 +227,13 @@ const GestaoNotasSefaz = () => {
   };
 
   // ============================================================================
-  // 🔥 MOTOR DE ENRIQUECIMENTO SILENCIOSO (API BRASIL + MÁSCARAS)
+  // 🔥 MOTOR DE ENRIQUECIMENTO SILENCIOSO
   // ============================================================================
   const enriquecerFornecedorSilenciosamente = async (idForn, cnpjForn) => {
       if (!idForn || !cnpjForn) return;
       const docLimpo = cnpjForn.replace(/\D/g, '');
 
       try {
-          // 1. Busca Dados Limpos na API
           const resApi = await fetchWithTimeout(`https://publica.cnpj.ws/cnpj/${docLimpo}`, { timeout: 4000 });
           if (!resApi.ok) return;
 
@@ -227,34 +243,25 @@ const GestaoNotasSefaz = () => {
           const tel = data.estabelecimento?.telefone1 || '';
           const telefoneApi = (ddd && tel) ? maskPhone(ddd + tel) : '';
 
-          // 2. Busca o Fornecedor atual que o Java acabou de criar
           const resForn = await api.get(`/fornecedores/${idForn}`);
           const fornAtual = resForn.data;
-
           let precisaAtualizar = false;
 
-          // 3. Aplica o Email se estiver vazio ou com o fake antigo
-          if (!fornAtual.email || fornAtual.email.trim() === '' || fornAtual.email.includes('importacao.xml')) {
+          if (!fornAtual.email || fornAtual.email.trim() === '') {
               fornAtual.email = emailApi;
               precisaAtualizar = true;
           }
-
-          // 4. Aplica a Máscara no Telefone ou Puxa da API
-          if (!fornAtual.telefone || fornAtual.telefone.trim() === '' || fornAtual.telefone === '81900000000' || !fornAtual.telefone.includes('(')) {
+          if (!fornAtual.telefone || fornAtual.telefone.trim() === '' || !fornAtual.telefone.includes('(')) {
               fornAtual.telefone = telefoneApi || maskPhone(fornAtual.telefone || '');
               precisaAtualizar = true;
           }
-
-          // 5. Aplica a Máscara no CNPJ no Banco
           if (fornAtual.cnpj && !fornAtual.cnpj.includes('.')) {
               fornAtual.cnpj = maskCNPJ(fornAtual.cnpj);
               precisaAtualizar = true;
           }
 
-          // 6. Atualiza o Banco sem o utilizador perceber
           if (precisaAtualizar) {
               const result = await api.put(`/fornecedores/${idForn}`, fornAtual);
-              // Atualiza o select do Modal para mostrar bonitinho
               setListaFornecedores(prev => {
                   const newList = prev.filter(p => p.id !== idForn);
                   return [...newList, result.data].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || ''));
@@ -279,12 +286,10 @@ const GestaoNotasSefaz = () => {
 
           let fornecedorSalvoId = fornecedorId || '';
 
-          // Se a NFe tiver o fornecedor mas o Java falhar por algum motivo, o Frontend assume
           if (!fornecedorSalvoId && cnpjFornecedor) {
                setDadosPreForn({ cnpj: maskCNPJ(cnpjFornecedor), razaoSocial: razaoSocialFornecedor || nota.nomeFornecedor });
           }
 
-          // Atualiza View Rápida
           if (fornecedorSalvoId && !listaFornecedores.some(f => String(f.id) === String(fornecedorSalvoId))) {
               setListaFornecedores(prev => [...prev, {
                   id: fornecedorSalvoId,
@@ -305,7 +310,6 @@ const GestaoNotasSefaz = () => {
           setNotaSelecionada(nota);
           setModalAberto(true);
 
-          // 🔥 GATILHO DA MÁGICA EM 2º PLANO 🔥
           if (fornecedorSalvoId && cnpjFornecedor) {
               enriquecerFornecedorSilenciosamente(fornecedorSalvoId, cnpjFornecedor);
           }
@@ -366,40 +370,50 @@ const GestaoNotasSefaz = () => {
       setItensImportacao(lista);
   };
 
+  // 🔥 CONFIRMAÇÃO ANTI-DUPLO CLIQUE 🔥
   const confirmarEntradaModal = async () => {
-        if (!cabecalhoModal.fornecedorId) {
-            toast.warn("O campo Fornecedor é obrigatório!");
-            document.getElementById('fornecedor-modal-select')?.focus();
-            return;
-        }
-        if (itensImportacao.some(i => i.status === 'semelhante')) return toast.warn("Verifique os itens marcados em ATENÇÃO.");
-        if (itensImportacao.some(i => i.status === 'novo' && (!i.codigoBarras || i.codigoBarras.length < 3))) return toast.warn("Produtos novos precisam de um Código EAN.");
+      if (loadingModal) return;
 
-        const toastId = toast.loading("Salvando Estoque e Financeiro...");
-        try {
-            // 🔥 A CHAVE AGORA VAI AQUI DENTRO DO POST 🔥
-            await api.post('/estoque/entrada', {
-                fornecedorId: cabecalhoModal.fornecedorId,
-                numeroDocumento: cabecalhoModal.numeroDocumento || "S/N",
-                dataVencimento: cabecalhoModal.dataEmissao,
-                chaveAcesso: notaSelecionada.chaveAcesso, // <- PROTEÇÃO ANTI-DUPLICIDADE
-                itens: itensImportacao.map(i => ({
-                    produtoId: i.idProduto, codigoBarras: i.codigoBarras || "S/N",
-                    descricao: i.descricao, quantidade: i.quantidade || 0, valorUnitario: i.precoCusto || 0,
-                    ncm: i.ncm || "00000000", origem: i.origem || '0', cst: i.fiscal?.csosn || i.cst || '102',
-                    marca: i.marca || 'GENERICA', categoria: i.categoria || 'GERAL', unidade: 'UN'
-                }))
-            });
+      if (!cabecalhoModal.fornecedorId) {
+          toast.warn("O campo Fornecedor é obrigatório!");
+          document.getElementById('fornecedor-modal-select')?.focus();
+          return;
+      }
+      if (itensImportacao.some(i => i.status === 'semelhante')) return toast.warn("Verifique os itens marcados em ATENÇÃO.");
+      if (itensImportacao.some(i => i.status === 'novo' && (!i.codigoBarras || i.codigoBarras.length < 3))) return toast.warn("Produtos novos precisam de um Código EAN.");
 
-            await api.post(`/estoque/notas-pendentes/${notaSelecionada.id}/importar`);
+      setLoadingModal(true); // Trava o modal
+      const toastId = toast.loading("Salvando Estoque e Financeiro...");
 
-            toast.update(toastId, { render: "Estoque Atualizado com Sucesso!", type: "success", isLoading: false, autoClose: 2000 });
-            setModalAberto(false);
-            carregarNotasDoBackend();
-        } catch(e) {
-            toast.update(toastId, { render: e.response?.data?.message || "Erro Crítico ao salvar estoque.", type: "error", isLoading: false, autoClose: 5000 });
-        }
-    };
+      try {
+          await api.post('/estoque/entrada', {
+              fornecedorId: cabecalhoModal.fornecedorId,
+              numeroDocumento: cabecalhoModal.numeroDocumento || "S/N",
+              dataVencimento: cabecalhoModal.dataEmissao,
+              chaveAcesso: notaSelecionada.chaveAcesso, // <- ANTI DUPLICIDADE DO BACKEND
+              itens: itensImportacao.map(i => ({
+                  produtoId: i.idProduto, codigoBarras: i.codigoBarras || "S/N",
+                  descricao: i.descricao, quantidade: i.quantidade || 0, valorUnitario: i.precoCusto || 0,
+                  ncm: i.ncm || "00000000", origem: i.origem || '0', cst: i.fiscal?.csosn || i.cst || '102',
+                  marca: i.marca || 'GENERICA', categoria: i.categoria || 'GERAL', unidade: 'UN'
+              }))
+          });
+
+          await api.post(`/estoque/notas-pendentes/${notaSelecionada.id}/importar`);
+
+          // Atualização imediata na tela (Mágica Visual)
+          setTodasNotas(prev => prev.map(n =>
+              n.id === notaSelecionada.id ? { ...n, status: 'IMPORTADA' } : n
+          ));
+
+          toast.update(toastId, { render: "Estoque Atualizado com Sucesso!", type: "success", isLoading: false, autoClose: 2000 });
+          setModalAberto(false);
+      } catch(e) {
+          toast.update(toastId, { render: e.response?.data?.message || "Erro Crítico ao salvar estoque.", type: "error", isLoading: false, autoClose: 5000 });
+      } finally {
+          setLoadingModal(false);
+      }
+  };
 
   const getStatusBadge = (status) => {
       switch(status) {
@@ -449,7 +463,7 @@ const GestaoNotasSefaz = () => {
 
           <div className="filter-card">
             <div className="filter-header">
-                <h3><Filter size={18} color="#f59e0b"/> Filtrar por Emissão (Local)</h3>
+                <h3><Filter size={18} color="#f59e0b"/> Filtros da Base de Dados</h3>
                 {(dataInicio || dataFim) && (<button onClick={limparFiltros} className="btn-clear-filter">Limpar</button>)}
             </div>
             <div className="date-inputs-wrapper">
@@ -457,6 +471,13 @@ const GestaoNotasSefaz = () => {
                 <span className="date-separator">até</span>
                 <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="date-input" />
                 <button onClick={aplicarFiltroDatas} className="btn-aplicar-filtro">Filtrar</button>
+            </div>
+
+            <div className="toggle-view" style={{marginTop: '15px'}}>
+                <label className="switch-ui">
+                    <input type="checkbox" checked={verImportadas} onChange={(e) => setVerImportadas(e.target.checked)} />
+                    <span className="switch-text">Exibir Histórico de Notas Já Registradas</span>
+                </label>
             </div>
           </div>
       </div>
@@ -531,7 +552,7 @@ const GestaoNotasSefaz = () => {
 
                     <div className="ncu-acao">
                         {isImportada ? (
-                          <button disabled className="btn-acao disabled"><CheckCircle size={18} /> Cadastrada</button>
+                          <button disabled className="btn-acao disabled"><CheckCircle size={18} /> Entrada Confirmada</button>
                         ) : (
                           <button onClick={() => iniciarProcessamento(nota)} disabled={isLoadingThis} className={`btn-acao ${isResumo ? 'resumo' : 'importar'}`}>
                             {isLoadingThis ? <RefreshCw size={18} className="animate-spin" /> : isResumo ? <DownloadCloud size={18} /> : <Package size={18} />}
@@ -584,7 +605,6 @@ const GestaoNotasSefaz = () => {
                                   <div className="dp-col dp-col-fornecedor">
                                       <div style={{display:'flex', justifyContent:'space-between', alignItems: 'center', marginBottom: '6px'}}>
                                           <label style={{margin:0}}>Fornecedor</label>
-                                          {/* O Fallback de Segurança Manual */}
                                           {!cabecalhoModal.fornecedorId && (
                                               <button onClick={() => setModalFornecedorAberto(true)} className="btn-add-forn"><Plus size={12}/> ADICIONAR MANUALMENTE</button>
                                           )}
@@ -688,7 +708,8 @@ const GestaoNotasSefaz = () => {
                               <span>Investimento Líquido</span>
                               <strong>R$ {totalGeralModal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
                           </div>
-                          <button className="btn-confirmar-gigante" onClick={confirmarEntradaModal}>
+                          {/* 🔥 BOTÃO PROTEGIDO CONTRA DUPLO CLIQUE 🔥 */}
+                          <button className="btn-confirmar-gigante" onClick={confirmarEntradaModal} disabled={loadingModal}>
                               <Save size={22}/> Confirmar Atualização do Estoque
                           </button>
                       </div>
@@ -698,7 +719,7 @@ const GestaoNotasSefaz = () => {
       )}
 
       {/* ============================================================================ */}
-      {/* MODAL DE CADASTRO MANUAL DE FORNECEDOR (BYPASS SEGURO) */}
+      {/* MODAL MANUAL DE FORNECEDOR */}
       {/* ============================================================================ */}
       {modalFornecedorAberto && (
           <div className="modal-overlay" style={{zIndex: 99999}}>
