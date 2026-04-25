@@ -58,6 +58,20 @@ const inferirDadosFiscais = (xmlItem, fornecedorNome) => {
     return { marca, categoria: mapa[prefixo] || "GERAL", fiscal };
 };
 
+const fetchWithTimeout = async (resource, options = {}) => {
+  const { timeout = 4000 } = options;
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+      const response = await fetch(resource, { ...options, signal: controller.signal });
+      clearTimeout(id);
+      return response;
+  } catch (error) {
+      clearTimeout(id);
+      throw error;
+  }
+};
+
 // ============================================================================
 // COMPONENTE PRINCIPAL
 // ============================================================================
@@ -76,10 +90,11 @@ const GestaoNotasSefaz = () => {
   const itensPorPagina = 15;
   const [paginaAtual, setPaginaAtual] = useState(0);
 
-  // --- ESTADOS DE FILTROS ---
+  // --- ESTADOS DE FILTROS E BUSCA ---
   const [chaveBusca, setChaveBusca] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
+  const [buscaLocalAtiva, setBuscaLocalAtiva] = useState(false); // Feedback visual
 
   // --- ESTADOS DO MODAL DE IMPORTAÇÃO ---
   const [modalAberto, setModalAberto] = useState(false);
@@ -88,7 +103,7 @@ const GestaoNotasSefaz = () => {
   const [itensImportacao, setItensImportacao] = useState([]);
   const [cabecalhoModal, setCabecalhoModal] = useState({ fornecedorId: '', numeroDocumento: '', dataEmissao: '' });
 
-  // 🔥 NOVO: Controle de Cadastro de Fornecedor Manual
+  // Controle de Cadastro de Fornecedor Manual (Fallback)
   const [modalFornecedorAberto, setModalFornecedorAberto] = useState(false);
   const [dadosPreForn, setDadosPreForn] = useState(null);
 
@@ -109,17 +124,20 @@ const GestaoNotasSefaz = () => {
     // eslint-disable-next-line
   }, []);
 
-  // 2. PAGINAÇÃO E FILTRO EM TEMPO REAL (A BUSCA HÍBRIDA)
+  // 2. PAGINAÇÃO E FILTRO EM TEMPO REAL (O RADAR)
   useEffect(() => {
       if (!Array.isArray(todasNotas)) return;
 
-      // Filtrar por Chave Localmente (O Segredo da Busca Rápida)
       let notasFiltradas = todasNotas;
+      let isSearching = false;
+
       if (chaveBusca && chaveBusca.length > 5) {
           const chaveLimpa = chaveBusca.replace(/\D/g, '');
           notasFiltradas = todasNotas.filter(n => n.chaveAcesso?.replace(/\D/g, '').includes(chaveLimpa));
+          isSearching = true;
       }
 
+      setBuscaLocalAtiva(isSearching);
       const inicio = paginaAtual * itensPorPagina;
       const fim = inicio + itensPorPagina;
       setNotasExibidas(notasFiltradas.slice(inicio, fim));
@@ -174,7 +192,7 @@ const GestaoNotasSefaz = () => {
     }
   };
 
-  // 🔥 BUSCA REMOTA NA SEFAZ (Só usada se a nota não estiver na tela)
+  // BUSCA REMOTA NA SEFAZ
   const buscarNaSefazForcado = async () => {
     const chaveLimpa = chaveBusca.replace(/\D/g, '');
     if (chaveLimpa.length !== 44) return toast.warn("A Chave deve conter 44 números.");
@@ -194,13 +212,65 @@ const GestaoNotasSefaz = () => {
 
 
   // ============================================================================
-  // FLUXO DE IMPORTAÇÃO (COM BYPASS DE CADASTRO MANUAL)
+  // 🔥 A MÁGICA: O AUTO-CADASTRO SILENCIOSO DO FORNECEDOR
   // ============================================================================
   const buscarFornecedorLocal = (cnpj) => {
       if (!cnpj) return null;
       const limpo = cnpj.replace(/\D/g, '');
       const forn = listaFornecedores.find(f => (f.cnpj || f.documento || '').replace(/\D/g, '') === limpo);
       return (forn && !forn.razaoSocial?.toUpperCase().includes('FORNECEDOR NOVO')) ? forn : null;
+  };
+
+  const autoCadastrarFornecedor = async (cnpjDescoberto, razaoNome) => {
+      const docLimpo = cnpjDescoberto.replace(/\D/g, '');
+
+      // Monta o payload perfeitinho para a sua API aceitar de primeira
+      let payload = {
+          cnpj: docLimpo,
+          razaoSocial: razaoNome ? razaoNome.substring(0, 200) : `FORNECEDOR ${docLimpo}`,
+          nomeFantasia: razaoNome ? razaoNome.substring(0, 200) : `FORNECEDOR ${docLimpo}`,
+          inscricaoEstadual: "ISENTO",
+          email: "contato@fornecedor.com.br",
+          telefone: "81900000000",
+          cep: "50000000",
+          logradouro: "DADOS IMPORTADOS DA NOTA",
+          numero: "SN",
+          bairro: "CENTRO",
+          cidade: "RECIFE",
+          uf: "PE",
+          ativo: true
+      };
+
+      // Tenta enriquecer com dados reais da Receita
+      try {
+          const resApi = await fetchWithTimeout(`https://brasilapi.com.br/api/cnpj/v1/${docLimpo}`, { timeout: 3000 });
+          if (resApi.ok) {
+              const data = await resApi.json();
+              payload.razaoSocial = data.razao_social || payload.razaoSocial;
+              payload.nomeFantasia = data.nome_fantasia || data.razao_social || payload.nomeFantasia;
+              payload.cep = data.cep ? data.cep.replace(/\D/g, '') : payload.cep;
+              payload.logradouro = data.logradouro || payload.logradouro;
+              payload.numero = data.numero || payload.numero;
+              payload.bairro = data.bairro || payload.bairro;
+              payload.cidade = data.municipio || payload.cidade;
+              payload.uf = data.uf || payload.uf;
+              payload.telefone = data.ddd_telefone_1 ? data.ddd_telefone_1.replace(/\D/g, '') : payload.telefone;
+          }
+      } catch (e) {
+          console.log("Integração BrasilAPI lenta, usando dados base da nota.");
+      }
+
+      try {
+          const result = await api.post('/fornecedores', payload);
+          if (result.data && result.data.id) {
+              setListaFornecedores(prev => [...prev, result.data].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || '')));
+              return result.data.id;
+          }
+          return null;
+      } catch(e) {
+          console.error("Falha no Auto-Cadastro (Possível regra de negócio do Backend):", e);
+          return null;
+      }
   };
 
   const abrirModalImportacao = async (nota) => {
@@ -226,18 +296,23 @@ const GestaoNotasSefaz = () => {
           const res = await api.get(`/estoque/notas-pendentes/${idTratar}/xml-parse`);
           const { cnpjFornecedor, razaoSocialFornecedor, itensXml, dataEmissao } = res.data;
 
-          // 1. Tenta achar o fornecedor na Memória (Zero Bugs)
+          // 🔥 A IMPLEMENTAÇÃO EXTRAORDINÁRIA 🔥
           const fornecedorExistente = buscarFornecedorLocal(cnpjFornecedor);
           let fornecedorSalvoId = '';
 
           if (fornecedorExistente) {
                fornecedorSalvoId = fornecedorExistente.id;
-          } else {
-               // 🔥 O BYPASS: Se não achar, guarda os dados básicos para o Formulário Manual!
-               setDadosPreForn({ cnpj: cnpjFornecedor, razaoSocial: razaoSocialFornecedor });
+          } else if (cnpjFornecedor) {
+               // Fornecedor não existe! Auto-Cadastro em ação...
+               const idNovoFornecedor = await autoCadastrarFornecedor(cnpjFornecedor, razaoSocialFornecedor || nota.nomeFornecedor);
+               if (idNovoFornecedor) {
+                   fornecedorSalvoId = idNovoFornecedor;
+               } else {
+                   // Fallback seguro se o auto-cadastro for bloqueado por alguma regra severa do DB
+                   setDadosPreForn({ cnpj: cnpjFornecedor, razaoSocial: razaoSocialFornecedor });
+               }
           }
 
-          // 2. Processa os itens
           const itensProcessados = processarInteligenciaProdutos(itensXml || [], razaoSocialFornecedor || nota.nomeFornecedor);
 
           setCabecalhoModal({
@@ -255,12 +330,12 @@ const GestaoNotasSefaz = () => {
       }
   };
 
-  // Sucesso no Cadastro Manual do Fornecedor
+  // Sucesso no Cadastro Manual do Fornecedor (O Fallback)
   const handleFornecedorCriado = (novoForn) => {
       setListaFornecedores(prev => [...prev, novoForn].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || '')));
       setCabecalhoModal(prev => ({ ...prev, fornecedorId: novoForn.id }));
       setModalFornecedorAberto(false);
-      toast.success("Fornecedor cadastrado e vinculado à nota!");
+      toast.success("Fornecedor vinculado com sucesso!");
   };
 
   const processarInteligenciaProdutos = (itensXml, fornecedorNome) => {
@@ -307,7 +382,7 @@ const GestaoNotasSefaz = () => {
 
   const confirmarEntradaModal = async () => {
       if (!cabecalhoModal.fornecedorId) {
-          toast.warn("O campo Fornecedor é obrigatório!");
+          toast.warn("O Fornecedor não está selecionado. Preencha antes de continuar.");
           document.getElementById('fornecedor-modal-select')?.focus();
           return;
       }
@@ -371,12 +446,12 @@ const GestaoNotasSefaz = () => {
       {/* ÁREA DE FILTROS E BUSCA */}
       <div className="gns-filters-grid">
           <div className="filter-card">
-            <h3><Search size={18} color="#3b82f6"/> Filtro Inteligente (Chave)</h3>
+            <h3><Search size={18} color="#3b82f6"/> Filtro Inteligente (Local)</h3>
             <div className="form-busca">
               <div className="input-wrapper">
                 <Search size={18} className="icon-busca" />
                 <input
-                    type="text" placeholder="Cole a chave ou digite..."
+                    type="text" placeholder="Comece a digitar a chave..."
                     value={chaveBusca} onChange={(e) => setChaveBusca(e.target.value)}
                     maxLength={44} className="search-input"
                 />
@@ -398,6 +473,14 @@ const GestaoNotasSefaz = () => {
           </div>
       </div>
 
+      {/* 🔥 ALERTA VISUAL DO RADAR (BUSCA INTELIGENTE) 🔥 */}
+      {buscaLocalAtiva && (
+          <div className="busca-inteligente-alert fade-in">
+              <div className="pulse-dot"></div>
+              <span>Busca em Tempo Real: <strong>{notasExibidas.length}</strong> nota(s) localizada(s) na tela.</span>
+          </div>
+      )}
+
       {/* LISTAGEM DE NOTAS */}
       {loading ? (
         <div className="state-container loading">
@@ -405,12 +488,12 @@ const GestaoNotasSefaz = () => {
           <h2>Lendo Base de Dados...</h2>
         </div>
       ) : notasExibidas.length === 0 ? (
-        <div className="state-container empty">
+        <div className="state-container empty fade-in">
           <FileText size={48} style={{ color: '#cbd5e1', margin: '0 auto 20px' }} />
           <h2>Nenhuma nota encontrada na tela.</h2>
           {chaveBusca.length === 44 ? (
              <button onClick={buscarNaSefazForcado} className="btn-aplicar-filtro" style={{marginTop: '15px'}}>
-                 Buscar esta Chave na SEFAZ Nacional
+                 🔍 Buscar esta Chave na SEFAZ Nacional
              </button>
           ) : (
              <p>Se tem faturamentos recentes, clique em <strong>"Puxar Novas Notas"</strong> no topo.</p>
@@ -423,7 +506,7 @@ const GestaoNotasSefaz = () => {
             const isResumo = nota.status === 'PENDENTE_MANIFESTACAO';
 
             return (
-              <div key={nota.id} className={`nota-card-ui ${isImportada ? 'importada' : isResumo ? 'resumo' : 'pendente'}`}>
+              <div key={nota.id} className={`nota-card-ui ${isImportada ? 'importada' : isResumo ? 'resumo' : 'pendente'} ${buscaLocalAtiva ? 'glow-card' : ''}`}>
 
                 <div className="ncu-fornecedor">
                     <div className="ncu-title-row">
@@ -440,7 +523,6 @@ const GestaoNotasSefaz = () => {
                             <span className="ncu-label">Documento</span>
                             <strong className="ncu-value"><FileText size={14}/> NF-e {extrairNumeroNota(nota.chaveAcesso)}</strong>
                         </div>
-                        {/* CHAVE SEM QUEBRA DE LINHA */}
                         <div className="ncu-item full-width">
                             <span className="ncu-label">Chave de Acesso</span>
                             <span className="ncu-chave">{nota.chaveAcesso}</span>
@@ -476,7 +558,7 @@ const GestaoNotasSefaz = () => {
       )}
 
       {/* PAGINAÇÃO INFERIOR */}
-      {!loading && totalPaginasCalculado > 1 && (
+      {!loading && totalPaginasCalculado > 1 && !buscaLocalAtiva && (
         <div className="paginacao">
             <button onClick={() => setPaginaAtual(p => Math.max(0, p - 1))} disabled={paginaAtual === 0} className={`btn-page ${paginaAtual === 0 ? '' : 'active'}`}>Anterior</button>
             <span className="paginacao-info">Página {paginaAtual + 1} de {totalPaginasCalculado}</span>
@@ -503,7 +585,7 @@ const GestaoNotasSefaz = () => {
                       {loadingModal ? (
                           <div className="state-container loading">
                               <RefreshCw size={40} className="animate-spin" style={{ margin: '0 auto 15px', color: '#3b82f6' }} />
-                              <h3>Descarregando XML e Cruzando Dados...</h3>
+                              <h3>Lendo Arquivo e Identificando Mercadorias...</h3>
                           </div>
                       ) : (
                           <div className="modal-content-wrapper">
@@ -513,7 +595,7 @@ const GestaoNotasSefaz = () => {
                                   <div className="dp-col dp-col-fornecedor">
                                       <div style={{display:'flex', justifyContent:'space-between', alignItems: 'center', marginBottom: '6px'}}>
                                           <label style={{margin:0}}>Fornecedor</label>
-                                          {/* 🔥 O BYPASS: Botão para Cadastrar caso a lista falhe */}
+                                          {/* Fallback caso a API da Receita falhe */}
                                           {!cabecalhoModal.fornecedorId && (
                                               <button onClick={() => setModalFornecedorAberto(true)} className="btn-add-forn"><Plus size={12}/> NOVO</button>
                                           )}
@@ -525,7 +607,7 @@ const GestaoNotasSefaz = () => {
                                           onChange={(e) => setCabecalhoModal({...cabecalhoModal, fornecedorId: e.target.value})}
                                           style={{border: !cabecalhoModal.fornecedorId ? '2px solid #f59e0b' : '1px solid #cbd5e1'}}
                                       >
-                                          <option value="">{cabecalhoModal.fornecedorId ? "Selecione..." : "⚠️ CADASTRE OU SELECIONE"}</option>
+                                          <option value="">{cabecalhoModal.fornecedorId ? "Selecione..." : "⚠️ FORNECEDOR AUSENTE - CLIQUE EM NOVO"}</option>
                                           {listaFornecedores.map(f => (
                                               <option key={f.id} value={f.id}>{f.razaoSocial || f.nomeFantasia}</option>
                                           ))}
@@ -637,8 +719,7 @@ const GestaoNotasSefaz = () => {
                       <button onClick={() => setModalFornecedorAberto(false)} className="btn-close-modal"><X size={20}/></button>
                   </div>
                   <div style={{ padding: '20px' }}>
-                      <p style={{marginBottom: '20px', color: '#64748b'}}>A SEFAZ não devolveu dados completos. Por favor, confirme o cadastro para continuar a importação.</p>
-                      {/* Envia os dados prévios extraídos do XML para o Formulário não nascer vazio */}
+                      <p style={{marginBottom: '20px', color: '#64748b'}}>A SEFAZ não devolveu dados completos para Auto-Cadastro. Por favor, confirme os dados para continuar a importação.</p>
                       <FornecedorForm
                           isModal={true}
                           prefillData={dadosPreForn}

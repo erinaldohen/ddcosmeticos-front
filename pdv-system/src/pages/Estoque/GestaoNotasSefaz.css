@@ -1,5 +1,5 @@
 /* Container Principal (Alargado para comportar a chave de 44 dígitos com folga) */
-.gestao-notas-container { padding: 20px; max-width: 1000px; margin: 0 auto; font-family: 'Inter', sans-serif; }
+.gestao-notas-container { padding: 20px; max-width: 1400px; margin: 0 auto; font-family: 'Inter', sans-serif; }
 
 /* Header Premium */
 .gns-header { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-radius: 16px; padding: 30px; color: #fff; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); margin-bottom: 30px; }
@@ -14,7 +14,7 @@
 .btn-sync:disabled { background-color: #475569; cursor: not-allowed; }
 
 /* Grid de Filtros */
-.gns-filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 30px; }
+.gns-filters-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin-bottom: 20px; }
 .filter-card { background: #fff; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 .filter-card h3 { font-size: 1rem; color: #0f172a; margin: 0 0 15px 0; display: flex; align-items: center; gap: 8px; }
 .filter-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
@@ -36,6 +36,15 @@
 .btn-aplicar-filtro { padding: 10px 15px; background: #f59e0b; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
 .btn-aplicar-filtro:hover { background: #d97706; }
 
+/* 🔥 O NOVO ALERTA DA BUSCA INTELIGENTE 🔥 */
+.busca-inteligente-alert {
+    background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+    padding: 12px 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;
+    color: #1e3a8a; font-size: 0.9rem;
+}
+.pulse-dot { width: 10px; height: 10px; background-color: #3b82f6; border-radius: 50%; animation: pulseBlue 1.5s infinite; }
+@keyframes pulseBlue { 0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(59, 130, 246, 0); } 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); } }
+
 /* Estados Visuais */
 .state-container { text-align: center; padding: 80px 20px; }
 .state-container.loading { color: #64748b; }
@@ -49,15 +58,13 @@
    ========================================================================= */
 .notas-list { display: flex; flex-direction: column; gap: 20px; }
 
-.nota-card-ui {
-    background: #fff; border-radius: 16px; border: 1px solid #e2e8f0;
-    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); overflow: hidden;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
+.nota-card-ui { background: #fff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); overflow: hidden; transition: transform 0.2s, box-shadow 0.2s; }
 .nota-card-ui:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
 .nota-card-ui.importada { border-left: 6px solid #10b981; opacity: 0.8; }
 .nota-card-ui.resumo { border-left: 6px solid #f59e0b; }
 .nota-card-ui.pendente { border-left: 6px solid #3b82f6; }
+
+.glow-card { box-shadow: 0 0 15px rgba(59, 130, 246, 0.4); border-color: #93c5fd; } /* Efeito ao buscar */
 
 .ncu-fornecedor { padding: 20px 24px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
 .ncu-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
@@ -69,8 +76,8 @@
 
 .ncu-body { display: flex; flex-wrap: wrap; padding: 24px; gap: 30px; align-items: center; }
 
-/* REPOSTAS AS LINHAS TRACEJADAS VERTICAIS (BORDERS) E LARGURA AJUSTADA */
-.ncu-fiscal { display: flex; flex-direction: column; gap: 15px; flex: 1.8; min-width: 480px; } /* Aumentada a largura mínima para acomodar a chave */
+/* LINHAS TRACEJADAS VERTICAIS (BORDERS) E LARGURA AJUSTADA */
+.ncu-fiscal { display: flex; flex-direction: column; gap: 15px; flex: 1.8; min-width: 480px; }
 .ncu-financeiro { display: flex; flex-direction: column; gap: 15px; flex: 0.8; min-width: 150px; border-left: 1px dashed #cbd5e1; padding-left: 30px; }
 
 .ncu-item { display: flex; flex-direction: column; gap: 4px; }
@@ -195,10 +202,7 @@
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes scaleIn { 0% { transform: scale(0.97); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
-/* =========================================================================
-   📱 MEDIA QUERIES (AJUSTES PARA MOBILE E IPAD)
-   ========================================================================= */
-@media (max-width: 1024px) {
+@media (max-width: 900px) {
   .ncu-body { flex-direction: column; gap: 20px; padding: 20px; }
   .ncu-financeiro { border-left: none; padding-left: 0; border-top: 1px dashed #cbd5e1; padding-top: 20px; }
   .ncu-acao { width: 100%; }
