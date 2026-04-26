@@ -7,18 +7,16 @@ import ConfirmModal from '../../components/ConfirmModal';
 import {
   Search, Plus, Edit3, Trash2, Box,
   ChevronLeft, ChevronRight, Zap, Printer, History, X,
-  RotateCcw, ImageOff, Filter, XCircle, AlertOctagon,
-  Copy, Check, Upload, FileText, FileSpreadsheet, Bot, AlertTriangle, ChevronRight as ChevronRightIcon
+  RotateCcw, ImageOff, Filter, XCircle,
+  Copy, Check, Upload, FileText, FileSpreadsheet, Bot, AlertTriangle, ChevronRight as ChevronRightIcon, Barcode, MoreVertical
 } from 'lucide-react';
 import './ProdutoList.css';
 
 // --- COMPONENTE: SEARCH BAR ISOLADA (PERFORMANCE MÁXIMA) ---
-// Este componente gere a sua própria digitação para não travar a tabela gigante.
 const SearchBar = ({ onSearch }) => {
   const [localTerm, setLocalTerm] = useState('');
 
   useEffect(() => {
-    // Só avisa a tabela principal para pesquisar 500ms DEPOIS de parar de digitar
     const handler = setTimeout(() => {
       onSearch(localTerm);
     }, 500);
@@ -124,6 +122,66 @@ const BulkActionBar = ({ count, onClear, onDelete, onPrint, mode }) => {
   );
 };
 
+// --- NOVO COMPONENTE: ACTION MENU (KEBAB) ---
+const ActionMenu = ({ prod, onEdit, onDelete, onPrint, onHistory, loadingPrint }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const menuRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (menuRef.current && !menuRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleAction = (e, actionFn) => {
+        e.stopPropagation();
+        setIsOpen(false);
+        actionFn();
+    };
+
+    return (
+        <div className="action-menu-container" ref={menuRef}>
+            <button
+                className="btn-icon-primary"
+                onClick={(e) => handleAction(e, () => onEdit(prod.id))}
+                title="Editar Produto"
+            >
+                <Edit3 size={18} />
+            </button>
+
+            <button
+                className="btn-icon-secondary"
+                onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
+                title="Mais ações"
+            >
+                <MoreVertical size={18} />
+            </button>
+
+            {isOpen && (
+                <div className="action-dropdown fade-in-fast">
+                    <button className="dropdown-item" onClick={(e) => handleAction(e, () => onPrint(prod.id))} disabled={loadingPrint === prod.id}>
+                        {loadingPrint === prod.id ? <div className="spinner-micro dark"></div> : <Printer size={16} />}
+                        <span>Imprimir Etiqueta</span>
+                    </button>
+                    <button className="dropdown-item" onClick={(e) => handleAction(e, () => onHistory(prod.id))}>
+                        <History size={16} />
+                        <span>Ver Histórico</span>
+                    </button>
+                    <div className="dropdown-divider"></div>
+                    <button className="dropdown-item text-danger" onClick={(e) => handleAction(e, () => onDelete(prod))}>
+                        <Trash2 size={16} />
+                        <span>Mover para Lixeira</span>
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
 // ==================================================================================
 // COMPONENTE PRINCIPAL
 // ==================================================================================
@@ -147,9 +205,7 @@ const ProdutoList = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
 
-  // O termo final de pesquisa (após o utilizador parar de digitar)
   const [termoBusca, setTermoBusca] = useState('');
-
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger', confirmText: 'Confirmar' });
 
   // Helpers de Interface
@@ -234,7 +290,7 @@ const ProdutoList = () => {
       } catch (error) {
           toast.update(toastId, { render: "Erro na importação do arquivo.", type: "error", isLoading: false, autoClose: 5000 });
       }
-    };
+  };
 
   const handleCorrigirNcms = () => {
     setConfirmModal({
@@ -246,6 +302,24 @@ const ProdutoList = () => {
           toast.update(toastId, { render: `Sucesso! ${res.data.qtdCorrigidos || 0} NCMs corrigidos.`, type: "success", isLoading: false, autoClose: 5000 });
           carregarProdutos(page, termoBusca);
         } catch (e) { toast.update(toastId, { render: "Erro ao executar robô fiscal.", type: "error", isLoading: false, autoClose: 3000 }); }
+      }
+    });
+  };
+
+  const handleCorrigirEANsInternos = () => {
+    setConfirmModal({
+      isOpen: true, type: 'robot', title: 'IA Validação de EAN Interno',
+      message: 'O Robô irá varrer todos os EANs iniciados com "2", validar o dígito verificador GS1 e corrigir os que estiverem fora do padrão. Deseja continuar?',
+      confirmText: 'Corrigir EANs',
+      onConfirm: async () => {
+        const toastId = toast.loading("🤖 Calculando Módulo 10 GS1...");
+        try {
+          const res = await api.post('/produtos/corrigir-eans-internos-ia');
+          toast.update(toastId, { render: `Matemática Aplicada! ${res.data.qtdCorrigidos || 0} EANs ajustados.`, type: "success", isLoading: false, autoClose: 5000 });
+          carregarProdutos(page, termoBusca);
+        } catch (e) {
+            toast.update(toastId, { render: "Erro ao varrer códigos EAN.", type: "error", isLoading: false, autoClose: 3000 });
+        }
       }
     });
   };
@@ -361,6 +435,9 @@ const ProdutoList = () => {
             {!modoLixeira && (
               <>
                 <div className="header-actions-group">
+                    <button className="btn-secondary btn-purple bordered" onClick={handleCorrigirEANsInternos} data-label="Limpar EAN">
+                        <Barcode size={18} /> <span className="action-text">IA EAN Local</span>
+                    </button>
                     <button className="btn-secondary btn-purple bordered" onClick={handleCorrigirNcms} data-label="IA Fiscal">
                         <Bot size={18} /> <span className="action-text">IA Fiscal</span>
                     </button>
@@ -388,42 +465,31 @@ const ProdutoList = () => {
           </div>
         </header>
 
-        {/* 🚨 BANNER DE ALERTA: PRODUTOS CRIADOS NO PDV */}
+        {/* ALERTA DE PRODUTOS DO PDV */}
         {!modoLixeira && produtosPendentesDeRevisao > 0 && (
-            <div className="alert-banner" style={{
-                background: '#fffbeb', borderLeft: '4px solid #f59e0b', padding: '16px',
-                borderRadius: '8px', display: 'flex', justifyContent: 'space-between',
-                alignItems: 'center', marginBottom: '24px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ background: '#fde68a', color: '#d97706', padding: '8px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="alert-banner">
+                <div className="alert-banner-left">
+                    <div className="alert-icon-box">
                         <AlertTriangle size={24} />
                     </div>
                     <div>
-                        <h3 style={{ margin: '0 0 4px', color: '#92400e', fontSize: '1.1rem', fontWeight: '800' }}>
-                            Revisão Necessária
-                        </h3>
-                        <p style={{ margin: 0, color: '#b45309', fontSize: '0.95rem' }}>
+                        <h3 className="alert-title">Revisão Necessária</h3>
+                        <p className="alert-text">
                             Existem <strong>{produtosPendentesDeRevisao}</strong> produtos cadastrados no PDV aguardando preenchimento de custo e NCM.
                         </p>
                     </div>
                 </div>
                 <button
                     onClick={() => handleFiltroChange('revisaoPendente', !filtros.revisaoPendente)}
-                    style={{
-                        background: '#f59e0b', color: 'white', border: 'none', padding: '10px 16px',
-                        borderRadius: '6px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer'
-                    }}
+                    className="btn-alert-action"
                 >
                     {filtros.revisaoPendente ? 'Mostrar Todos' : 'Ver Pendentes'} <ChevronRightIcon size={18} />
                 </button>
             </div>
         )}
 
-        <div className="content-card">
+        <div className="content-card shadow-sm rounded-lg">
           <div className="card-toolbar">
-
-            {/* 🔥 NOVO: Barra de pesquisa ultra-rápida, isolada do componente */}
             <SearchBar onSearch={setTermoBusca} />
 
             <div className="toolbar-actions">
@@ -479,7 +545,7 @@ const ProdutoList = () => {
                   <th>Preço</th>
                   <th>Estoque</th>
                   <th>Status</th>
-                  <th className="text-right">Ações</th>
+                  <th className="text-right" style={{paddingRight: '20px'}}>Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -489,7 +555,7 @@ const ProdutoList = () => {
                     produtosExibidos.map((prod) => {
                       const isSelected = selectedIds.includes(prod.id);
                       return (
-                        <tr key={prod.id} className={`fade-in ${isSelected ? 'row-selected' : ''}`} onClick={() => handleSelectOne(prod.id)}>
+                        <tr key={prod.id} className={`fade-in hover-row ${isSelected ? 'row-selected' : ''}`} onClick={() => handleSelectOne(prod.id)}>
                           <td className="td-checkbox" onClick={(e) => e.stopPropagation()}><div className="checkbox-wrapper"><input type="checkbox" checked={isSelected} onChange={() => handleSelectOne(prod.id)} /></div></td>
                           <td>
                             <div className="product-item">
@@ -511,23 +577,19 @@ const ProdutoList = () => {
                           <td className="font-numeric">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(prod.precoVenda || 0)}</td>
                           <td><div className="stock-pill"><span className={(prod.quantidadeEmEstoque || 0) < (prod.estoqueMinimo || 5) ? 'text-red' : ''}>{prod.quantidadeEmEstoque || 0}</span><small>un</small></div></td>
                           <td><StatusIndicator prod={prod} /></td>
-                          <td className="td-actions" onClick={(e) => e.stopPropagation()}>
-                            <div className="actions-flex">
+                          <td className="td-actions text-right" style={{paddingRight: '15px'}} onClick={(e) => e.stopPropagation()}>
                               {modoLixeira ? (
                                 <button className="btn-icon-soft green" onClick={() => handleSingleAction('restore', prod)} title="Restaurar Produto"><RotateCcw size={18} /></button>
                               ) : (
-                                <>
-                                  <button className="btn-icon-soft" onClick={() => handlePrint(prod.id)} disabled={loadingPrint === prod.id} title="Imprimir Etiqueta ZPL">
-                                    {loadingPrint === prod.id ? <div className="spinner-micro dark"></div> : <Printer size={18} />}
-                                  </button>
-
-                                  <button className="btn-icon-soft purple" onClick={() => handleOpenHistorico(prod.id)} title="Ver Histórico de Auditoria"><History size={18} /></button>
-
-                                  <button className="btn-icon-soft blue" onClick={() => navigate(`/produtos/editar/${prod.id}`)} title="Editar Produto"><Edit3 size={18} /></button>
-                                  <button className="btn-icon-soft red" onClick={() => handleSingleAction('delete', prod)} title="Mover para Lixeira"><Trash2 size={18} /></button>
-                                </>
+                                <ActionMenu
+                                    prod={prod}
+                                    onEdit={(id) => navigate(`/produtos/editar/${id}`)}
+                                    onDelete={(p) => handleSingleAction('delete', p)}
+                                    onPrint={handlePrint}
+                                    onHistory={handleOpenHistorico}
+                                    loadingPrint={loadingPrint}
+                                />
                               )}
-                            </div>
                           </td>
                         </tr>
                       );
