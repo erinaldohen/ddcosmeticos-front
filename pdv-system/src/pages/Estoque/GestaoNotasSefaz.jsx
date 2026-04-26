@@ -79,7 +79,6 @@ const GestaoNotasSefaz = () => {
 
   const navigate = useNavigate();
 
-  // --- ESTADOS DA LISTA BASE ---
   const [todasNotas, setTodasNotas] = useState([]);
   const [notasExibidas, setNotasExibidas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -90,24 +89,20 @@ const GestaoNotasSefaz = () => {
   const itensPorPagina = 15;
   const [paginaAtual, setPaginaAtual] = useState(0);
 
-  // --- ESTADOS DE FILTROS E BUSCA ---
   const [chaveBusca, setChaveBusca] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [buscaLocalAtiva, setBuscaLocalAtiva] = useState(false);
 
-  // 🔥 O SEGREDO DE UX: Memória de Cache (Nasce TRUE por padrão) 🔥
   const [verImportadas, setVerImportadas] = useState(() => {
       const salvo = localStorage.getItem('ddcosmeticos_ver_importadas');
       return salvo !== null ? JSON.parse(salvo) : true;
   });
 
-  // Salva no navegador sempre que você altera a chave
   useEffect(() => {
       localStorage.setItem('ddcosmeticos_ver_importadas', JSON.stringify(verImportadas));
   }, [verImportadas]);
 
-  // --- ESTADOS DO MODAL DE IMPORTAÇÃO ---
   const [modalAberto, setModalAberto] = useState(false);
   const [notaSelecionada, setNotaSelecionada] = useState(null);
   const [loadingModal, setLoadingModal] = useState(false);
@@ -115,11 +110,9 @@ const GestaoNotasSefaz = () => {
   const [itensImportacao, setItensImportacao] = useState([]);
   const [cabecalhoModal, setCabecalhoModal] = useState({ fornecedorId: '', numeroDocumento: '', dataEmissao: '' });
 
-  // Controle de Cadastro Manual (Fallback)
   const [modalFornecedorAberto, setModalFornecedorAberto] = useState(false);
   const [dadosPreForn, setDadosPreForn] = useState(null);
 
-  // 1. CARREGAMENTO INICIAL
   useEffect(() => {
     const init = async () => {
         try {
@@ -136,13 +129,11 @@ const GestaoNotasSefaz = () => {
     // eslint-disable-next-line
   }, []);
 
-  // 2. DISPARA NOVA BUSCA AO MUDAR O TOGGLE
   useEffect(() => {
       carregarNotasDoBackend();
       // eslint-disable-next-line
   }, [verImportadas]);
 
-  // 3. PAGINAÇÃO E FILTRO EM TEMPO REAL (RADAR)
   useEffect(() => {
       if (!Array.isArray(todasNotas)) return;
 
@@ -226,9 +217,6 @@ const GestaoNotasSefaz = () => {
     }
   };
 
-  // ============================================================================
-  // 🔥 MOTOR DE ENRIQUECIMENTO SILENCIOSO
-  // ============================================================================
   const enriquecerFornecedorSilenciosamente = async (idForn, cnpjForn) => {
       if (!idForn || !cnpjForn) return;
       const docLimpo = cnpjForn.replace(/\D/g, '');
@@ -357,11 +345,52 @@ const GestaoNotasSefaz = () => {
       setItensImportacao(lista);
   };
 
+  // ============================================================================
+  // 🔥 EAN AUTOMÁTICO INTELIGENTE COM CÁLCULO GS1 LOCAL 🔥
+  // ============================================================================
   const gerarEanNoModal = async (index) => {
       try {
-          const novoEan = await produtoService.gerarEanInterno();
-          atualizarCampoItem(index, 'codigoBarras', novoEan);
-      } catch(e) { toast.error("Erro ao gerar EAN."); }
+          // 1. Puxa o EAN base que o Java acha que é o próximo
+          const eanBaseBackend = await produtoService.gerarEanInterno();
+          let eanSugerido = String(eanBaseBackend);
+
+          // 2. Procura se algum produto DENTRO DO MODAL já recebeu um EAN (Começado em 2)
+          const eansInternosLocais = itensImportacao
+              .map(item => item.codigoBarras)
+              .filter(c => c && String(c).startsWith('2') && String(c).length === eanSugerido.length);
+
+          if (eansInternosLocais.length > 0) {
+              // 3. Se encontrar EANs no modal, pegamos a "Base" do maior (ignorando o último dígito verificador)
+              let maiorBase = BigInt(eanSugerido.substring(0, eanSugerido.length - 1));
+
+              eansInternosLocais.forEach(ean => {
+                  let baseAtual = BigInt(ean.substring(0, ean.length - 1));
+                  if (baseAtual > maiorBase) {
+                      maiorBase = baseAtual;
+                  }
+              });
+
+              // 4. Somamos +1 na base para gerar o próximo código da sequência
+              let novaBase = String(maiorBase + 1n).padStart(eanSugerido.length - 1, '0');
+
+              // 5. Cálculo do Dígito Verificador (Algoritmo Oficial EAN-13/GS1)
+              let soma = 0;
+              let multiplicador = 3;
+              for (let i = novaBase.length - 1; i >= 0; i--) {
+                  soma += parseInt(novaBase.charAt(i)) * multiplicador;
+                  multiplicador = multiplicador === 3 ? 1 : 3;
+              }
+              const resto = soma % 10;
+              const dv = resto === 0 ? 0 : 10 - resto;
+
+              // 6. Junta a nova base com o Dígito Verificador correto
+              eanSugerido = novaBase + String(dv);
+          }
+
+          atualizarCampoItem(index, 'codigoBarras', eanSugerido);
+      } catch(e) {
+          toast.error("Erro ao gerar EAN Automático.");
+      }
   };
 
   const vincularSugestao = (index, dbProd) => {
@@ -370,7 +399,6 @@ const GestaoNotasSefaz = () => {
       setItensImportacao(lista);
   };
 
-  // 🔥 CONFIRMAÇÃO ANTI-DUPLO CLIQUE 🔥
   const confirmarEntradaModal = async () => {
       if (loadingModal) return;
 
@@ -382,15 +410,15 @@ const GestaoNotasSefaz = () => {
       if (itensImportacao.some(i => i.status === 'semelhante')) return toast.warn("Verifique os itens marcados em ATENÇÃO.");
       if (itensImportacao.some(i => i.status === 'novo' && (!i.codigoBarras || i.codigoBarras.length < 3))) return toast.warn("Produtos novos precisam de um Código EAN.");
 
-      setLoadingModal(true); // Trava o modal
-      const toastId = toast.loading("Salvando Estoque e Financeiro...");
+      setLoadingModal(true);
+      const toastId = toast.loading("A Efetivar Estoque e Financeiro...");
 
       try {
           await api.post('/estoque/entrada', {
               fornecedorId: cabecalhoModal.fornecedorId,
               numeroDocumento: cabecalhoModal.numeroDocumento || "S/N",
               dataVencimento: cabecalhoModal.dataEmissao,
-              chaveAcesso: notaSelecionada.chaveAcesso, // <- ANTI DUPLICIDADE DO BACKEND
+              chaveAcesso: notaSelecionada.chaveAcesso,
               itens: itensImportacao.map(i => ({
                   produtoId: i.idProduto, codigoBarras: i.codigoBarras || "S/N",
                   descricao: i.descricao, quantidade: i.quantidade || 0, valorUnitario: i.precoCusto || 0,
@@ -401,7 +429,6 @@ const GestaoNotasSefaz = () => {
 
           await api.post(`/estoque/notas-pendentes/${notaSelecionada.id}/importar`);
 
-          // Atualização imediata na tela (Mágica Visual)
           setTodasNotas(prev => prev.map(n =>
               n.id === notaSelecionada.id ? { ...n, status: 'IMPORTADA' } : n
           ));
@@ -430,7 +457,6 @@ const GestaoNotasSefaz = () => {
   return (
     <div className="gestao-notas-container">
 
-      {/* HEADER DA PÁGINA */}
       <div className="gns-header">
         <div className="gns-header-left">
             <div className="gns-icon-box"><Inbox size={36} color="#60a5fa" /></div>
@@ -445,7 +471,6 @@ const GestaoNotasSefaz = () => {
         </button>
       </div>
 
-      {/* ÁREA DE FILTROS E BUSCA */}
       <div className="gns-filters-grid">
           <div className="filter-card">
             <h3><Search size={18} color="#3b82f6"/> Filtro Inteligente (Chave)</h3>
@@ -482,7 +507,6 @@ const GestaoNotasSefaz = () => {
           </div>
       </div>
 
-      {/* RADAR DE BUSCA */}
       {buscaLocalAtiva && (
           <div className="busca-inteligente-alert fade-in">
               <div className="pulse-dot"></div>
@@ -490,7 +514,6 @@ const GestaoNotasSefaz = () => {
           </div>
       )}
 
-      {/* LISTAGEM DE NOTAS */}
       {loading ? (
         <div className="state-container loading">
           <RefreshCw size={40} className="animate-spin" style={{ margin: '0 auto 15px', color: '#3b82f6' }} />
@@ -567,7 +590,6 @@ const GestaoNotasSefaz = () => {
         </div>
       )}
 
-      {/* PAGINAÇÃO INFERIOR */}
       {!loading && totalPaginasCalculado > 1 && !buscaLocalAtiva && (
         <div className="paginacao">
             <button onClick={() => setPaginaAtual(p => Math.max(0, p - 1))} disabled={paginaAtual === 0} className={`btn-page ${paginaAtual === 0 ? '' : 'active'}`}>Anterior</button>
@@ -592,59 +614,53 @@ const GestaoNotasSefaz = () => {
                   </div>
 
                   <div className="modal-body-premium">
-                      {loadingModal ? (
-                          <div className="state-container loading">
-                              <RefreshCw size={40} className="animate-spin" style={{ margin: '0 auto 15px', color: '#3b82f6' }} />
-                              <h3>Descarregando XML e Cruzando Dados...</h3>
-                          </div>
-                      ) : (
-                          <div className="modal-content-wrapper">
+                      <div className="modal-content-wrapper">
 
-                              <div className="stepper-header">Passo 1: Identificação</div>
-                              <div className="dashboard-panel-glass">
-                                  <div className="dp-col dp-col-fornecedor">
-                                      <div style={{display:'flex', justifyContent:'space-between', alignItems: 'center', marginBottom: '6px'}}>
-                                          <label style={{margin:0}}>Fornecedor</label>
-                                          {!cabecalhoModal.fornecedorId && (
-                                              <button onClick={() => setModalFornecedorAberto(true)} className="btn-add-forn"><Plus size={12}/> ADICIONAR MANUALMENTE</button>
-                                          )}
-                                      </div>
-                                      <select
-                                          id="fornecedor-modal-select"
-                                          className="dp-select-premium"
-                                          value={cabecalhoModal.fornecedorId}
-                                          onChange={(e) => setCabecalhoModal({...cabecalhoModal, fornecedorId: e.target.value})}
-                                          style={{border: !cabecalhoModal.fornecedorId ? '2px solid #f59e0b' : '1px solid #cbd5e1'}}
-                                      >
-                                          <option value="">{cabecalhoModal.fornecedorId ? "Selecione..." : "⚠️ FORNECEDOR AUSENTE - CADASTRE PARA CONTINUAR"}</option>
-                                          {listaFornecedores.map(f => (
-                                              <option key={f.id} value={f.id}>{f.razaoSocial || f.nomeFantasia}</option>
-                                          ))}
-                                      </select>
+                          <div className="stepper-header">Passo 1: Identificação</div>
+                          <div className="dashboard-panel-glass">
+                              <div className="dp-col dp-col-fornecedor">
+                                  <div style={{display:'flex', justifyContent:'space-between', alignItems: 'center', marginBottom: '6px'}}>
+                                      <label style={{margin:0}}>Fornecedor</label>
+                                      {!cabecalhoModal.fornecedorId && (
+                                          <button onClick={() => setModalFornecedorAberto(true)} className="btn-add-forn"><Plus size={12}/> ADICIONAR MANUALMENTE</button>
+                                      )}
                                   </div>
-                                  <div className="dp-col dp-col-small">
-                                      <label>NF-e</label>
-                                      <input className="dp-input-premium" value={cabecalhoModal.numeroDocumento} readOnly />
-                                  </div>
-                                  <div className="dp-col dp-col-small">
-                                      <label>Data Faturamento</label>
-                                      <input type="date" className="dp-input-premium" value={cabecalhoModal.dataEmissao} onChange={(e) => setCabecalhoModal({...cabecalhoModal, dataEmissao: e.target.value})} />
-                                  </div>
+                                  <select
+                                      id="fornecedor-modal-select"
+                                      className="dp-select-premium"
+                                      value={cabecalhoModal.fornecedorId}
+                                      onChange={(e) => setCabecalhoModal({...cabecalhoModal, fornecedorId: e.target.value})}
+                                      style={{border: !cabecalhoModal.fornecedorId ? '2px solid #f59e0b' : '1px solid #cbd5e1'}}
+                                  >
+                                      <option value="">{cabecalhoModal.fornecedorId ? "Selecione..." : "⚠️ FORNECEDOR AUSENTE - CADASTRE PARA CONTINUAR"}</option>
+                                      {listaFornecedores.map(f => (
+                                          <option key={f.id} value={f.id}>{f.razaoSocial || f.nomeFantasia}</option>
+                                      ))}
+                                  </select>
                               </div>
+                              <div className="dp-col dp-col-small">
+                                  <label>NF-e</label>
+                                  <input className="dp-input-premium" value={cabecalhoModal.numeroDocumento} readOnly />
+                              </div>
+                              <div className="dp-col dp-col-small">
+                                  <label>Data Faturamento</label>
+                                  <input type="date" className="dp-input-premium" value={cabecalhoModal.dataEmissao} onChange={(e) => setCabecalhoModal({...cabecalhoModal, dataEmissao: e.target.value})} />
+                              </div>
+                          </div>
 
-                              <div className="stepper-header" style={{marginTop: '10px'}}>Passo 2: Mercadorias</div>
-                              <div className="modal-table-area">
-                                  <table className="modern-table">
-                                      <thead>
-                                          <tr>
-                                              <th width="15%">Auditoria IA</th>
-                                              <th width="45%">Mercadoria</th>
-                                              <th width="20%">Custo / Volume</th>
-                                              <th width="20%">Ação Requerida</th>
-                                          </tr>
-                                      </thead>
-                                      <tbody>
-                                          {itensImportacao.map((item, idx) => (
+                          <div className="stepper-header" style={{marginTop: '10px'}}>Passo 2: Mercadorias</div>
+                          <div className="modal-table-area">
+                              <table className="modern-table">
+                                  <thead>
+                                      <tr>
+                                          <th width="15%">Auditoria IA</th>
+                                          <th width="45%">Mercadoria</th>
+                                          <th width="20%">Custo / Volume</th>
+                                          <th width="20%">Ação Requerida</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody>
+                                      {itensImportacao.map((item, idx) => (
                                               <tr key={idx} className={`tr-${item.status}`}>
                                                   <td className="td-status">
                                                       {item.status === 'vinculado' && <span className="badge-status importada"><CheckCircle size={14}/> VINCULADO</span>}
@@ -658,7 +674,7 @@ const GestaoNotasSefaz = () => {
                                                               <input value={item.descricao} onChange={(e) => atualizarCampoItem(idx, 'descricao', e.target.value)} className="input-elegante focus-blue" placeholder="Nome no seu sistema"/>
                                                               <div className="ean-generator">
                                                                   <input value={item.codigoBarras} onChange={(e) => atualizarCampoItem(idx, 'codigoBarras', e.target.value)} className="input-elegante" placeholder="EAN / Cód. Barras"/>
-                                                                  <button onClick={() => gerarEanNoModal(idx)} className="btn-magic" title="Gerar EAN Automático"><Wand2 size={16}/></button>
+                                                                  <button onClick={() => gerarEanNoModal(idx)} className="btn-magic" title="Gerar EAN Automático (Sequencial)"><Wand2 size={16}/></button>
                                                               </div>
                                                           </div>
                                                       ) : (
@@ -695,11 +711,10 @@ const GestaoNotasSefaz = () => {
                                                   </td>
                                               </tr>
                                           ))}
-                                      </tbody>
-                                  </table>
-                              </div>
+                                  </tbody>
+                              </table>
                           </div>
-                      )}
+                      </div>
                   </div>
 
                   {!loadingModal && (
@@ -708,7 +723,6 @@ const GestaoNotasSefaz = () => {
                               <span>Investimento Líquido</span>
                               <strong>R$ {totalGeralModal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
                           </div>
-                          {/* 🔥 BOTÃO PROTEGIDO CONTRA DUPLO CLIQUE 🔥 */}
                           <button className="btn-confirmar-gigante" onClick={confirmarEntradaModal} disabled={loadingModal}>
                               <Save size={22}/> Confirmar Atualização do Estoque
                           </button>
@@ -719,7 +733,7 @@ const GestaoNotasSefaz = () => {
       )}
 
       {/* ============================================================================ */}
-      {/* MODAL MANUAL DE FORNECEDOR */}
+      {/* MODAL DE CADASTRO MANUAL DE FORNECEDOR (BYPASS SEGURO) */}
       {/* ============================================================================ */}
       {modalFornecedorAberto && (
           <div className="modal-overlay" style={{zIndex: 99999}}>
