@@ -5,7 +5,7 @@ import {
   Settings, LogOut, ChevronLeft, X,
   ShieldCheck, Truck, History, Clock,
   Wallet, TrendingDown, Store, ClipboardList, ShoppingBag,
-  BarChart3, HeartHandshake, TrendingUp, FileText, Inbox
+  BarChart3, HeartHandshake, TrendingUp, FileText, Inbox, Barcode
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -51,7 +51,7 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
         title: 'Estoque',
         items: [
           { path: '/produtos', icon: <Package size={20} />, label: 'Produtos', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
-          // 🔥 ADICIONADO: A Nova Caixa de Entrada SEFAZ 🔥
+          { path: '/auditoria-preco', icon: <Barcode size={20} />, label: 'Auditoria de Gôndola', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/estoque/sefaz', icon: <Inbox size={20} />, label: 'Caixa de Entrada SEFAZ', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/estoque/entrada', icon: <Truck size={20} />, label: 'Importar XML', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/historico-notas', icon: <FileText size={20} />, label: 'Histórico XML', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },

@@ -19,6 +19,9 @@ const ProdutoList = lazy(() => import('./pages/Produtos/ProdutoList'));
 const ProdutoForm = lazy(() => import('./pages/Produtos/ProdutoForm'));
 const HistoricoProduto = lazy(() => import('./pages/Produtos/HistoricoProduto'));
 
+// 🔥 NOVA PÁGINA: AUDITORIA DE GÔNDOLA 🔥
+const AuditoriaPreco = lazy(() => import('./pages/Produtos/AuditoriaPreco'));
+
 // 🔥 NOVA PÁGINA: GESTÃO DE NOTAS SEFAZ 🔥
 const GestaoNotasSefaz = lazy(() => import('./pages/Estoque/GestaoNotasSefaz'));
 
@@ -140,10 +143,14 @@ export default function App() {
                 <Route path="/caixa" element={<PrivateRoute><GerenciamentoCaixa /></PrivateRoute>} />
                 <Route path="/historico-caixa" element={<AdminRoute><HistoricoCaixa /></AdminRoute>} />
                 <Route path="/vendas/historico" element={<AdminRoute><HistoricoVendas /></AdminRoute>} />
+
+                {/* Gestão de Produtos e Auditoria */}
                 <Route path="/produtos" element={<AdminRoute><ProdutoList /></AdminRoute>} />
                 <Route path="/produtos/novo" element={<AdminRoute><ProdutoForm /></AdminRoute>} />
                 <Route path="/produtos/editar/:id" element={<AdminRoute><ProdutoForm /></AdminRoute>} />
                 <Route path="/produtos/historico/:id" element={<AdminRoute><HistoricoProduto /></AdminRoute>} />
+                <Route path="/auditoria-preco" element={<AdminRoute><AuditoriaPreco /></AdminRoute>} />
+
                 <Route path="/estoque" element={<AdminRoute><ProdutoList /></AdminRoute>} />
 
                 {/* 🔥 A TELA DE GESTÃO DA SEFAZ AQUI 🔥 */}
