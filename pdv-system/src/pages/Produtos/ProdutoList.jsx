@@ -6,23 +6,59 @@ import { useNavigate } from 'react-router-dom';
 import ConfirmModal from '../../components/ConfirmModal';
 import {
   Search, Plus, Edit3, Trash2, Box, ChevronLeft, ChevronRight, Zap, Printer, History, X,
-  RotateCcw, ImageOff, Filter, XCircle, Copy, Check, Upload, FileText, FileSpreadsheet,
-  Bot, AlertTriangle, Barcode, ChevronDown, ZoomIn, Edit2
+  RotateCcw, ImageOff, Filter, Copy, Check, Upload, FileText, FileSpreadsheet,
+  Bot, AlertTriangle, Barcode, ChevronDown, ZoomIn, Edit2, AlertCircle
 } from 'lucide-react';
 import './ProdutoList.css';
 
 // =========================================================================
-// 🧩 COMPONENTES AUXILIARES
+// 🧩 COMPONENTES AUXILIARES (UI/UX Refinados)
 // =========================================================================
 
 const SearchBar = ({ onSearch }) => {
   const [localTerm, setLocalTerm] = useState('');
-  useEffect(() => { const handler = setTimeout(() => { onSearch(localTerm); }, 500); return () => clearTimeout(handler); }, [localTerm, onSearch]);
+  useEffect(() => {
+      const handler = setTimeout(() => onSearch(localTerm), 500);
+      return () => clearTimeout(handler);
+  }, [localTerm, onSearch]);
+
   return (
-    <div className="input-group">
-      <Search className="input-icon" size={18} />
-      <input type="text" placeholder="Pesquisar produto, marca ou EAN..." value={localTerm} onChange={(e) => setLocalTerm(e.target.value)} />
-      {localTerm && <button className="clear-btn" onClick={() => setLocalTerm('')}><X size={14}/></button>}
+    <div className="search-bar-modern">
+      <Search className="search-icon" size={18} />
+      <input
+        type="text"
+        placeholder="Pesquisar produto, marca ou EAN..."
+        value={localTerm}
+        onChange={(e) => setLocalTerm(e.target.value)}
+      />
+      {localTerm && (
+        <button className="clear-search-btn" onClick={() => setLocalTerm('')} title="Limpar busca">
+            <X size={14}/>
+        </button>
+      )}
+    </div>
+  );
+};
+
+const Pagination = ({ page, totalPages, setPage }) => {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="pagination-modern">
+      <button
+        className="btn-page"
+        disabled={page === 0}
+        onClick={() => setPage(page - 1)}>
+        <ChevronLeft size={18} /> <span className="hide-mobile">Anterior</span>
+      </button>
+      <div className="page-indicator">
+        Página <strong>{page + 1}</strong> de <strong>{totalPages}</strong>
+      </div>
+      <button
+        className="btn-page"
+        disabled={page >= totalPages - 1}
+        onClick={() => setPage(page + 1)}>
+        <span className="hide-mobile">Próxima</span> <ChevronRight size={18} />
+      </button>
     </div>
   );
 };
@@ -64,7 +100,9 @@ const ProductImage = ({ src, alt, onZoom }) => {
 const CopyableCode = ({ code }) => {
   const [copied, setCopied] = useState(false);
   const handleCopy = (e) => {
-    e.stopPropagation(); if (!code) return; navigator.clipboard.writeText(code); setCopied(true);
+    e.stopPropagation(); if (!code) return;
+    navigator.clipboard.writeText(code);
+    setCopied(true);
     toast.success("EAN Copiado!", { autoClose: 1000, hideProgressBar: true, position: "bottom-center" });
     setTimeout(() => setCopied(false), 2000);
   };
@@ -90,26 +128,27 @@ const ActionMenu = ({ prod, onEdit, onDelete, onPrint, onHistory, loadingPrint }
 
     return (
         <div className="action-menu-container" ref={menuRef}>
-            <button className="btn-manage" onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}>Gerenciar <ChevronDown size={16} /></button>
+            <button className="btn-manage" onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}>
+                Gerenciar <ChevronDown size={16} />
+            </button>
             {isOpen && (
                 <div className="action-dropdown fade-in-fast">
-                    <button className="dropdown-item primary" onClick={(e) => handleAction(e, () => onEdit(prod.id))}><Edit3 size={18} /> <span>Editar Produto</span></button>
+                    <button className="dropdown-item primary" onClick={(e) => handleAction(e, () => onEdit(prod.id))}><Edit3 size={16} /> <span>Editar Produto</span></button>
                     <div className="dropdown-divider"></div>
                     <button className="dropdown-item" onClick={(e) => handleAction(e, () => onPrint(prod.id))} disabled={loadingPrint === prod.id}>
-                        {loadingPrint === prod.id ? <div className="spinner-micro dark"></div> : <Printer size={18} />} <span>Imprimir Etiqueta</span>
+                        {loadingPrint === prod.id ? <div className="spinner-micro dark"></div> : <Printer size={16} />} <span>Imprimir Etiqueta</span>
                     </button>
-                    <button className="dropdown-item" onClick={(e) => handleAction(e, () => onHistory(prod.id))}><History size={18} /> <span>Ver Histórico</span></button>
+                    <button className="dropdown-item" onClick={(e) => handleAction(e, () => onHistory(prod.id))}><History size={16} /> <span>Ver Histórico</span></button>
                     <div className="dropdown-divider"></div>
-                    <button className="dropdown-item text-danger" onClick={(e) => handleAction(e, () => onDelete(prod))}><Trash2 size={18} /> <span>Mover para Lixeira</span></button>
+                    <button className="dropdown-item text-danger" onClick={(e) => handleAction(e, () => onDelete(prod))}><Trash2 size={16} /> <span>Mover para Lixeira</span></button>
                 </div>
             )}
         </div>
     );
 };
 
-// 🔥 NOVO: Barra de Saúde do Estoque
 const StockHealthBar = ({ estoque, minimo }) => {
-    const maxBar = minimo > 0 ? minimo * 3 : 20; // Uma estimativa para o "cheio"
+    const maxBar = minimo > 0 ? minimo * 3 : 20;
     const percent = Math.min(100, Math.max(0, (estoque / maxBar) * 100));
 
     let colorClass = 'bg-emerald-500';
@@ -119,7 +158,7 @@ const StockHealthBar = ({ estoque, minimo }) => {
     return (
         <div className="stock-health-container" title={`Mínimo exigido: ${minimo || 5}`}>
             <div className="stock-health-text">
-                <span className={`stock-number ${estoque <= minimo ? 'text-danger' : ''}`}>{estoque} un.</span>
+                <span className={`stock-number ${estoque <= minimo ? 'text-danger' : 'text-success'}`}>{estoque} un.</span>
             </div>
             <div className="stock-health-track">
                 <div className={`stock-health-fill ${colorClass}`} style={{ width: `${percent}%` }}></div>
@@ -153,7 +192,6 @@ const ProdutoList = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [zoomedImage, setZoomedImage] = useState(null);
 
-  // 🔥 ESTADOS DA EDIÇÃO INLINE (MODO EXCEL) 🔥
   const [editingCell, setEditingCell] = useState({ id: null, field: null, value: '' });
 
   const [showDivergenceModal, setShowDivergenceModal] = useState(false);
@@ -168,8 +206,6 @@ const ProdutoList = () => {
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger', confirmText: 'Confirmar' });
 
   const getImageUrl = (url) => url ? (url.startsWith('blob:') || url.startsWith('http') ? url : `http://localhost:8080${url}`) : null;
-  const marcasDisponiveis = useMemo(() => Array.from(new Set(produtos.map(p => p.marca).filter(Boolean))).sort(), [produtos]);
-  const categoriasDisponiveis = useMemo(() => Array.from(new Set(produtos.map(p => p.categoria).filter(Boolean))).sort(), [produtos]);
 
   const carregarProdutos = useCallback(async (pagina, termo) => {
     setLoading(true);
@@ -209,9 +245,8 @@ const ProdutoList = () => {
   const handleSelectAll = (e) => e.target.checked ? setSelectedIds(produtos.map(p => p.id)) : setSelectedIds([]);
   const handleSelectOne = (id) => selectedIds.includes(id) ? setSelectedIds(selectedIds.filter(itemId => itemId !== id)) : setSelectedIds([...selectedIds, id]);
 
-  // 🔥 LÓGICA DE EDIÇÃO INLINE (MODO EXCEL) 🔥
   const iniciarEdicaoInline = (e, id, field, currentValue) => {
-      e.stopPropagation(); // Evita selecionar a linha da tabela
+      e.stopPropagation();
       setEditingCell({ id, field, value: currentValue || '' });
   };
 
@@ -230,8 +265,8 @@ const ProdutoList = () => {
               await api.patch(`/produtos/${id}/estoque?quantidade=${qtdNum}`);
           }
 
-          toast.success("Atualizado rapidamente!", { autoClose: 1000, hideProgressBar: true });
-          carregarProdutos(page, termoBusca); // Recarrega para mostrar o novo valor
+          toast.success("Atualizado com sucesso!", { autoClose: 1000, hideProgressBar: true });
+          carregarProdutos(page, termoBusca);
       } catch (error) {
           toast.error(error.message === "Preço inválido" || error.message === "Quantidade inválida" ? error.message : "Erro ao salvar alteração rápida.");
       } finally {
@@ -244,14 +279,13 @@ const ProdutoList = () => {
       if (e.key === 'Escape') setEditingCell({ id: null, field: null, value: '' });
   };
 
-  // Funções de Import/Export mantidas...
   const handleImportar = async (e) => {
       const file = e.target.files[0]; if (!file) return; e.target.value = null;
       const formData = new FormData(); formData.append("arquivo", file);
       const toastId = toast.loading("Importando base de dados...");
       try {
         const response = await api.post('/produtos/importar', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 });
-        if (response.data.sucesso) { toast.update(toastId, { render: "Importação fail-safe concluída!", type: "success", isLoading: false, autoClose: 4000 }); setPage(0); carregarProdutos(0, ''); }
+        if (response.data.sucesso) { toast.update(toastId, { render: "Importação concluída com sucesso!", type: "success", isLoading: false, autoClose: 4000 }); setPage(0); carregarProdutos(0, ''); }
         else { throw new Error(response.data.mensagem); }
       } catch (error) { toast.update(toastId, { render: "Erro na importação.", type: "error", isLoading: false, autoClose: 5000 }); }
   };
@@ -272,8 +306,8 @@ const ProdutoList = () => {
     setConfirmModal({
       isOpen: true, type: isDelete ? 'danger' : 'success', title: isDelete ? 'Mover para Lixeira' : 'Restaurar', message: `${isDelete ? 'Inativar' : 'Restaurar'} "${prod.descricao}"?`, confirmText: 'Confirmar',
       onConfirm: async () => {
-        try { if (isDelete) await produtoService.excluir(prod.codigoBarras); else await produtoService.restaurar(prod.codigoBarras); toast.success("Sucesso."); carregarProdutos(isDelete ? page : 0, termoBusca); }
-        catch (e) { toast.error("Falha."); }
+        try { if (isDelete) await produtoService.excluir(prod.codigoBarras); else await produtoService.restaurar(prod.codigoBarras); toast.success("Operação realizada com sucesso."); carregarProdutos(isDelete ? page : 0, termoBusca); }
+        catch (e) { toast.error("Falha ao executar ação."); }
       }
     });
   };
@@ -284,274 +318,269 @@ const ProdutoList = () => {
     catch (e) { toast.error("Erro na impressão."); } finally { setLoadingPrint(null); }
   };
 
+  // 🔥 LÓGICA REFINADA PARA IMPASSES DA IA 🔥
   const handleQuickFix = (tipo, mensagemConfirmacao, nomeCorrecao) => {
+      if ((tipo === 'SEM_CUSTO' || tipo === 'PRECO_VENDA_ZERADO') && raioXIa.semCusto > 0 && raioXIa.semCusto === raioXIa.precoVendaZerado) {
+           toast.warn("Impasse Matemático: Não é possível usar a IA porque tanto a Venda quanto o Custo estão a R$ 0,00. Edite manualmente na tabela primeiro.", { autoClose: 6000, theme: "colored" });
+           handleFiltroChange('precoZerado', true);
+           return;
+      }
+
       setConfirmModal({
-        isOpen: true, type: 'robot', title: `Resolução Inteligente: ${nomeCorrecao}`, message: mensagemConfirmacao, confirmText: 'Aplicar e Resolver',
+        isOpen: true, type: 'robot', title: `Ação Automática: ${nomeCorrecao}`, message: mensagemConfirmacao, confirmText: 'Aplicar',
         onConfirm: async () => {
-          const toastId = toast.loading(`🤖 Aplicando: ${nomeCorrecao}...`);
+          const toastId = toast.loading(`🤖 O Robô está a aplicar: ${nomeCorrecao}...`);
           try {
             const res = await api.post(`/produtos/quick-fix-ia/${tipo}`);
 
-            // 🔥 LÓGICA DE FEEDBACK HONESTA IMPLEMENTADA AQUI
             if (res.data.qtdCorrigidos > 0) {
-                toast.update(toastId, {
-                    render: `Resolvido! ${res.data.qtdCorrigidos} produtos atualizados com sucesso.`,
-                    type: "success",
-                    isLoading: false,
-                    autoClose: 4000
-                });
+                toast.update(toastId, { render: `Sucesso! ${res.data.qtdCorrigidos} produtos corrigidos.`, type: "success", isLoading: false, autoClose: 4000 });
             } else {
-                let motivo = "Nenhum produto precisava de correção.";
-                if (tipo === 'SEM_CUSTO' || tipo === 'PRECO_VENDA_ZERADO') {
-                    motivo = "Impasse detetado: Custo e Venda estão ambos a R$ 0,00. Digite um dos valores na tabela primeiro!";
-                }
-
-                toast.update(toastId, {
-                    render: `Aviso: ${motivo}`,
-                    type: "warning",
-                    isLoading: false,
-                    autoClose: 6000
-                });
+                toast.update(toastId, { render: `Nenhuma ação tomada. Verifique se os produtos necessitam de valores inseridos manualmente.`, type: "info", isLoading: false, autoClose: 5000 });
+                if(tipo === 'SEM_CUSTO' || tipo === 'PRECO_VENDA_ZERADO') handleFiltroChange('precoZerado', true);
             }
 
-            // Se houver ZPL (da divergência de gôndola), imprime
             if (res.data && res.data.zpl) {
                 const w = window.open('', '_blank', 'width=500,height=500');
-                w.document.write(`<pre>${res.data.zpl}</pre>`);
-                w.document.close();
+                w.document.write(`<pre>${res.data.zpl}</pre>`); w.document.close();
             }
 
             carregarProdutos(page, termoBusca);
           } catch (e) {
-              toast.update(toastId, { render: "Falha na comunicação com o robô.", type: "error", isLoading: false, autoClose: 3000 });
+              toast.update(toastId, { render: "Falha na comunicação com o servidor.", type: "error", isLoading: false, autoClose: 3000 });
           }
         }
       });
-    };
+  };
 
-  // 🔥 RESTAURAÇÃO DOS BOTÕES MANUAIS DE SANEAMENTO 🔥
   const handleCorrigirNcms = () => {
     setConfirmModal({
-      isOpen: true, type: 'robot', title: 'Auditoria Fiscal IA', message: 'O Robô irá corrigir NCMs inválidos em toda a base.', confirmText: 'Iniciar Auditoria',
+      isOpen: true, type: 'robot', title: 'Auditoria Fiscal', message: 'O sistema irá varrer a base de dados para corrigir NCMs baseando-se na inteligência fiscal.', confirmText: 'Iniciar Correção',
       onConfirm: async () => {
-        const toastId = toast.loading("🤖 Analisando...");
-        try { const res = await api.post('/produtos/corrigir-ncms-ia'); toast.update(toastId, { render: `Concluído! ${res.data.qtdCorrigidos || 0} NCMs corrigidos.`, type: "success", isLoading: false, autoClose: 4000 }); carregarProdutos(page, termoBusca); }
-        catch (e) { toast.update(toastId, { render: "Erro na auditoria.", type: "error", isLoading: false, autoClose: 3000 }); }
+        const toastId = toast.loading("🤖 Analisando NCMs...");
+        try { const res = await api.post('/produtos/corrigir-ncms-ia'); toast.update(toastId, { render: `Auditoria Concluída! ${res.data.qtdCorrigidos || 0} corrigidos.`, type: "success", isLoading: false, autoClose: 4000 }); carregarProdutos(page, termoBusca); }
+        catch (e) { toast.update(toastId, { render: "Erro na auditoria fiscal.", type: "error", isLoading: false, autoClose: 3000 }); }
       }
     });
   };
 
   const handleCorrigirEANsInternos = () => {
     setConfirmModal({
-      isOpen: true, type: 'robot', title: 'Matemática GS1', message: 'Recalcular o dígito verificador de todos os códigos de barra?', confirmText: 'Corrigir EANs',
+      isOpen: true, type: 'robot', title: 'Normalização EAN', message: 'Deseja recalcular e padronizar o dígito verificador GS1 para todos os códigos internos?', confirmText: 'Corrigir Base',
       onConfirm: async () => {
-        const toastId = toast.loading("🤖 Calculando...");
-        try { const res = await api.post('/produtos/corrigir-eans-internos-ia'); toast.update(toastId, { render: `Concluído! ${res.data.qtdCorrigidos || 0} EANs ajustados.`, type: "success", isLoading: false, autoClose: 4000 }); carregarProdutos(page, termoBusca); }
-        catch (e) { toast.update(toastId, { render: "Erro no cálculo.", type: "error", isLoading: false, autoClose: 3000 }); }
+        const toastId = toast.loading("🤖 Recalculando códigos...");
+        try { const res = await api.post('/produtos/corrigir-eans-internos-ia'); toast.update(toastId, { render: `Normalização Concluída! ${res.data.qtdCorrigidos || 0} EANs ajustados.`, type: "success", isLoading: false, autoClose: 4000 }); carregarProdutos(page, termoBusca); }
+        catch (e) { toast.update(toastId, { render: "Erro no recálculo.", type: "error", isLoading: false, autoClose: 3000 }); }
       }
     });
   };
 
   const abrirModalDivergencia = async () => {
-    const toastId = toast.loading("Buscando produtos divergentes...");
+    const toastId = toast.loading("Listando produtos sinalizados...");
     try {
         const response = await api.get('/produtos/divergencias-gondola');
         setDivergentProducts(response.data); setShowDivergenceModal(true); toast.dismiss(toastId);
-    } catch (e) { toast.update(toastId, { render: "Erro ao buscar.", type: "error", isLoading: false, autoClose: 3000 }); }
+    } catch (e) { toast.update(toastId, { render: "Erro de comunicação.", type: "error", isLoading: false, autoClose: 3000 }); }
   };
 
   const resolverItemDivergente = async (id) => {
       const preco = newPrices[id];
-      if (!preco || isNaN(preco) || preco <= 0) { toast.error("Insira um valor válido."); return; }
-      const toastId = toast.loading("Salvando e gerando etiqueta...");
+      if (!preco || isNaN(preco) || preco <= 0) { toast.error("Insira um novo preço válido."); return; }
+      const toastId = toast.loading("Gravando e preparando impressão...");
       try {
           const res = await api.post(`/produtos/${id}/resolver-divergencia?novoPreco=${preco}`);
-          toast.update(toastId, { render: "Sucesso!", type: "success", isLoading: false, autoClose: 2000 });
+          toast.update(toastId, { render: "Preço atualizado na base!", type: "success", isLoading: false, autoClose: 2000 });
           if (res.data && res.data.zpl) { const w = window.open('', '_blank', 'width=500,height=500'); w.document.write(`<pre>${res.data.zpl}</pre>`); w.document.close(); }
           setDivergentProducts(prev => prev.filter(p => p.id !== id)); carregarProdutos(page, termoBusca);
-      } catch (e) { toast.update(toastId, { render: "Erro ao atualizar.", type: "error", isLoading: false, autoClose: 3000 }); }
+      } catch (e) { toast.update(toastId, { render: "Erro na atualização.", type: "error", isLoading: false, autoClose: 3000 }); }
   };
 
   return (
     <>
       <div className="modern-layout-container fade-in">
-        <header className="page-header">
+        {/* CABEÇALHO */}
+        <header className="page-header-modern">
           <div className="header-titles">
-            <h1 className="title-gradient">{modoLixeira ? 'Lixeira de Produtos' : 'Gestão de Inventário'}</h1>
-            <p className="subtitle">{totalElements} itens encontrados na sua base de dados</p>
+            <h1 className="title-gradient">{modoLixeira ? 'Lixeira de Produtos' : 'Catálogo e Inventário'}</h1>
+            <p className="subtitle text-muted">Gestão integrada • {totalElements} registos</p>
           </div>
 
-          <div className="header-buttons-main">
-            <div className="tab-switcher">
-              <button className={`tab-btn ${!modoLixeira ? 'active' : ''}`} onClick={() => setModoLixeira(false)}>Catálogo</button>
+          <div className="header-actions-group">
+            <div className="tab-switcher-modern">
+              <button className={`tab-btn ${!modoLixeira ? 'active' : ''}`} onClick={() => setModoLixeira(false)}>Catálogo Ativo</button>
               <button className={`tab-btn ${modoLixeira ? 'active' : ''}`} onClick={() => setModoLixeira(true)}>
-                Lixeira {qtdLixeira > 0 && <span className="ping-dot"></span>}
+                Lixeira {qtdLixeira > 0 && <span className="ping-dot-danger"></span>}
               </button>
             </div>
 
             {!modoLixeira && (
-              <button className="btn-primary-glow" onClick={() => navigate('/produtos/novo')} style={{ width: window.innerWidth <= 768 ? '100%' : 'auto' }}>
-                <Plus size={20} /> <span>Cadastrar Produto</span>
+              <button className="btn-primary-shadow" onClick={() => navigate('/produtos/novo')}>
+                <Plus size={18} strokeWidth={3} /> <span>Novo Produto</span>
               </button>
             )}
           </div>
         </header>
 
+        {/* DASHBOARD IA (GLASSMORPHISM) */}
         {!modoLixeira && (
-          <div className="ai-dashboard-glass" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-            <div className="ai-info" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-              <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                <div className="ai-icon-pulse"><Bot size={28} /></div>
+          <div className="ai-dashboard-premium">
+            <div className="ai-header-row">
+              <div className="ai-title-wrapper">
+                <div className="ai-pulse-ring"><Bot size={24} className="text-white" /></div>
                 <div>
-                  <h3>Auditoria de Catálogo Guiada por IA</h3>
-                  <p>Anomalias e alertas que necessitam da sua atenção.</p>
+                  <h3 className="ai-title">Assistente de Catálogo Inteligente</h3>
+                  <p className="ai-subtitle">Deteção automática de anomalias financeiras e fiscais.</p>
                 </div>
               </div>
 
-              {/* 🔥 BOTÕES RESTAURADOS AQUI 🔥 */}
-              <div className="ai-actions-grid" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                 <button className="btn-outline-ai" onClick={handleCorrigirEANsInternos}><Barcode size={18}/> <span>Saneamento EAN</span></button>
-                 <button className="btn-outline-ai" onClick={handleCorrigirNcms}><Zap size={18}/> <span>Auditoria Fiscal (NCM)</span></button>
+              <div className="ai-buttons-group">
+                 <button className="btn-glass-outline" onClick={handleCorrigirEANsInternos} title="Verifica padrões GS1">
+                     <Barcode size={16}/> <span>Corrigir EANs</span>
+                 </button>
+                 <button className="btn-glass-outline" onClick={handleCorrigirNcms} title="Aplica regras fiscais via IA">
+                     <Zap size={16}/> <span>Corrigir NCMs</span>
+                 </button>
               </div>
             </div>
 
             {raioXIa.totalAnomalias > 0 ? (
-              <div className="ai-anomalies-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '12px' }}>
-
+              <div className="ai-cards-container">
                  {raioXIa.semCusto > 0 && (
-                   <div className="anomaly-card" style={{ background: '#fffbeb', border: '1px solid #fde68a', padding: '12px', borderRadius: '8px' }}>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                       <strong style={{ color: '#d97706', display: 'flex', alignItems: 'center', gap: '6px' }}><AlertTriangle size={16}/> Sem Custo: {raioXIa.semCusto}</strong>
+                   <div className="ai-anomaly-card warning">
+                     <div className="anomaly-header">
+                       <span className="anomaly-badge"><AlertCircle size={14}/> {raioXIa.semCusto} Itens</span>
+                       <span className="anomaly-title">Custo Ausente</span>
                      </div>
-                     <button onClick={() => handleQuickFix('SEM_CUSTO', 'A IA vai deduzir o custo calculando 50% do valor da Venda. Continuar?', 'Deduzir Custo')} style={{ width: '100%', padding: '6px', background: '#f59e0b', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Deduzir pela Venda ✨</button>
-                   </div>
-                 )}
-
-                 {raioXIa.precoVendaZerado > 0 && (
-                   <div className="anomaly-card" style={{ background: '#fef2f2', border: '1px solid #fecaca', padding: '12px', borderRadius: '8px' }}>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                       <strong style={{ color: '#dc2626', display: 'flex', alignItems: 'center', gap: '6px' }}><AlertTriangle size={16}/> Venda a R$ 0,00: {raioXIa.precoVendaZerado}</strong>
-                     </div>
-                     <button onClick={() => handleQuickFix('PRECO_VENDA_ZERADO', 'A IA vai aplicar +50% de margem sobre o preço de custo. Continuar?', 'Aplicar Margem')} style={{ width: '100%', padding: '6px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Aplicar Margem 50% ✨</button>
-                   </div>
-                 )}
-
-                 {(raioXIa.semNcm > 0 || raioXIa.ncmInvalido > 0) && (
-                   <div className="anomaly-card" style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '12px', borderRadius: '8px' }}>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                       <strong style={{ color: '#2563eb', display: 'flex', alignItems: 'center', gap: '6px' }}><Zap size={16}/> NCM Inválido: {(raioXIa.semNcm + raioXIa.ncmInvalido)}</strong>
-                     </div>
-                     <button onClick={() => handleQuickFix('SEM_NCM', 'A IA vai aplicar o NCM Genérico (33049990) e Monofásico (CST 04). Continuar?', 'NCM Padrão')} style={{ width: '100%', padding: '6px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Usar Genérico ✨</button>
-                   </div>
-                 )}
-
-                 {raioXIa.semMarca > 0 && (
-                   <div className="anomaly-card" style={{ background: '#f5f3ff', border: '1px solid #e9d5ff', padding: '12px', borderRadius: '8px' }}>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                       <strong style={{ color: '#9333ea', display: 'flex', alignItems: 'center', gap: '6px' }}><Box size={16}/> Sem Marca: {raioXIa.semMarca}</strong>
-                     </div>
-                     <button onClick={() => handleQuickFix('SEM_MARCA', 'A IA vai preencher a marca com "DIVERSOS". Continuar?', 'Marca Padrão')} style={{ width: '100%', padding: '6px', background: '#a855f7', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Classificar DIVERSOS ✨</button>
-                   </div>
-                 )}
-
-                 {raioXIa.divergenciaGondola > 0 && (
-                   <div className="anomaly-card" style={{ background: '#fdf2f8', border: '1px solid #fbcfe8', padding: '12px', borderRadius: '8px' }}>
-                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 0 8px 0' }}>
-                       <strong style={{ color: '#db2777', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                         <Search size={16}/> Divergência Loja: {raioXIa.divergenciaGondola}
-                       </strong>
-                     </div>
-                     <p style={{fontSize: '0.8rem', color: '#831843', margin: '0 0 8px 0', lineHeight: '1.2'}}>Alertas disparados do telemóvel.</p>
-                     <button onClick={abrirModalDivergencia} style={{ width: '100%', padding: '6px', background: '#ec4899', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
-                       Ajustar e Imprimir 🖨️
+                     <button className="btn-fix-action" onClick={() => handleQuickFix('SEM_CUSTO', 'Deduzir custo baseado em 50% do valor de venda cadastrado?', 'Deduzir Custos')}>
+                         Calcular Automaticamente
                      </button>
                    </div>
                  )}
 
+                 {raioXIa.precoVendaZerado > 0 && (
+                   <div className="ai-anomaly-card danger">
+                     <div className="anomaly-header">
+                       <span className="anomaly-badge"><AlertTriangle size={14}/> {raioXIa.precoVendaZerado} Itens</span>
+                       <span className="anomaly-title">Venda Zerada</span>
+                     </div>
+                     <button className="btn-fix-action" onClick={() => handleQuickFix('PRECO_VENDA_ZERADO', 'Aplicar margem de 50% sobre os custos de fornecedor cadastrados?', 'Aplicar Margem')}>
+                         Gerar Preço de Venda
+                     </button>
+                   </div>
+                 )}
+
+                 {(raioXIa.semNcm > 0 || raioXIa.ncmInvalido > 0) && (
+                   <div className="anomaly-card primary">
+                     <div className="anomaly-header">
+                       <span className="anomaly-badge"><Zap size={14}/> {raioXIa.semNcm + raioXIa.ncmInvalido} Itens</span>
+                       <span className="anomaly-title">NCM Pendente</span>
+                     </div>
+                     <button className="btn-fix-action" onClick={() => handleQuickFix('SEM_NCM', 'Aplicar NCM Genérico Cosmético (3304.99.90)?', 'Aplicar Padrão')}>
+                         Usar Padrão SEFAZ
+                     </button>
+                   </div>
+                 )}
+
+                 {raioXIa.semMarca > 0 && (
+                   <div className="anomaly-card purple">
+                     <div className="anomaly-header">
+                       <span className="anomaly-badge"><Box size={14}/> {raioXIa.semMarca} Itens</span>
+                       <span className="anomaly-title">Marca Ausente</span>
+                     </div>
+                     <button className="btn-fix-action" onClick={() => handleQuickFix('SEM_MARCA', 'Atribuir a classificação DIVERSOS a estes itens?', 'Padronizar Marca')}>
+                         Agrupar Diversos
+                     </button>
+                   </div>
+                 )}
+
+                 {raioXIa.divergenciaGondola > 0 && (
+                   <div className="anomaly-card pink">
+                     <div className="anomaly-header">
+                       <span className="anomaly-badge"><Search size={14}/> {raioXIa.divergenciaGondola} Alertas</span>
+                       <span className="anomaly-title">Divergência Física</span>
+                     </div>
+                     <button className="btn-fix-action solid" onClick={abrirModalDivergencia}>
+                         Analisar e Reimprimir
+                     </button>
+                   </div>
+                 )}
               </div>
             ) : (
-              <div style={{ padding: '12px', background: '#dcfce7', color: '#166534', borderRadius: '8px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Check size={20} /> O seu catálogo está 100% íntegro. Nenhuma anomalia crítica encontrada!
+              <div className="ai-success-bar">
+                <Check size={18} /> Monitoramento Inteligente: Base de dados auditada e sem inconsistências.
               </div>
             )}
           </div>
         )}
 
-        <div className="data-card">
-          <div className="data-toolbar" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '16px' }}>
+        <div className="data-card-modern">
+          <div className="toolbar-modern">
+            <SearchBar onSearch={setTermoBusca} />
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-                <SearchBar onSearch={setTermoBusca} />
-                <div className="toolbar-right">
-                    <button className={`btn-outline ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(!showFilters)}>
-                      <Filter size={18}/> <span>Filtros</span>
-                    </button>
+            <div className="toolbar-actions">
+                <button className={`btn-icon-soft ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(!showFilters)} title="Mostrar filtros avançados">
+                  <Filter size={18}/>
+                </button>
 
-                    {!modoLixeira && (
-                       <div className="catalog-actions-group">
-                         <button className="btn-modern-export green" onClick={() => handleExportar('excel')} title="Baixar planilha Excel">
-                           <FileSpreadsheet size={18}/> <span className="hide-mobile">Baixar Excel</span>
-                         </button>
-                         <button className="btn-modern-export purple" onClick={() => handleExportar('csv')} title="Baixar ficheiro CSV">
-                           <FileText size={18}/> <span className="hide-mobile">Baixar CSV</span>
-                         </button>
-
-                         <div className="action-divider"></div>
-
-                         <input type="file" ref={fileInputRef} onChange={handleImportar} accept=".csv, .xls, .xlsx, .xml" style={{display: 'none'}} />
-                         <button className="btn-modern-import" onClick={() => fileInputRef.current.click()} title="Importar novos produtos">
-                           <Upload size={18}/> <span className="hide-mobile">Importar Planilha</span>
-                         </button>
-                       </div>
-                    )}
-                </div>
+                {!modoLixeira && (
+                   <>
+                     <button className="btn-icon-soft text-green" onClick={() => handleExportar('excel')} title="Exportar para Excel">
+                       <FileSpreadsheet size={18}/>
+                     </button>
+                     <div className="divider-v"></div>
+                     <input type="file" ref={fileInputRef} onChange={handleImportar} accept=".csv, .xls, .xlsx, .xml" style={{display: 'none'}} />
+                     <button className="btn-icon-text" onClick={() => fileInputRef.current.click()} title="Importação em massa">
+                       <Upload size={18}/> <span>Importar Base</span>
+                     </button>
+                   </>
+                )}
             </div>
-
-            {!modoLixeira && (
-                <div className="smart-chips-container">
-                    <span style={{fontSize:'0.85rem', fontWeight:'700', color:'#64748b', marginRight:'8px'}}>Acesso Rápido:</span>
-                    <button className={`smart-chip ${filtros.estoque === 'todos' && !filtros.revisaoPendente && !filtros.semImagem ? 'active' : ''}`} onClick={limparFiltros}>
-                        Todos
-                    </button>
-                    <button className={`smart-chip ${filtros.estoque === 'zerado' ? 'active-danger' : ''}`} onClick={() => handleFiltroChange('estoque', 'zerado')}>
-                        Estoque Zerado
-                    </button>
-                    <button className={`smart-chip ${filtros.estoque === 'baixo' ? 'active-warning' : ''}`} onClick={() => handleFiltroChange('estoque', 'baixo')}>
-                        Estoque Baixo
-                    </button>
-                    <button className={`smart-chip ${filtros.revisaoPendente ? 'active-danger' : ''}`} onClick={() => handleFiltroChange('revisaoPendente', true)}>
-                        Pendentes de Revisão
-                    </button>
-                    <button className={`smart-chip ${filtros.semImagem ? 'active-info' : ''}`} onClick={() => handleFiltroChange('semImagem', true)}>
-                        Sem Imagem
-                    </button>
-                </div>
-            )}
           </div>
 
-          <div className="table-responsive sticky-header-wrapper">
+          {!modoLixeira && (
+            <div className="filters-row-scrollable">
+                <span className="filter-label">Visualizar:</span>
+                <button className={`chip ${filtros.estoque === 'todos' && !filtros.revisaoPendente && !filtros.semImagem && !filtros.precoZerado ? 'active' : ''}`} onClick={limparFiltros}>
+                    Tudo
+                </button>
+                <button className={`chip danger ${filtros.estoque === 'zerado' ? 'active' : ''}`} onClick={() => handleFiltroChange('estoque', 'zerado')}>
+                    Estoque Zerado
+                </button>
+                <button className={`chip warning ${filtros.estoque === 'baixo' ? 'active' : ''}`} onClick={() => handleFiltroChange('estoque', 'baixo')}>
+                    Estoque Crítico
+                </button>
+                <button className={`chip danger ${filtros.revisaoPendente ? 'active' : ''}`} onClick={() => handleFiltroChange('revisaoPendente', true)}>
+                    Alerta Revisão
+                </button>
+                <button className={`chip warning ${filtros.precoZerado ? 'active' : ''}`} onClick={() => handleFiltroChange('precoZerado', true)}>
+                    Sem Preço Definido
+                </button>
+            </div>
+          )}
+
+          <div className="table-responsive sticky-header-wrapper custom-scrollbar">
             <table className="ux-table">
               <thead>
                 <tr>
-                  <th className="checkbox-cell"><input type="checkbox" onChange={handleSelectAll} checked={produtos.length > 0 && selectedIds.length === produtos.length}/></th>
-                  <th>Produto e Detalhes</th>
-                  <th className="hide-mobile">Marca</th>
-                  <th>Preço de Venda <Edit2 size={12} style={{display:'inline', marginLeft:'4px', color:'#94a3b8'}} title="Duplo clique para editar"/></th>
-                  <th>Estoque Físico <Edit2 size={12} style={{display:'inline', marginLeft:'4px', color:'#94a3b8'}} title="Duplo clique para editar"/></th>
-                  <th className="hide-mobile">Status</th>
-                  <th className="align-right">Ações Rápidas</th>
+                  <th className="checkbox-cell" width="40px"><input type="checkbox" onChange={handleSelectAll} checked={produtos.length > 0 && selectedIds.length === produtos.length}/></th>
+                  <th width="35%">Identificação do Produto</th>
+                  <th className="hide-mobile" width="15%">Marca / Fornecedor</th>
+                  <th width="15%">Preço Retalho <span className="tooltip-icon" title="Duplo clique numa linha para editar"><Edit2 size={12}/></span></th>
+                  <th width="15%">Inventário <span className="tooltip-icon" title="Duplo clique numa linha para editar"><Edit2 size={12}/></span></th>
+                  <th className="hide-mobile" width="10%">Status</th>
+                  <th className="align-right" width="10%">Gerir</th>
                 </tr>
               </thead>
               <tbody>
                   {loading ? (<TableSkeleton />) : produtos.length === 0 ? (
                     <tr>
-                        <td colSpan="7" className="empty-state">
-                            <Box size={48} className="text-muted mb-3" />
-                            <h3 style={{ fontSize: '1.2rem', color: '#1e293b' }}>Nenhum produto encontrado.</h3>
-                            <p style={{ color: '#64748b', marginBottom: '16px' }}>Os filtros atuais não retornaram resultados.</p>
-                            {(termoBusca || filtros.estoque !== 'todos' || filtros.revisaoPendente || filtros.semImagem) && (
-                                <button onClick={() => { setTermoBusca(''); limparFiltros(); }} style={{ background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
-                                    Limpar Todos os Filtros
+                        <td colSpan="7" className="empty-state-modern">
+                            <div className="empty-icon-wrapper"><Box size={40} /></div>
+                            <h3>Sem resultados para exibir</h3>
+                            <p>Os critérios de pesquisa atuais não devolveram nenhum produto.</p>
+                            {(termoBusca || filtros.estoque !== 'todos' || filtros.revisaoPendente || filtros.semImagem || filtros.precoZerado) && (
+                                <button className="btn-clear-filters" onClick={() => { setTermoBusca(''); limparFiltros(); }}>
+                                    <RotateCcw size={16}/> Limpar Pesquisa e Filtros
                                 </button>
                             )}
                         </td>
@@ -562,70 +591,75 @@ const ProdutoList = () => {
                       return (
                         <tr key={prod.id} className={`ux-table-row ${isSelected ? 'selected' : ''}`} onClick={() => handleSelectOne(prod.id)}>
 
-                          <td className="checkbox-cell" onClick={(e) => e.stopPropagation()} data-label="Selecionar">
+                          <td className="checkbox-cell" onClick={(e) => e.stopPropagation()}>
                               <input type="checkbox" checked={isSelected} onChange={() => handleSelectOne(prod.id)} />
                           </td>
 
-                          <td className="product-main-cell" data-label="Produto">
+                          <td className="product-main-cell">
                             <ProductImage src={getImageUrl(prod.urlImagem)} alt={prod.descricao} onZoom={setZoomedImage} />
-
-                            <div className="product-info">
-                                <h4 className="product-title">
+                            <div className="product-info-modern">
+                                <h4 className="product-title-modern">
                                   {prod.descricao}
-                                  {prod.revisaoPendente && <span className="tag-urgent">Alerta</span>}
+                                  {prod.revisaoPendente && <span className="badge-urgent-mini">Rever</span>}
                                 </h4>
                                 <CopyableCode code={prod.codigoBarras} />
-                                <span className="mobile-only-info text-muted">{prod.marca || 'Sem Marca Registada'}</span>
+                                <span className="mobile-only-info text-muted">{prod.marca || 'S/ Marca'}</span>
                             </div>
                           </td>
 
-                          <td className="hide-mobile" data-label="Marca">{prod.marca || '-'}</td>
+                          <td className="hide-mobile text-muted font-medium">{prod.marca || 'Não classificado'}</td>
 
-                          <td className="font-numeric price-cell editable-cell" data-label="Preço" onDoubleClick={(e) => iniciarEdicaoInline(e, prod.id, 'precoVenda', prod.precoVenda)}>
+                          <td className="font-numeric editable-cell-modern" onDoubleClick={(e) => iniciarEdicaoInline(e, prod.id, 'precoVenda', prod.precoVenda)}>
                               {editingCell.id === prod.id && editingCell.field === 'precoVenda' ? (
-                                  <input
-                                    autoFocus
-                                    type="number"
-                                    step="0.01"
-                                    className="inline-edit-input"
-                                    value={editingCell.value}
-                                    onChange={(e) => setEditingCell({...editingCell, value: e.target.value})}
-                                    onBlur={salvarEdicaoInline}
-                                    onKeyDown={handleInlineKeyDown}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
+                                  <div className="inline-edit-wrapper">
+                                    <span className="currency-prefix">R$</span>
+                                    <input
+                                      autoFocus
+                                      type="number"
+                                      step="0.01"
+                                      className="inline-input"
+                                      value={editingCell.value}
+                                      onChange={(e) => setEditingCell({...editingCell, value: e.target.value})}
+                                      onBlur={salvarEdicaoInline}
+                                      onKeyDown={handleInlineKeyDown}
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                  </div>
                               ) : (
-                                  <div className="editable-content" title="Duplo clique para editar">
+                                  <div className="editable-content-display">
                                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(prod.precoVenda || 0)}
                                   </div>
                               )}
                           </td>
 
-                          <td data-label="Estoque" className="editable-cell" onDoubleClick={(e) => iniciarEdicaoInline(e, prod.id, 'quantidadeEmEstoque', prod.quantidadeEmEstoque)}>
+                          <td className="editable-cell-modern" onDoubleClick={(e) => iniciarEdicaoInline(e, prod.id, 'quantidadeEmEstoque', prod.quantidadeEmEstoque)}>
                               {editingCell.id === prod.id && editingCell.field === 'quantidadeEmEstoque' ? (
-                                  <input
-                                    autoFocus
-                                    type="number"
-                                    className="inline-edit-input"
-                                    value={editingCell.value}
-                                    onChange={(e) => setEditingCell({...editingCell, value: e.target.value})}
-                                    onBlur={salvarEdicaoInline}
-                                    onKeyDown={handleInlineKeyDown}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
+                                  <div className="inline-edit-wrapper">
+                                    <input
+                                      autoFocus
+                                      type="number"
+                                      className="inline-input text-center"
+                                      value={editingCell.value}
+                                      onChange={(e) => setEditingCell({...editingCell, value: e.target.value})}
+                                      onBlur={salvarEdicaoInline}
+                                      onKeyDown={handleInlineKeyDown}
+                                      onClick={(e) => e.stopPropagation()}
+                                    />
+                                    <span className="unit-suffix">un</span>
+                                  </div>
                               ) : (
-                                  <div className="editable-content" title="Duplo clique para editar">
+                                  <div className="editable-content-display">
                                       <StockHealthBar estoque={prod.quantidadeEmEstoque || 0} minimo={prod.estoqueMinimo || 5} />
                                   </div>
                               )}
                           </td>
 
-                          <td className="hide-mobile" data-label="Status"><StatusIndicator prod={prod} /></td>
+                          <td className="hide-mobile"><StatusIndicator prod={prod} /></td>
 
-                          <td className="align-right actions-cell" onClick={(e) => e.stopPropagation()} data-label="Ações">
+                          <td className="align-right actions-cell" onClick={(e) => e.stopPropagation()}>
                               {modoLixeira ? (
-                                <button className="btn-restore" onClick={() => handleSingleAction('restore', prod)}>
-                                   <RotateCcw size={18}/> Restaurar
+                                <button className="btn-restore-modern" onClick={() => handleSingleAction('restore', prod)}>
+                                   <RotateCcw size={16}/> <span>Restaurar</span>
                                 </button>
                               ) : (
                                 <ActionMenu prod={prod} onEdit={(id) => navigate(`/produtos/editar/${id}`)} onDelete={(p) => handleSingleAction('delete', p)} onPrint={handlePrint} onHistory={(id) => navigate(`/produtos/historico/${id}`)} loadingPrint={loadingPrint} />
@@ -638,60 +672,77 @@ const ProdutoList = () => {
               </tbody>
             </table>
           </div>
+
+          {/* 🔥 ADIÇÃO CRÍTICA: PAGINAÇÃO 🔥 */}
+          {!loading && produtos.length > 0 && (
+             <Pagination page={page} totalPages={totalPages} setPage={setPage} />
+          )}
+
         </div>
       </div>
 
       {confirmModal.isOpen && (
-        <ConfirmModal title={confirmModal.title} message={confirmModal.message} confirmText={confirmModal.confirmText} onConfirm={() => { confirmModal.onConfirm(); setConfirmModal(prev => ({...prev, isOpen: false})); }} onCancel={() => setConfirmModal(prev => ({...prev, isOpen: false}))} isDanger={confirmModal.type === 'danger'} />
+        <ConfirmModal
+            title={confirmModal.title}
+            message={confirmModal.message}
+            confirmText={confirmModal.confirmText}
+            onConfirm={() => { confirmModal.onConfirm(); setConfirmModal(prev => ({...prev, isOpen: false})); }}
+            onCancel={() => setConfirmModal(prev => ({...prev, isOpen: false}))}
+            isDanger={confirmModal.type === 'danger'}
+        />
       )}
 
       {zoomedImage && (
-        <div className="modal-overlay" style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}} onClick={() => setZoomedImage(null)}>
-            <div style={{position:'relative', maxWidth:'90vw', maxHeight:'90vh'}}>
-               <button onClick={() => setZoomedImage(null)} style={{position:'absolute', top:'-40px', right:'0', background:'none', border:'none', color:'white', cursor:'pointer'}}><X size={32}/></button>
-               <img src={zoomedImage} alt="Zoom" style={{maxWidth:'100%', maxHeight:'85vh', objectFit:'contain', borderRadius:'12px', boxShadow:'0 25px 50px -12px rgba(0, 0, 0, 0.5)'}} />
+        <div className="lightbox-overlay fade-in" onClick={() => setZoomedImage(null)}>
+            <div className="lightbox-content">
+               <button onClick={() => setZoomedImage(null)} className="lightbox-close"><X size={28}/></button>
+               <img src={zoomedImage} alt="Visualização em tamanho grande" />
             </div>
         </div>
       )}
 
       {showDivergenceModal && (
-          <div className="modal-overlay" style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center'}}>
-             <div className="modal-content fade-in" style={{background:'white', padding:'24px', borderRadius:'16px', width:'90%', maxWidth:'600px', maxHeight:'80vh', overflowY:'auto'}}>
-                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px'}}>
-                   <h2 style={{margin:0, color:'#db2777', display:'flex', alignItems:'center', gap:'8px'}}><AlertTriangle /> Resolução de Divergências</h2>
-                   <button onClick={() => setShowDivergenceModal(false)} style={{background:'none', border:'none', cursor:'pointer'}}><X size={24}/></button>
+          <div className="modal-overlay">
+             <div className="modal-content-modern slide-up">
+                <div className="modal-header">
+                   <h2><AlertTriangle className="text-pink" /> Analisar Divergências Físicas</h2>
+                   <button onClick={() => setShowDivergenceModal(false)} className="btn-close-modal"><X size={24}/></button>
                 </div>
 
-                {divergentProducts.length === 0 ? (
-                    <p style={{textAlign:'center', color:'#64748b'}}>Nenhuma divergência pendente.</p>
-                ) : (
-                    <div style={{display:'flex', flexDirection:'column', gap:'16px'}}>
-                        {divergentProducts.map(p => (
-                            <div key={p.id} style={{background:'#f8fafc', border:'1px solid #e2e8f0', padding:'16px', borderRadius:'12px', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:'12px'}}>
-                                <div style={{flex:'1 1 250px'}}>
-                                    <strong style={{display:'block', fontSize:'1.1rem'}}>{p.descricao}</strong>
-                                    <span style={{color:'#64748b', fontSize:'0.9rem'}}>EAN: {p.codigoBarras}</span>
-                                    <div style={{color:'#ef4444', fontWeight:'bold', marginTop:'4px'}}>Preço Antigo: R$ {p.precoVenda?.toFixed(2)}</div>
+                <div className="modal-body custom-scrollbar">
+                    {divergentProducts.length === 0 ? (
+                        <div className="empty-state-mini">
+                           <Check size={32} className="text-success mb-2" />
+                           <p>Não há mais divergências para resolver.</p>
+                        </div>
+                    ) : (
+                        <div className="divergence-list">
+                            {divergentProducts.map(p => (
+                                <div key={p.id} className="divergence-card">
+                                    <div className="divergence-info">
+                                        <strong className="div-title">{p.descricao}</strong>
+                                        <span className="div-ean"><Barcode size={14}/> {p.codigoBarras}</span>
+                                        <div className="div-old-price">Preço no Sistema: <b>R$ {p.precoVenda?.toFixed(2)}</b></div>
+                                    </div>
+                                    <div className="divergence-action">
+                                        <div className="input-prefix-wrapper">
+                                            <span>R$</span>
+                                            <input
+                                                type="number"
+                                                placeholder="Preço da Etiqueta"
+                                                className="input-new-price"
+                                                onChange={(e) => setNewPrices(prev => ({...prev, [p.id]: e.target.value}))}
+                                            />
+                                        </div>
+                                        <button onClick={() => resolverItemDivergente(p.id)} className="btn-save-print">
+                                            <Printer size={16} /> Salvar
+                                        </button>
+                                    </div>
                                 </div>
-                                <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
-                                    <span style={{fontWeight:'bold'}}>R$</span>
-                                    <input
-                                        type="number"
-                                        placeholder="Novo Preço"
-                                        style={{padding:'8px', borderRadius:'6px', border:'1px solid #cbd5e1', width:'100px'}}
-                                        onChange={(e) => setNewPrices(prev => ({...prev, [p.id]: e.target.value}))}
-                                    />
-                                    <button
-                                        onClick={() => resolverItemDivergente(p.id)}
-                                        style={{background:'#ec4899', color:'white', border:'none', padding:'8px 12px', borderRadius:'6px', fontWeight:'bold', cursor:'pointer'}}
-                                    >
-                                        Salvar & Imprimir
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                            ))}
+                        </div>
+                    )}
+                </div>
              </div>
           </div>
       )}
