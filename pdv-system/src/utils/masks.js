@@ -1,11 +1,11 @@
 export const maskCNPJ = (value) => {
-  return value
-    .replace(/\D/g, '')
-    .replace(/^(\d{2})(\d)/, '$1.$2')
-    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
-    .replace(/\.(\d{3})(\d)/, '.$1/$2')
-    .replace(/(\d{4})(\d)/, '$1-$2')
-    .substring(0, 18);
+    if (!value) return '';
+    // A Receita Federal vai manter a pontuação e os 14 caracteres.
+    // As letras entram nas posições da raiz (os 8 primeiros dígitos).
+    let v = value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    if (v.length > 14) v = v.substring(0, 14);
+
+    return v.replace(/^([A-Z0-9]{2})([A-Z0-9]{3})([A-Z0-9]{3})([A-Z0-9]{4})([A-Z0-9]{2})/, "$1.$2.$3/$4-$5");
 };
 
 // ATUALIZADO: Máscara mais fluida

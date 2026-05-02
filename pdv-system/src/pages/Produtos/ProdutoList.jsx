@@ -544,7 +544,18 @@ const ProdutoList = () => {
               </thead>
               <tbody>
                   {loading ? (<TableSkeleton />) : produtos.length === 0 ? (
-                    <tr><td colSpan="7" className="empty-state"><Box size={48} /><h3>Nenhum resultado para a sua pesquisa</h3></td></tr>
+                    <tr>
+                        <td colSpan="7" className="empty-state">
+                            <Box size={48} className="text-muted mb-3" />
+                            <h3 style={{ fontSize: '1.2rem', color: '#1e293b' }}>Nenhum produto encontrado.</h3>
+                            <p style={{ color: '#64748b', marginBottom: '16px' }}>Os filtros atuais não retornaram resultados.</p>
+                            {(termoBusca || filtros.estoque !== 'todos' || filtros.revisaoPendente || filtros.semImagem) && (
+                                <button onClick={() => { setTermoBusca(''); limparFiltros(); }} style={{ background: '#eff6ff', color: '#3b82f6', border: '1px solid #bfdbfe', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                    Limpar Todos os Filtros
+                                </button>
+                            )}
+                        </td>
+                    </tr>
                   ) : (
                     produtos.map((prod) => {
                       const isSelected = selectedIds.includes(prod.id);
