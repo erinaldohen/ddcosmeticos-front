@@ -1,211 +1,149 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
-import { ArrowLeft, History, User, Clock, AlertTriangle, ShieldCheck, Cpu } from 'lucide-react';
+import { ArrowLeft, Clock, User, FileSpreadsheet, Edit3, Trash2, Box, Calendar } from 'lucide-react';
 import './HistoricoProduto.css';
-import { toast } from 'react-toastify';
 
 const HistoricoProduto = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const [historico, setHistorico] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [aiAnalysis, setAiAnalysis] = useState(null);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [produtoNome, setProdutoNome] = useState('');
 
     useEffect(() => {
-        const fetchHistory = async () => {
+        const fetchHistorico = async () => {
             try {
-                // A sua API retorna a lista das revisões do Envers (quem, quando, tipo e os dados)
-                const res = await api.get(`/auditoria/produto/${id}`);
-                setHistorico(res.data || []);
-            } catch (err) {
-                toast.error("Erro ao buscar a trilha de auditoria.");
+                // Tenta ir buscar o nome do produto atual para o título
+                try {
+                    const prodRes = await api.get(`/produtos/${id}`);
+                    setProdutoNome(prodRes.data.descricao);
+                } catch (e) {}
+
+                // Busca as revisões do Envers
+                const response = await api.get(`/produtos/${id}/historico`);
+                setHistorico(response.data);
+            } catch (error) {
+                console.error("Erro ao carregar auditoria:", error);
             } finally {
                 setLoading(false);
             }
         };
-        fetchHistory();
+        fetchHistorico();
     }, [id]);
 
-    const formatarData = (dataArray) => {
-        if (!dataArray) return "Data desconhecida";
-        // Envers costuma devolver a data em array [Ano, Mês, Dia, Hora, Minuto, Segundo]
-        if(Array.isArray(dataArray) && dataArray.length >= 5) {
-            const [ano, mes, dia, hora, min] = dataArray;
-            return `${String(dia).padStart(2,'0')}/${String(mes).padStart(2,'0')}/${ano} às ${String(hora).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
-        }
-        // Fallback caso venha como String ISO normal
-        return new Date(dataArray).toLocaleString('pt-BR');
+    // Formatador de Data e Hora
+    const formatDateTime = (dateArray) => {
+        if (!dateArray || dateArray.length < 5) return "Data desconhecida";
+        // dateArray geralmente vem do Java: [YYYY, MM, DD, HH, mm, ss]
+        const data = new Date(dateArray[0], dateArray[1] - 1, dateArray[2], dateArray[3], dateArray[4]);
+        return data.toLocaleString('pt-BR', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
     };
 
-    // 🔥 BLINDADO: Compara a revisão atual com a anterior de forma 100% segura contra null/undefined
-    const getMudancas = (atual, index, arrayCompleto) => {
-        if (!atual) return [];
-
-        const tipo = atual.tipoEvento || atual.revtype;
-        if (tipo === 'CREATE' || tipo === 'INSERT' || tipo === 0) return [{ campo: 'Criação', de: '-', para: 'Novo Registo' }];
-        if (tipo === 'DELETE' || tipo === 'REMOVE' || tipo === 2) return [{ campo: 'Exclusão', de: 'Ativo', para: 'Lixeira' }];
-
-        const anterior = arrayCompleto[index + 1];
-        if (!anterior) return [];
-
-        // Segurança extra: Se `entidade` for undefined, assumimos que os campos vêm diretamente na raiz do objeto `atual`
-        const entAtual = atual.entidade || atual || {};
-        const entAnterior = anterior.entidade || anterior || {};
-
-        const mudancas = [];
-
-        if (entAtual.precoVenda !== entAnterior.precoVenda) {
-            const de = entAnterior.precoVenda || 0;
-            const para = entAtual.precoVenda || 0;
-            mudancas.push({ campo: 'Preço Venda', de: `R$ ${de.toFixed(2)}`, para: `R$ ${para.toFixed(2)}` });
-        }
-        if (entAtual.precoCusto !== entAnterior.precoCusto) {
-            const de = entAnterior.precoCusto || 0;
-            const para = entAtual.precoCusto || 0;
-            mudancas.push({ campo: 'Preço Custo', de: `R$ ${de.toFixed(2)}`, para: `R$ ${para.toFixed(2)}` });
-        }
-        if (entAtual.quantidadeEmEstoque !== entAnterior.quantidadeEmEstoque) {
-            mudancas.push({ campo: 'Estoque Físico', de: entAnterior.quantidadeEmEstoque || 0, para: entAtual.quantidadeEmEstoque || 0 });
-        }
-        if (entAtual.descricao !== entAnterior.descricao) {
-            mudancas.push({ campo: 'Descrição', de: entAnterior.descricao || 'S/N', para: entAtual.descricao || 'S/N' });
+    // Inteligência para traduzir a Ação
+    const getActionDetails = (revType, origem) => {
+        if (origem === 'IMPORTACAO_EXCEL') {
+            return {
+                title: 'Importação de Arquivo (Excel/CSV)',
+                cssClass: 'action-excel',
+                icon: <FileSpreadsheet size={14} />
+            };
         }
 
-        return mudancas;
+        switch (revType) {
+            case 'ADD':
+                return { title: 'Criação Manual do Produto', cssClass: 'action-add', icon: <Box size={14} /> };
+            case 'MOD':
+                return { title: 'Edição de Dados', cssClass: 'action-mod', icon: <Edit3 size={14} /> };
+            case 'DEL':
+                return { title: 'Produto Inativado/Excluído', cssClass: 'action-del', icon: <Trash2 size={14} /> };
+            default:
+                return { title: 'Alteração de Sistema', cssClass: 'action-mod', icon: <Edit3 size={14} /> };
+        }
     };
 
-    const analisarComIA = () => {
-        setIsAnalyzing(true);
-
-        setTimeout(() => {
-            let alertas = [];
-            let quedasPreco = 0;
-
-            historico.forEach((rev, idx) => {
-                const mudancas = getMudancas(rev, idx, historico);
-                const ent = rev.entidade || rev || {};
-
-                mudancas.forEach(m => {
-                    if (m.campo === 'Preço Venda') {
-                        // Limpa os R$ para poder comparar matematicamente
-                        const de = parseFloat(m.de.replace('R$ ', '').replace(',', '.'));
-                        const para = parseFloat(m.para.replace('R$ ', '').replace(',', '.'));
-
-                        if (para < de) quedasPreco++;
-
-                        // IA Deteta se alguma vez este utilizador baixou a Venda para valor INFERIOR ao Custo
-                        if (para > 0 && para < (ent.precoCusto || 0)) {
-                            alertas.push(`Venda Abaixo de Custo (R$ ${para.toFixed(2)}) efetuada por ${rev.usuarioOperacao || 'Sistema'} em ${formatarData(rev.dataHora)}.`);
-                        }
-                    }
-                });
-            });
-
-            if (quedasPreco > 2) alertas.push(`Comportamento Atípico: O preço de retalho foi rebaixado ${quedasPreco} vezes recentemente. Requer atenção administrativa.`);
-
-            setAiAnalysis({
-                seguro: alertas.length === 0,
-                mensagem: alertas.length === 0 ? "A trilha de auditoria deste produto encontra-se dentro dos padrões normais de operação comercial." : "Foram detetadas anomalias graves na trilha de auditoria deste produto.",
-                detalhes: alertas
-            });
-
-            setIsAnalyzing(false);
-        }, 1500);
-    };
+    if (loading) {
+        return <div className="historico-container"><h3>A carregar registos de auditoria...</h3></div>;
+    }
 
     return (
-        <div className="modern-layout-container fade-in">
-            <header className="page-header-modern">
-                <button onClick={() => navigate(-1)} className="btn-icon-soft" style={{marginRight: '16px', float: 'left'}}><ArrowLeft size={20}/></button>
-                <div className="header-titles" style={{clear:'none'}}>
-                    <h1 className="title-gradient">Auditoria de Produto</h1>
-                    <p className="subtitle text-muted">Trilha de modificações com proteção Envers</p>
-                </div>
-            </header>
-
-            <div className="audit-content-wrapper">
-
-                {/* Painel da IA de Auditoria */}
-                <div className="ai-audit-panel">
-                    <div className="ai-audit-header">
-                        <Cpu size={28} className="text-primary" />
-                        <div>
-                            <h3>Inspetor IA</h3>
-                            <p>Análise comportamental de alterações de preço e stock.</p>
-                        </div>
-                    </div>
-
-                    {!aiAnalysis ? (
-                        <button className="btn-primary-shadow w-full" onClick={analisarComIA} disabled={isAnalyzing}>
-                            {isAnalyzing ? "A Processar Registos..." : "Executar Varredura de Segurança"}
-                        </button>
-                    ) : (
-                        <div className={`ai-audit-result ${aiAnalysis.seguro ? 'safe' : 'danger'}`}>
-                            {aiAnalysis.seguro ? <ShieldCheck size={24} style={{flexShrink:0}} /> : <AlertTriangle size={24} style={{flexShrink:0}} />}
-                            <div>
-                                <strong>{aiAnalysis.mensagem}</strong>
-                                {aiAnalysis.detalhes.map((det, i) => <div key={i} className="audit-alert-item">• {det}</div>)}
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* Timeline Visual (Trilha de Histórico) */}
-                <div className="timeline-container">
-                    {loading ? (
-                        <p>A extrair e decifrar histórico da base de dados...</p>
-                    ) : historico.length === 0 ? (
-                        <div className="empty-state-modern">
-                            <History size={48} className="text-muted" />
-                            <p>Nenhuma modificação registada para este produto após a sua criação inicial.</p>
-                        </div>
-                    ) : (
-                        historico.map((rev, index) => {
-                            const mudancas = getMudancas(rev, index, historico);
-                            const tipo = rev.tipoEvento || rev.revtype;
-                            const isCreate = tipo === 'CREATE' || tipo === 'INSERT' || tipo === 0;
-
-                            return (
-                                <div key={rev.idRevisao || index} className="timeline-item">
-                                    <div className={`timeline-marker ${isCreate ? 'create' : 'update'}`}></div>
-                                    <div className="timeline-content">
-                                        <div className="timeline-header">
-                                            <span className="timeline-action">{isCreate ? 'Criação do Registo' : 'Atualização de Dados'}</span>
-                                            <span className="timeline-date"><Clock size={14}/> {formatarData(rev.dataHora)}</span>
-                                        </div>
-
-                                        <div className="timeline-user">
-                                            <User size={16}/> Operador: <strong>{rev.usuarioOperacao || 'Sistema Base (Importação)'}</strong>
-                                        </div>
-
-                                        {mudancas.length > 0 ? (
-                                            <div className="timeline-diff-box">
-                                                <div className="diff-title">Resumo das Alterações efetuadas:</div>
-                                                {mudancas.map((m, i) => (
-                                                    <div key={i} className="diff-row">
-                                                        <span className="diff-field">{m.campo}:</span>
-                                                        <span className="diff-old">{m.de}</span>
-                                                        <span className="diff-arrow">➔</span>
-                                                        <span className="diff-new">{m.para}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        ) : (
-                                            !isCreate && (
-                                                <div className="timeline-diff-box" style={{background: '#f1f5f9', color: '#64748b'}}>
-                                                    Nenhum campo principal (Preço, Estoque, Descrição) foi alterado nesta revisão.
-                                                </div>
-                                            )
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })
-                    )}
+        <div className="historico-container fade-in">
+            <div className="historico-header">
+                <button className="btn-voltar" onClick={() => navigate('/produtos')}>
+                    <ArrowLeft size={18} /> Voltar ao Catálogo
+                </button>
+                <div>
+                    <h1 className="historico-title">Auditoria do Produto</h1>
+                    <span style={{color: '#64748b'}}>{produtoNome || `ID: ${id}`}</span>
                 </div>
             </div>
+
+            {historico.length === 0 ? (
+                <div className="empty-history">
+                    <History size={48} style={{opacity: 0.2, marginBottom: '16px'}} />
+                    <h2>Nenhum registo encontrado</h2>
+                    <p>O histórico de alterações para este produto não está disponível ou o produto é muito recente.</p>
+                </div>
+            ) : (
+                <div className="timeline">
+                    {historico.map((rev, index) => {
+                        // Extrai a origem do estado do produto naquela revisão
+                        const origem = rev.entidade?.origem;
+                        const action = getActionDetails(rev.tipoRevisao, origem);
+                        const dataFormatada = formatDateTime(rev.dataRevisao);
+                        // Se o backend enviar o usuário, usamos. Senão, 'Sistema/Admin'.
+                        const operador = rev.nomeUsuario || 'Administrador';
+
+                        return (
+                            <div key={index} className={`timeline-item ${action.cssClass} slide-up`}>
+                                <div className="timeline-icon">
+                                    {action.icon}
+                                </div>
+
+                                <div className="audit-card-header">
+                                    <div>
+                                        <h3 className="audit-action-title">{action.title}</h3>
+                                        <div className="audit-meta">
+                                            <span><Calendar size={14} /> {dataFormatada}</span>
+                                            <span className="operator-badge"><User size={12} /> {operador}</span>
+                                        </div>
+                                    </div>
+                                    <span style={{fontSize: '0.8rem', color: '#94a3b8'}}>Rev #{rev.revisaoId}</span>
+                                </div>
+
+                                {/* Mostra o estado do produto nesta alteração */}
+                                {rev.entidade && (
+                                    <div className="audit-diff-grid">
+                                        <div className="diff-item">
+                                            <span className="diff-label">Preço de Venda</span>
+                                            <span className="diff-value">R$ {rev.entidade.precoVenda?.toFixed(2) || '0.00'}</span>
+                                        </div>
+                                        <div className="diff-item">
+                                            <span className="diff-label">Preço de Custo</span>
+                                            <span className="diff-value">R$ {rev.entidade.precoCusto?.toFixed(2) || '0.00'}</span>
+                                        </div>
+                                        <div className="diff-item">
+                                            <span className="diff-label">Estoque</span>
+                                            <span className="diff-value">{rev.entidade.quantidadeEmEstoque || 0} un.</span>
+                                        </div>
+                                        <div className="diff-item">
+                                            <span className="diff-label">Código (EAN)</span>
+                                            <span className="diff-value">{rev.entidade.codigoBarras || '-'}</span>
+                                        </div>
+                                        <div className="diff-item">
+                                            <span className="diff-label">NCM</span>
+                                            <span className="diff-value">{rev.entidade.ncm || '-'}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 };

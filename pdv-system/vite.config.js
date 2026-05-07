@@ -1,25 +1,14 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import react from '@vitejs/plugin-react' // ou o plugin que já lá estiver
 
-// https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [
-    react()
-    // ❌ Removemos o basicSsl() para que o Cloudflare consiga ler o servidor localmente via HTTP
-  ],
+  plugins: [react()],
   server: {
-    host: true, // Permite acesso por outros dispositivos na mesma rede Wi-Fi
-    port: 5173,
-    strictPort: true,
-    allowedHosts: true, // ✅ A SOLUÇÃO AQUI: Permite que o Vite aceite o link externo da Cloudflare
-
-    // O PROXY: Encaminha as chamadas do Frontend para o Backend (Java)
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        secure: false
-      }
+    host: true,
+    cors: true,
+    allowedHosts: true, // Impede que o Vite bloqueie o domínio da Cloudflare
+    hmr: {
+      clientPort: 443 // A MAGIA: Diz ao Vite para usar a porta segura do Cloudflare para o auto-refresh
     }
   }
 })
