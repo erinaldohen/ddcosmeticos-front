@@ -7,12 +7,12 @@ import ConfirmModal from '../../components/ConfirmModal';
 import {
   Search, Plus, Edit3, Trash2, Box, ChevronLeft, ChevronRight, Zap, Printer, History, X,
   RotateCcw, ImageOff, Filter, Copy, Check, Upload, FileText, FileSpreadsheet,
-  Bot, AlertTriangle, Barcode, ChevronDown, ZoomIn, Edit2, AlertCircle
+  Bot, AlertTriangle, Barcode, ChevronDown, ZoomIn, Edit2, AlertCircle, CheckCircle2
 } from 'lucide-react';
 import './ProdutoList.css';
 
 // =========================================================================
-// 🧩 COMPONENTES AUXILIARES (UI/UX Refinados)
+// 🧩 COMPONENTES AUXILIARES
 // =========================================================================
 
 const SearchBar = ({ onSearch }) => {
@@ -176,20 +176,25 @@ const StatusIndicator = ({ prod }) => {
 };
 
 // =========================================================================
-// 🩺 RAIO-X DE DIAGNÓSTICO (IA Visual)
+// 🩺 RAIO-X DE DIAGNÓSTICO
 // =========================================================================
-const DiagnosticoAlertas = ({ prod }) => {
+const DiagnosticoAlertas = ({ prod, filtroAtivo }) => {
     const alertas = [];
 
-    // Análises em tempo real do objeto
-    if (!prod.precoVenda || prod.precoVenda <= 0) {
-        alertas.push({ id: 'preco', texto: "Preço Zerado", classe: "bg-rose-100 text-rose-700 border-rose-200" });
+    if (prod.alertaGondola || prod.revisaoPendente) {
+        alertas.push({ id: 'gondola', texto: "🚨 DIVERGÊNCIA FÍSICA", classe: "badge-divergence-glow" });
     }
-    if (!prod.ncm || prod.ncm.length < 8 || prod.ncm === '00000000') {
-        alertas.push({ id: 'ncm', texto: "NCM Pendente/Inválido", classe: "bg-amber-100 text-amber-700 border-amber-200" });
-    }
-    if (!prod.urlImagem) {
-        alertas.push({ id: 'img', texto: "Sem Imagem", classe: "bg-purple-100 text-purple-700 border-purple-200" });
+
+    if (filtroAtivo || prod.alertaGondola || prod.revisaoPendente) {
+        if (!prod.precoVenda || prod.precoVenda <= 0) {
+            alertas.push({ id: 'preco', texto: "Preço Zerado", classe: "bg-rose-100 text-rose-700 border-rose-200" });
+        }
+        if (!prod.ncm || prod.ncm.length < 8 || prod.ncm === '00000000') {
+            alertas.push({ id: 'ncm', texto: "NCM Pendente/Inválido", classe: "bg-amber-100 text-amber-700 border-amber-200" });
+        }
+        if (!prod.urlImagem) {
+            alertas.push({ id: 'img', texto: "Sem Imagem", classe: "bg-purple-100 text-purple-700 border-purple-200" });
+        }
     }
 
     if (alertas.length === 0) return null;
@@ -276,33 +281,44 @@ const ProdutoList = () => {
   const handleSelectOne = (id) => selectedIds.includes(id) ? setSelectedIds(selectedIds.filter(itemId => itemId !== id)) : setSelectedIds([...selectedIds, id]);
 
   const iniciarEdicaoInline = (e, id, field, currentValue) => {
-      e.stopPropagation();
-      setEditingCell({ id, field, value: currentValue || '' });
-  };
+        e.stopPropagation();
+        let val = currentValue;
+
+        // Se for preço, já aplica a máscara de vírgula antes de abrir o input
+        if (field === 'precoVenda') {
+            val = currentValue.toFixed(2).replace('.', ',');
+        }
+
+        setEditingCell({ id, field, value: val || '' });
+    };
+
+    // 🔥 FUNÇÃO PARA SELECIONAR TUDO AO CLICAR (Auto-Select)
+    const handleFocus = (e) => e.target.select();
 
   const salvarEdicaoInline = async () => {
-      if (!editingCell.id) return;
-      const { id, field, value } = editingCell;
+        if (!editingCell.id) return;
+        const { id, field, value } = editingCell;
 
-      try {
-          if (field === 'precoVenda') {
-              const precoNum = parseFloat(value.toString().replace(',', '.'));
-              if (isNaN(precoNum) || precoNum < 0) throw new Error("Preço inválido");
-              await api.patch(`/produtos/${id}/preco-venda?valor=${precoNum}`);
-          } else if (field === 'quantidadeEmEstoque') {
-              const qtdNum = parseInt(value, 10);
-              if (isNaN(qtdNum) || qtdNum < 0) throw new Error("Quantidade inválida");
-              await api.patch(`/produtos/${id}/estoque?quantidade=${qtdNum}`);
-          }
+        try {
+            if (field === 'precoVenda') {
+                // Converte "15,50" -> 15.50
+                const precoNum = parseFloat(value.toString().replace(/\./g, '').replace(',', '.'));
+                if (isNaN(precoNum) || precoNum < 0) throw new Error("Preço inválido");
+                await api.patch(`/produtos/${id}/preco-venda?valor=${precoNum}`);
+            } else if (field === 'quantidadeEmEstoque') {
+                const qtdNum = parseInt(value, 10);
+                if (isNaN(qtdNum) || qtdNum < 0) throw new Error("Quantidade inválida");
+                await api.patch(`/produtos/${id}/estoque?quantidade=${qtdNum}`);
+            }
 
-          toast.success("Atualizado com sucesso!", { autoClose: 1000, hideProgressBar: true });
-          carregarProdutos(page, termoBusca);
-      } catch (error) {
-          toast.error(error.message === "Preço inválido" || error.message === "Quantidade inválida" ? error.message : "Erro ao salvar alteração rápida.");
-      } finally {
-          setEditingCell({ id: null, field: null, value: '' });
-      }
-  };
+            toast.success("Atualizado!", { autoClose: 800, hideProgressBar: true });
+            carregarProdutos(page, termoBusca);
+        } catch (error) {
+            toast.error("Erro ao salvar.");
+        } finally {
+            setEditingCell({ id: null, field: null, value: '' });
+        }
+    };
 
   const handleInlineKeyDown = (e) => {
       if (e.key === 'Enter') salvarEdicaoInline();
@@ -348,7 +364,6 @@ const ProdutoList = () => {
     catch (e) { toast.error("Erro na impressão."); } finally { setLoadingPrint(null); }
   };
 
-  // 🔥 LÓGICA REFINADA PARA IMPASSES DA IA 🔥
   const handleQuickFix = (tipo, mensagemConfirmacao, nomeCorrecao) => {
       if ((tipo === 'SEM_CUSTO' || tipo === 'PRECO_VENDA_ZERADO') && raioXIa.semCusto > 0 && raioXIa.semCusto === raioXIa.precoVendaZerado) {
            toast.warn("Impasse Matemático: Não é possível usar a IA porque tanto a Venda quanto o Custo estão a R$ 0,00. Edite manualmente na tabela primeiro.", { autoClose: 6000, theme: "colored" });
@@ -368,11 +383,6 @@ const ProdutoList = () => {
             } else {
                 toast.update(toastId, { render: `Nenhuma ação tomada. Verifique se os produtos necessitam de valores inseridos manualmente.`, type: "info", isLoading: false, autoClose: 5000 });
                 if(tipo === 'SEM_CUSTO' || tipo === 'PRECO_VENDA_ZERADO') handleFiltroChange('precoZerado', true);
-            }
-
-            if (res.data && res.data.zpl) {
-                const w = window.open('', '_blank', 'width=500,height=500');
-                w.document.write(`<pre>${res.data.zpl}</pre>`); w.document.close();
             }
 
             carregarProdutos(page, termoBusca);
@@ -406,24 +416,100 @@ const ProdutoList = () => {
   };
 
   const abrirModalDivergencia = async () => {
-    const toastId = toast.loading("Listando produtos sinalizados...");
-    try {
-        const response = await api.get('/produtos/divergencias-gondola');
-        setDivergentProducts(response.data); setShowDivergenceModal(true); toast.dismiss(toastId);
-    } catch (e) { toast.update(toastId, { render: "Erro de comunicação.", type: "error", isLoading: false, autoClose: 3000 }); }
+      // 🔥 PASSO 1: Limpa qualquer toast que tenha ficado travado anteriormente
+      toast.dismiss();
+
+      const toastId = toast.loading("Listando alertas de gôndola...");
+
+      try {
+          const response = await api.get('/produtos/divergencias-gondola');
+          setDivergentProducts(response.data);
+          setShowDivergenceModal(true);
+
+          // 🔥 PASSO 2: Força a transformação do loading em sucesso e encerra
+          toast.update(toastId, {
+              render: "Lista carregada!",
+              type: "success",
+              isLoading: false,
+              autoClose: 1000,
+              hideProgressBar: true
+          });
+
+      } catch (e) {
+          // 🔥 PASSO 3: Se der erro, mata o loading e mostra o erro
+          toast.dismiss(toastId);
+          toast.error("Erro ao carregar divergências.");
+      }
+    };
+
+// 🔥 MÁSCARA PARA EDIÇÃO INLINE (Tabela)
+  const formatarMoedaParaInput = (valor) => {
+    if (!valor && valor !== 0) return '';
+    const numeric = valor.toString().replace(/\D/g, '');
+    const floatValue = (parseFloat(numeric) / 100).toFixed(2);
+    return floatValue.replace('.', ',');
   };
 
-  const resolverItemDivergente = async (id) => {
-      const preco = newPrices[id];
-      if (!preco || isNaN(preco) || preco <= 0) { toast.error("Insira um novo preço válido."); return; }
-      const toastId = toast.loading("Gravando e preparando impressão...");
-      try {
-          const res = await api.post(`/produtos/${id}/resolver-divergencia?novoPreco=${preco}`);
-          toast.update(toastId, { render: "Preço atualizado na base!", type: "success", isLoading: false, autoClose: 2000 });
-          if (res.data && res.data.zpl) { const w = window.open('', '_blank', 'width=500,height=500'); w.document.write(`<pre>${res.data.zpl}</pre>`); w.document.close(); }
-          setDivergentProducts(prev => prev.filter(p => p.id !== id)); carregarProdutos(page, termoBusca);
-      } catch (e) { toast.update(toastId, { render: "Erro na atualização.", type: "error", isLoading: false, autoClose: 3000 }); }
+  // 🔥 MÁSCARA INTELIGENTE PARA MOEDA
+  const handlePriceMask = (e, id) => {
+      let valor = e.target.value.replace(/\D/g, ''); // Tira tudo o que não for número
+      if (!valor) {
+          setNewPrices(prev => ({...prev, [id]: ''}));
+          return;
+      }
+      // Converte para decimal (ex: 1234 -> 12.34)
+      valor = (parseInt(valor) / 100).toFixed(2);
+      // Troca ponto por vírgula e adiciona pontos de milhar
+      valor = valor.replace('.', ',');
+      valor = valor.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+
+      setNewPrices(prev => ({...prev, [id]: valor}));
   };
+
+  // 🔥 RESOLUÇÃO COM CONVERSÃO DE MÁSCARA
+  const resolverItemDivergente = async (id) => {
+      const precoStr = newPrices[id];
+      if (!precoStr) {
+          toast.error("Insira um novo preço.");
+          return;
+      }
+
+      // Converte a máscara "1.234,56" para float 1234.56
+      const precoFloat = parseFloat(precoStr.replace(/\./g, '').replace(',', '.'));
+      if (isNaN(precoFloat) || precoFloat <= 0) {
+          toast.error("Preço inválido.");
+          return;
+      }
+
+      // 🔥 PASSO 1: Limpa qualquer toast de "Carregando lista" que tenha sobrado
+      toast.dismiss();
+
+      // 🔥 PASSO 2: Criamos o toast de execução e guardamos o ID
+      const loadId = toast.loading("Aplicando correção no sistema...");
+
+      try {
+          await api.post(`/produtos/${id}/resolver-divergencia?novoPreco=${precoFloat}`);
+
+          // 🔥 PASSO 3: Em vez de apenas update, usamos o dismiss logo após para garantir
+          toast.update(loadId, {
+              render: "Preço atualizado com sucesso!",
+              type: "success",
+              isLoading: false,
+              autoClose: 1500
+          });
+
+          // Limpa o estado local
+          setDivergentProducts(prev => prev.filter(p => p.id !== id));
+
+          // Recarrega a lista principal ao fundo
+          carregarProdutos(page, termoBusca);
+
+      } catch (e) {
+          // 🔥 PASSO 4: Se falhar, removemos o loading e mostramos o erro clássico
+          toast.dismiss(loadId);
+          toast.error("Falha ao comunicar com o servidor.");
+      }
+    };
 
   return (
     <>
@@ -444,14 +530,14 @@ const ProdutoList = () => {
             </div>
 
             {!modoLixeira && (
-              <button className="btn-primary-shadow" onClick={() => navigate('/produtos/novo')}>
+              <button className="btn-blue-shadow" onClick={() => navigate('/produtos/novo')}>
                 <Plus size={18} strokeWidth={3} /> <span>Novo Produto</span>
               </button>
             )}
           </div>
         </header>
 
-        {/* DASHBOARD IA (GLASSMORPHISM) */}
+        {/* DASHBOARD IA */}
         {!modoLixeira && (
           <div className="ai-dashboard-premium">
             <div className="ai-header-row">
@@ -524,15 +610,18 @@ const ProdutoList = () => {
                  )}
 
                  {raioXIa.divergenciaGondola > 0 && (
-                   <div className="anomaly-card pink">
-                     <div className="anomaly-header">
-                       <span className="anomaly-badge"><Search size={14}/> {raioXIa.divergenciaGondola} Alertas</span>
-                       <span className="anomaly-title">Divergência Física</span>
-                     </div>
-                     <button className="btn-fix-action solid" onClick={abrirModalDivergencia}>
-                         Analisar e Reimprimir
-                     </button>
-                   </div>
+                   <div className="ai-divergence-siren-card slide-up">
+                        <div className="siren-content">
+                            <div className="siren-icon-wrapper"><AlertTriangle size={24} /></div>
+                            <div className="siren-text">
+                                <h4>{raioXIa.divergenciaGondola} Alertas de Gôndola</h4>
+                                <p>Preços físicos divergentes do sistema.</p>
+                            </div>
+                        </div>
+                        <button className="btn-siren-action" onClick={abrirModalDivergencia}>
+                            Resolver Agora
+                        </button>
+                    </div>
                  )}
               </div>
             ) : (
@@ -560,7 +649,7 @@ const ProdutoList = () => {
                      <div className="divider-v"></div>
                      <input type="file" ref={fileInputRef} onChange={handleImportar} accept=".csv, .xls, .xlsx, .xml" style={{display: 'none'}} />
                      <button className="btn-icon-text" onClick={() => fileInputRef.current.click()} title="Importação em massa">
-                       <Upload size={18}/> <span>Importar Base</span>
+                       <Upload size={18}/> <span className="hide-mobile">Importar Base</span>
                      </button>
                    </>
                 )}
@@ -635,10 +724,7 @@ const ProdutoList = () => {
                                     <CopyableCode code={prod.codigoBarras} />
                                     <span className="mobile-only-info text-muted">{prod.marca || 'S/ Marca'}</span>
 
-                                    {/* Diagnóstico em tempo real para alertas de revisão */}
-                                    {(filtros.revisaoPendente || prod.revisaoPendente) && (
-                                        <DiagnosticoAlertas prod={prod} />
-                                    )}
+                                    <DiagnosticoAlertas prod={prod} filtroAtivo={filtros.revisaoPendente} />
                                 </div>
                             </div>
                           </td>
@@ -651,11 +737,17 @@ const ProdutoList = () => {
                                     <span className="currency-prefix">R$</span>
                                     <input
                                       autoFocus
-                                      type="number"
-                                      step="0.01"
+                                      type="text" // Mudado para text para aceitar a máscara de vírgula
                                       className="inline-input"
                                       value={editingCell.value}
-                                      onChange={(e) => setEditingCell({...editingCell, value: e.target.value})}
+                                      onFocus={handleFocus} // 🔥 Seleciona tudo automaticamente
+                                      onChange={(e) => {
+                                          // Aplica a mesma lógica de máscara da gôndola
+                                          let v = e.target.value.replace(/\D/g, '');
+                                          v = (parseInt(v) / 100).toFixed(2).replace('.', ',');
+                                          if (v === "NaN") v = "0,00";
+                                          setEditingCell({...editingCell, value: v});
+                                      }}
                                       onBlur={salvarEdicaoInline}
                                       onKeyDown={handleInlineKeyDown}
                                       onClick={(e) => e.stopPropagation()}
@@ -736,41 +828,48 @@ const ProdutoList = () => {
         </div>
       )}
 
+      {/* 🔥 MODAL DE RESOLUÇÃO (NOVO LAYOUT AZUL & CLEAN) */}
       {showDivergenceModal && (
           <div className="modal-overlay">
-             <div className="modal-content-modern slide-up">
-                <div className="modal-header">
-                   <h2><AlertTriangle className="text-pink" /> Analisar Divergências Físicas</h2>
+             <div className="modal-content-resolution slide-up">
+                <div className="modal-header-resolution">
+                   <div className="header-title">
+                      <AlertTriangle size={24} style={{color: '#2563eb'}} />
+                      <h2>Resolver Divergências</h2>
+                   </div>
                    <button onClick={() => setShowDivergenceModal(false)} className="btn-close-modal"><X size={24}/></button>
                 </div>
 
-                <div className="modal-body custom-scrollbar">
+                <div className="modal-body-resolution custom-scrollbar">
                     {divergentProducts.length === 0 ? (
                         <div className="empty-state-mini">
-                           <Check size={32} className="text-success mb-2" />
-                           <p>Não há mais divergências para resolver.</p>
+                           <CheckCircle2 size={48} style={{color: '#2563eb', marginBottom: '12px'}} />
+                           <h3 style={{color: '#0f172a', margin: '0 0 4px 0'}}>Gôndolas Sincronizadas</h3>
+                           <p>Sem alertas pendentes.</p>
                         </div>
                     ) : (
-                        <div className="divergence-list">
+                        <div className="resolution-list">
                             {divergentProducts.map(p => (
-                                <div key={p.id} className="divergence-card">
-                                    <div className="divergence-info">
-                                        <strong className="div-title">{p.descricao}</strong>
-                                        <span className="div-ean"><Barcode size={14}/> {p.codigoBarras}</span>
-                                        <div className="div-old-price">Preço no Sistema: <b>R$ {p.precoVenda?.toFixed(2)}</b></div>
+                                <div key={p.id} className="resolution-item">
+                                    <div className="res-info">
+                                        <span className="res-ean"><Barcode size={14}/> {p.codigoBarras}</span>
+                                        <strong className="res-title">{p.descricao}</strong>
+                                        <div className="res-price-old">
+                                            Valor Errado na Gôndola: <span className="line-through">R$ {p.precoVenda?.toFixed(2)}</span>
+                                        </div>
                                     </div>
-                                    <div className="divergence-action">
-                                        <div className="input-prefix-wrapper">
-                                            <span>R$</span>
+                                    <div className="res-action">
+                                        <div className="res-input-group">
+                                            <span className="currency">R$</span>
                                             <input
-                                                type="number"
-                                                placeholder="Preço da Etiqueta"
-                                                className="input-new-price"
-                                                onChange={(e) => setNewPrices(prev => ({...prev, [p.id]: e.target.value}))}
+                                                type="text"
+                                                placeholder="Novo valor"
+                                                value={newPrices[p.id] || ''}
+                                                onChange={(e) => handlePriceMask(e, p.id)}
                                             />
                                         </div>
-                                        <button onClick={() => resolverItemDivergente(p.id)} className="btn-save-print">
-                                            <Printer size={16} /> Salvar
+                                        <button onClick={() => resolverItemDivergente(p.id)} className="btn-save-blue">
+                                            <CheckCircle2 size={18} /> Salvar
                                         </button>
                                     </div>
                                 </div>

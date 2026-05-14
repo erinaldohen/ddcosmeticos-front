@@ -70,7 +70,9 @@ const HistoricoProduto = () => {
                 { key: 'quantidade', label: 'Estoque Atual', type: 'number' },
                 { key: 'estoqueMinimo', label: 'Estoque Mínimo', type: 'number' }, // LÊ DO JAVA!
                 { key: 'ncm', label: 'NCM Fiscal', type: 'text' },                 // LÊ DO JAVA!
-                { key: 'marca', label: 'Marca', type: 'text' }                     // LÊ DO JAVA!
+                { key: 'marca', label: 'Marca', type: 'text' },                     // LÊ DO JAVA!
+                { key: 'revisaoPendente', label: 'Status na Gôndola', type: 'alerta' },
+                { key: 'alertaGondola', label: 'Auditoria de Gôndola', type: 'alerta_gondola' }
             ];
 
             const isAdd = tipoAlteracao === 'CRIADO' || tipoAlteracao === 'ADD';
@@ -116,28 +118,54 @@ const HistoricoProduto = () => {
     }, [historicoRaw]);
 
     const iaAlerts = useMemo(() => {
-        const alerts = [];
-        processedHistory.forEach(rev => {
-            rev.diffs.forEach(diff => {
-                if (diff.key === 'precoVenda' && diff.old > 0) {
-                    const drop = ((diff.old - diff.new) / diff.old) * 100;
-                    if (drop >= 30) {
-                        alerts.push({ id: `alert-${rev.idRevisao}-drop`, type: 'danger', icon: <ShieldAlert size={16}/>, msg: `Alerta Crítico: O preço de venda caiu ${drop.toFixed(0)}% na Alteração #${rev.idRevisao} feita por ${rev.operador}.` });
+            const alerts = [];
+            processedHistory.forEach(rev => {
+                rev.diffs.forEach(diff => {
+                    // 🔥 IA DETETA A GÔNDOLA
+                                    if (diff.key === 'alertaGondola' && (diff.new === true || diff.new === 'true')) {
+                                        alerts.push({
+                                            id: `alert-${rev.idRevisao}-gondola`,
+                                            type: 'danger',
+                                            icon: <AlertTriangle size={16}/>,
+                                            msg: `Atenção: O operador ${rev.operador} reportou uma divergência de preço físico na gôndola (Alteração #${rev.idRevisao}).`
+                                        });
+                                    }
+
+                    // 🔥 NOVO: Alerta visual de divergência
+                    if (diff.key === 'revisaoPendente' && (diff.new === true || diff.new === 'true')) {
+                        alerts.push({
+                            id: `alert-${rev.idRevisao}-gondola`,
+                            type: 'danger',
+                            icon: <AlertTriangle size={16}/>,
+                            msg: `Divergência Reportada: O operador ${rev.operador} sinalizou um problema de preço na gôndola durante a Alteração #${rev.idRevisao}.`
+                        });
                     }
-                }
-                if (diff.key === 'quantidade' && Math.abs(diff.new - diff.old) >= 50) {
-                    alerts.push({ id: `alert-${rev.idRevisao}-est`, type: 'warning', icon: <AlertTriangle size={16}/>, msg: `Atenção: Salto abrupto de estoque (${diff.old} para ${diff.new}) na Alteração #${rev.idRevisao}.` });
-                }
+                });
             });
-        });
-        return alerts;
-    }, [processedHistory]);
+            return alerts;
+        }, [processedHistory]);
 
     const renderValue = (val, type) => {
-        if (val === 'Vazio' || val === null || val === '') return <span style={{opacity: 0.5}}>N/A</span>;
-        if (type === 'currency') return formatCurrency(val);
-        return val;
-    };
+            if (val === 'Vazio' || val === null || val === '') return <span style={{opacity: 0.5}}>N/A</span>;
+            if (type === 'currency') return formatCurrency(val);
+            if (type === 'boolean') return val === true || val === 'true' ? 'Sim' : 'Não';
+
+            if (type === 'alerta_gondola') {
+                const isDivergente = val === true || val === 'true';
+                return isDivergente ?
+                    <span style={{ color: '#ef4444', fontWeight: 800 }}>⚠️ Preço Divergente Reportado</span> :
+                    <span style={{ color: '#10b981', fontWeight: 800 }}>✅ Etiqueta Correta</span>;
+            }
+
+            if (type === 'alerta_revisao') {
+                const isRevisao = val === true || val === 'true';
+                return isRevisao ?
+                    <span style={{ color: '#f59e0b', fontWeight: 800 }}>⚠️ Revisão Pendente</span> :
+                    <span style={{ color: '#64748b', fontWeight: 800 }}>Sem Alertas</span>;
+            }
+
+            return val;
+        };
 
     if (loading) return <div className="historico-layout"><div className="loading-state"><Clock className="spin" size={32}/><span>Decodificando Auditoria...</span></div></div>;
 
