@@ -40,10 +40,8 @@ export const produtoService = {
     }
   },
 
-  // 🔥 BLINDAGEM: Impede que o Frontend derrube o Backend num loop infinito
   contarPendentesRevisao: async () => {
     const agora = Date.now();
-    // Se foi chamado há menos de 30 segundos, devolve o valor guardado em memória
     if (ultimaContagemAlertas !== null && (agora - ultimoTempoContagem < 30000)) {
         return ultimaContagemAlertas;
     }
@@ -142,17 +140,32 @@ export const produtoService = {
     }
   },
 
+  // 🔥 CORREÇÃO: Esta função agora bate na rota correta para acionar os serviços externos (Cosmos, etc.)
+  // IMPORTANTE: Confirme se a rota no seu ProdutoController do Java é /externo/{ean} ou /consultar/{ean}.
+  // Estou assumindo /externo baseando-me nos padrões do projeto.
   consultarEan: async (ean) => {
     try {
-      const response = await api.get(`${RESOURCE_URL}?termo=${ean}&size=1`);
-      if (response.data && response.data.content && response.data.content.length > 0) {
-         const produto = response.data.content[0];
-         if (produto.codigoBarras === ean) return produto;
-      }
-      return null;
+      // Dispara o backend para procurar na internet!
+      const response = await api.get(`${RESOURCE_URL}/externo/${ean}`);
+      return response.data;
     } catch (error) {
+      console.warn("Produto não encontrado na base externa ou erro na API externa.");
       return null;
     }
+  },
+
+  // Nova função auxiliar caso precise consultar apenas se o EAN existe na SUA base local
+  consultarEanLocal: async (ean) => {
+      try {
+        const response = await api.get(`${RESOURCE_URL}?termo=${ean}&size=1`);
+        if (response.data && response.data.content && response.data.content.length > 0) {
+           const produto = response.data.content[0];
+           if (produto.codigoBarras === ean) return produto;
+        }
+        return null;
+      } catch (error) {
+        return null;
+      }
   },
 
   imprimirEtiqueta: async (id) => {
@@ -210,7 +223,6 @@ export const produtoService = {
     }
   },
 
-  // 🔥 CACHE DE NCM: Não chama a API se já pesquisou a mesma palavra
   buscarNcms: async (termo) => {
       if (!termo || termo.length < 2) return [];
       const termoLimpo = termo.toLowerCase().trim();

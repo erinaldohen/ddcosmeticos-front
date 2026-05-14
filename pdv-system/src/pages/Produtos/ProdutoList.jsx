@@ -175,6 +175,36 @@ const StatusIndicator = ({ prod }) => {
   return <span className="badge badge-active">Ativo</span>;
 };
 
+// =========================================================================
+// 🩺 RAIO-X DE DIAGNÓSTICO (IA Visual)
+// =========================================================================
+const DiagnosticoAlertas = ({ prod }) => {
+    const alertas = [];
+
+    // Análises em tempo real do objeto
+    if (!prod.precoVenda || prod.precoVenda <= 0) {
+        alertas.push({ id: 'preco', texto: "Preço Zerado", classe: "bg-rose-100 text-rose-700 border-rose-200" });
+    }
+    if (!prod.ncm || prod.ncm.length < 8 || prod.ncm === '00000000') {
+        alertas.push({ id: 'ncm', texto: "NCM Pendente/Inválido", classe: "bg-amber-100 text-amber-700 border-amber-200" });
+    }
+    if (!prod.urlImagem) {
+        alertas.push({ id: 'img', texto: "Sem Imagem", classe: "bg-purple-100 text-purple-700 border-purple-200" });
+    }
+
+    if (alertas.length === 0) return null;
+
+    return (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
+            {alertas.map(alerta => (
+                <span key={alerta.id} className={`badge border ${alerta.classe}`} style={{ fontSize: '0.65rem', padding: '2px 8px' }}>
+                    {alerta.texto}
+                </span>
+            ))}
+        </div>
+    );
+};
+
 // ==================================================================================
 // 🚀 COMPONENTE PRINCIPAL
 // ==================================================================================
@@ -543,10 +573,10 @@ const ProdutoList = () => {
                 <button className={`chip ${filtros.estoque === 'todos' && !filtros.revisaoPendente && !filtros.semImagem && !filtros.precoZerado ? 'active' : ''}`} onClick={limparFiltros}>
                     Tudo
                 </button>
-                <button className={`chip danger ${filtros.estoque === 'zerado' ? 'active' : ''}`} onClick={() => handleFiltroChange('estoque', 'zerado')}>
+                <button className={`chip danger ${filtros.estoque === 'ZERADO' ? 'active' : ''}`} onClick={() => handleFiltroChange('estoque', 'ZERADO')}>
                     Estoque Zerado
                 </button>
-                <button className={`chip warning ${filtros.estoque === 'baixo' ? 'active' : ''}`} onClick={() => handleFiltroChange('estoque', 'baixo')}>
+                <button className={`chip warning ${filtros.estoque === 'BAIXO' ? 'active' : ''}`} onClick={() => handleFiltroChange('estoque', 'BAIXO')}>
                     Estoque Crítico
                 </button>
                 <button className={`chip danger ${filtros.revisaoPendente ? 'active' : ''}`} onClick={() => handleFiltroChange('revisaoPendente', true)}>
@@ -564,9 +594,9 @@ const ProdutoList = () => {
                 <tr>
                   <th className="checkbox-cell" width="40px"><input type="checkbox" onChange={handleSelectAll} checked={produtos.length > 0 && selectedIds.length === produtos.length}/></th>
                   <th width="35%">Identificação do Produto</th>
-                  <th className="hide-mobile" width="15%">Marca / Fornecedor</th>
-                  <th width="15%">Preço Retalho <span className="tooltip-icon" title="Duplo clique numa linha para editar"><Edit2 size={12}/></span></th>
-                  <th width="15%">Inventário <span className="tooltip-icon" title="Duplo clique numa linha para editar"><Edit2 size={12}/></span></th>
+                  <th className="hide-mobile" width="15%">Fabricante</th>
+                  <th width="15%">Preço<span className="tooltip-icon" title="Duplo clique numa linha para editar"><Edit2 size={12}/></span></th>
+                  <th width="15%">Estoque<span className="tooltip-icon" title="Duplo clique numa linha para editar"><Edit2 size={12}/></span></th>
                   <th className="hide-mobile" width="10%">Status</th>
                   <th className="align-right" width="10%">Gerir</th>
                 </tr>
@@ -596,14 +626,20 @@ const ProdutoList = () => {
                           </td>
 
                           <td className="product-main-cell">
-                            <ProductImage src={getImageUrl(prod.urlImagem)} alt={prod.descricao} onZoom={setZoomedImage} />
-                            <div className="product-info-modern">
-                                <h4 className="product-title-modern">
-                                  {prod.descricao}
-                                  {prod.revisaoPendente && <span className="badge-urgent-mini">Rever</span>}
-                                </h4>
-                                <CopyableCode code={prod.codigoBarras} />
-                                <span className="mobile-only-info text-muted">{prod.marca || 'S/ Marca'}</span>
+                            <div className="flex-center" style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                                <ProductImage src={getImageUrl(prod.urlImagem)} alt={prod.descricao} onZoom={setZoomedImage} />
+                                <div className="product-info-modern" style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
+                                    <h4 className="product-title-modern">
+                                      {prod.descricao}
+                                    </h4>
+                                    <CopyableCode code={prod.codigoBarras} />
+                                    <span className="mobile-only-info text-muted">{prod.marca || 'S/ Marca'}</span>
+
+                                    {/* Diagnóstico em tempo real para alertas de revisão */}
+                                    {(filtros.revisaoPendente || prod.revisaoPendente) && (
+                                        <DiagnosticoAlertas prod={prod} />
+                                    )}
+                                </div>
                             </div>
                           </td>
 
@@ -673,7 +709,6 @@ const ProdutoList = () => {
             </table>
           </div>
 
-          {/* 🔥 ADIÇÃO CRÍTICA: PAGINAÇÃO 🔥 */}
           {!loading && produtos.length > 0 && (
              <Pagination page={page} totalPages={totalPages} setPage={setPage} />
           )}

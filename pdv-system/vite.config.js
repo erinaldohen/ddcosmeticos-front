@@ -4,13 +4,12 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: '0.0.0.0',
     port: 5173,
-    strictPort: true,
-    cors: true,
-    allowedHosts: true,
+    // 🔥 CORREÇÃO: Força o Hot Reload a usar o protocolo WS normal e a porta correta
     hmr: {
-      clientPort: 443
+      protocol: 'ws',
+      host: 'localhost',
+      port: 5173
     }
   }
 })
