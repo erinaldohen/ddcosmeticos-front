@@ -25,6 +25,9 @@ const AuditoriaPreco = lazy(() => import('./pages/Produtos/AuditoriaPreco'));
 // 🔥 NOVA PÁGINA: GESTÃO DE NOTAS SEFAZ 🔥
 const GestaoNotasSefaz = lazy(() => import('./pages/Estoque/GestaoNotasSefaz'));
 
+// 🔥 CORREÇÃO: PÁGINA DE HISTÓRICO DE ENTRADAS (XML) 🔥
+const HistoricoEntradas = lazy(() => import('./pages/Estoque/HistoricoEntradas'));
+
 const Inventario = lazy(() => import('./pages/Inventario/Inventario'));
 const FornecedorList = lazy(() => import('./pages/Fornecedores/FornecedorList'));
 const FornecedorForm = lazy(() => import('./pages/Fornecedores/FornecedorForm'));
@@ -55,7 +58,6 @@ class ErrorBoundary extends React.Component {
       console.error("UI Crash Interceptado:", error);
       const msg = error?.message || "";
       if (msg.includes('ChunkLoadError') || msg.includes('module')) {
-        // Recarregamento comentado temporariamente para evitar loop infinito
         // window.location.reload();
       }
     } catch(e) {
@@ -155,6 +157,9 @@ export default function App() {
 
                 {/* 🔥 A TELA DE GESTÃO DA SEFAZ AQUI 🔥 */}
                 <Route path="/estoque/sefaz" element={<AdminRoute><GestaoNotasSefaz /></AdminRoute>} />
+
+                {/* 🔥 CORREÇÃO: TELA DE ENTRADA E IMPORTAÇÃO XML 🔥 */}
+                <Route path="/estoque/entrada" element={<AdminRoute><HistoricoEntradas /></AdminRoute>} />
 
                 <Route path="/historico-notas" element={<AdminRoute><HistoricoNotas /></AdminRoute>} />
 
