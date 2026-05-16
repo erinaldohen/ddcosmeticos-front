@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { createPortal } from 'react-dom'; // 🔥 A mágica para resolver o conflito com o Menu
+import { createPortal } from 'react-dom';
 import api from '../../services/api';
 import { toast } from 'react-toastify';
 import {
     FileText, Eye, UploadCloud, X, Package,
-    Barcode, ChevronLeft, ChevronRight, FileUp, Sparkles, Loader2, Info, User, Calendar
+    ChevronLeft, ChevronRight, Sparkles, Loader2, User, Calendar,
+    Search, RefreshCw, DownloadCloud, Hash
 } from 'lucide-react';
 import './HistoricoEntradas.css';
 
@@ -14,6 +15,7 @@ const HistoricoEntradas = () => {
   const [pagina, setPagina] = useState(0);
   const [totalPaginas, setTotalPaginas] = useState(0);
 
+  const [busca, setBusca] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef(null);
@@ -21,8 +23,8 @@ const HistoricoEntradas = () => {
   const [notaSelecionada, setNotaSelecionada] = useState(null);
   const [itensNota, setItensNota] = useState([]);
   const [loadingItens, setLoadingItens] = useState(false);
+  const [baixandoDanfe, setBaixandoDanfe] = useState(false);
 
-  // 🔥 Bloqueia o scroll da página principal quando o modal abre (Melhoria de UI/UX)
   useEffect(() => {
     if (notaSelecionada) {
       document.body.style.overflow = 'hidden';
@@ -48,26 +50,38 @@ const HistoricoEntradas = () => {
       const res = await api.get(`estoque/historico-entradas?page=${pagina}&size=10`);
       setEntradas(res.data.content || []);
       setTotalPaginas(res.data.totalPages || 0);
-    } catch (error) { toast.error("Erro ao carregar histórico."); }
-    finally { setLoading(false); }
+    } catch (error) {
+      toast.error("Erro ao carregar histórico.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const processarArquivo = async (file) => {
-    if (!file.name.toLowerCase().endsWith('.xml')) { toast.error("Formato inválido."); return; }
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.xml')) {
+      toast.error("Formato inválido. Selecione um ficheiro XML.");
+      return;
+    }
+
     setIsUploading(true);
     const formData = new FormData();
     formData.append("arquivo", file);
+
     try {
       await api.post('importacao-xml/receber-nota', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
       toast.success("Importação concluída com sucesso!", { icon: "✨" });
-      setPagina(0); carregarHistorico();
+      setPagina(0);
+      carregarHistorico();
     } catch (error) {
-        let msg = "Erro no processamento.";
+        let msg = "Erro no processamento da Nota Fiscal.";
         if (error.response?.data?.mensagem) msg = error.response.data.mensagem;
         else if (typeof error.response?.data === 'string') msg = error.response.data;
         toast.error(msg);
+    } finally {
+        setIsUploading(false);
+        if(fileInputRef.current) fileInputRef.current.value = null;
     }
-    finally { setIsUploading(false); if(fileInputRef.current) fileInputRef.current.value = null; }
   };
 
   const abrirDetalhes = async (nota) => {
@@ -76,11 +90,50 @@ const HistoricoEntradas = () => {
     try {
       const res = await api.get(`estoque/historico-entradas/${encodeURIComponent(nota.numeroNota)}/itens`);
       setItensNota(res.data || []);
-    } catch (error) { setItensNota([]); }
-    finally { setLoadingItens(false); }
+    } catch (error) {
+      setItensNota([]);
+      toast.error("Não foi possível carregar os itens desta nota.");
+    } finally {
+      setLoadingItens(false);
+    }
   };
 
-  const fecharModal = () => { setNotaSelecionada(null); setItensNota([]); };
+  const fecharModal = () => {
+    setNotaSelecionada(null);
+    setItensNota([]);
+  };
+
+  const baixarDanfeOficial = async () => {
+      if (!notaSelecionada || !notaSelecionada.numeroNota) return;
+      setBaixandoDanfe(true);
+      const toastId = toast.loading("Buscando DANFE no Servidor...");
+
+      try {
+          const res = await api.get(`estoque/historico-entradas/${notaSelecionada.numeroNota}/danfe-oficial`, { responseType: 'blob' });
+          const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', `DANFE_Entrada_${notaSelecionada.numeroNota}.pdf`);
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          toast.update(toastId, { render: "DANFE baixada com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
+      } catch (error) {
+          toast.update(toastId, { render: "O Servidor não gerou a DANFE em PDF para esta nota.", type: "error", isLoading: false, autoClose: 4000 });
+      } finally {
+          setBaixandoDanfe(false);
+      }
+  };
+
+  const entradasFiltradas = entradas.filter(n => {
+      if (!busca) return true;
+      const termo = busca.toLowerCase();
+      const nome = (n.fornecedorNome || '').toLowerCase();
+      const numero = (n.numeroNota || '').toLowerCase();
+      const chave = (n.chaveAcesso || '').toLowerCase();
+      const cnpj = (n.fornecedorCnpj || '').toLowerCase();
+      return nome.includes(termo) || numero.includes(termo) || chave.includes(termo) || cnpj.includes(termo);
+  });
 
   const formatarMoeda = (v) => v ? Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
   const formatarCnpj = (cnpj) => cnpj?.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5") || '---';
@@ -94,6 +147,27 @@ const HistoricoEntradas = () => {
     } catch(e) { return "---"; }
   };
 
+  // Função auxiliar para renderizar a etiqueta da IA de forma segura
+  const renderIABadge = (statusIA, vinculoIA) => {
+    if (!statusIA) return <span className="ai-badge badge-ok">✅ Estoque Atualizado</span>;
+
+    if (statusIA.includes('[IA_DUPLICADA')) {
+        return (
+            <div className="tooltip-ia">
+                <span className="ai-badge badge-warn">🤖 IA Detectou Semelhança:</span>
+                <span className="text-xs font-semibold mobile-truncate">{vinculoIA}</span>
+                <div className="tooltip-text">Possível duplicação. Analise se é o mesmo produto: {vinculoIA}</div>
+            </div>
+        );
+    }
+
+    if (statusIA.includes('[NOVO]')) {
+        return <span className="ai-badge badge-new">✨ Cadastro Imediato</span>;
+    }
+
+    return <span className="ai-badge badge-ok">✅ Estoque Atualizado</span>;
+  };
+
   return (
     <div className="import-hub-container fade-in">
       <header className="hub-header">
@@ -105,7 +179,13 @@ const HistoricoEntradas = () => {
 
       <section className="hub-upload-section">
          {!isUploading ? (
-             <div className={`dropzone-area ${isDragging ? 'drag-active' : ''}`} onDragOver={(e) => {e.preventDefault(); setIsDragging(true)}} onDragLeave={() => setIsDragging(false)} onDrop={(e) => {e.preventDefault(); setIsDragging(false); processarArquivo(e.dataTransfer.files[0])}} onClick={() => fileInputRef.current.click()} >
+             <div
+                className={`dropzone-area ${isDragging ? 'drag-active' : ''}`}
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => { e.preventDefault(); setIsDragging(false); processarArquivo(e.dataTransfer.files[0]); }}
+                onClick={() => fileInputRef.current?.click()}
+             >
                 <input type="file" accept=".xml" ref={fileInputRef} style={{ display: 'none' }} onChange={(e) => processarArquivo(e.target.files[0])} />
                 <div className="dropzone-content">
                     <div className="icon-circle"><UploadCloud size={40} /></div>
@@ -122,7 +202,25 @@ const HistoricoEntradas = () => {
       </section>
 
       <section className="hub-history-section">
-        <div className="history-header"><h3><Package size={18}/> Notas Processadas Recentemente</h3></div>
+        <div className="history-header">
+            <h3><Package size={18}/> Notas Processadas</h3>
+            <div className="history-tools">
+                <div className="search-bar-container">
+                    <Search size={18} color="var(--text-muted)" />
+                    <input
+                        type="text"
+                        placeholder="Pesquisar Fornecedor, NF ou Chave..."
+                        value={busca}
+                        onChange={(e) => setBusca(e.target.value)}
+                    />
+                    {busca && <X size={16} color="var(--text-muted)" style={{cursor: 'pointer'}} onClick={() => setBusca('')} />}
+                </div>
+                <button className="btn-refresh" onClick={() => { setPagina(0); carregarHistorico(); }} title="Atualizar Lista">
+                    <RefreshCw size={20} className={loading ? 'spin' : ''} />
+                </button>
+            </div>
+        </div>
+
         <div className="table-wrapper custom-scrollbar">
           <table className="modern-table">
             <thead>
@@ -136,28 +234,36 @@ const HistoricoEntradas = () => {
               </tr>
             </thead>
             <tbody>
-              {entradas.map((ent, idx) => (
-                <tr key={idx} className="modern-table-row">
-                  <td>{formatarData(ent.dataEntrada)}</td>
-                  <td><span className="nfe-badge">{ent.numeroNota}</span></td>
-                  <td>
-                    <div className="supplier-info">
-                        <strong>{ent.fornecedorNome}</strong>
-                        <span>{formatarCnpj(ent.fornecedorCnpj)}</span>
-                    </div>
-                  </td>
-                  <td className="text-center font-bold">{ent.qtdItens} un</td>
-                  <td className="text-right font-bold text-primary">{formatarMoeda(ent.valorTotal)}</td>
-                  <td className="text-center">
-                    <button className="btn-view-details" onClick={() => abrirDetalhes(ent)}><Eye size={18} /></button>
-                  </td>
-                </tr>
-              ))}
+              {entradasFiltradas.length === 0 && !loading ? (
+                  <tr>
+                      <td colSpan="6" style={{textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontWeight: 600}}>
+                          Nenhuma nota encontrada.
+                      </td>
+                  </tr>
+              ) : (
+                  entradasFiltradas.map((ent, idx) => (
+                    <tr key={idx} className="modern-table-row">
+                      <td>{formatarData(ent.dataEntrada)}</td>
+                      <td><span className="nfe-badge">{ent.numeroNota}</span></td>
+                      <td>
+                        <div className="supplier-info">
+                            <strong>{ent.fornecedorNome}</strong>
+                            <span>{formatarCnpj(ent.fornecedorCnpj)}</span>
+                        </div>
+                      </td>
+                      <td className="text-center font-bold">{ent.qtdItens} un</td>
+                      <td className="text-right font-bold text-primary">{formatarMoeda(ent.valorTotal)}</td>
+                      <td className="text-center">
+                        <button className="btn-view-details" onClick={() => abrirDetalhes(ent)}><Eye size={18} /></button>
+                      </td>
+                    </tr>
+                  ))
+              )}
             </tbody>
           </table>
         </div>
 
-        {totalPaginas > 1 && (
+        {totalPaginas > 1 && !busca && (
             <div className="hub-pagination">
                 <button disabled={pagina === 0} onClick={() => setPagina(p => p - 1)}><ChevronLeft size={18}/> Anterior</button>
                 <span>Página {pagina + 1} de {totalPaginas}</span>
@@ -166,7 +272,6 @@ const HistoricoEntradas = () => {
         )}
       </section>
 
-      {/* 🔥 O REACT PORTAL ENTRA AQUI: O Modal sai do contentor e vai para o Body */}
       {notaSelecionada && createPortal(
         <div className="modal-overlay">
           <div className="modal-content-resolution slide-up">
@@ -174,11 +279,19 @@ const HistoricoEntradas = () => {
               <div className="header-title">
                 <FileText size={26} className="text-primary" />
                 <div>
-                  <h2>Auditoria de Nota Fiscal: {notaSelecionada.numeroNota}</h2>
-                  <span className="text-muted text-xs">ID Lote Base: {notaSelecionada.id}</span>
+                  <h2>Auditoria de Nota: {notaSelecionada.numeroNota}</h2>
+                  <span className="text-muted text-xs" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Hash size={12}/> {notaSelecionada.chaveAcesso || `ID Lote Base: ${notaSelecionada.id}`}
+                  </span>
                 </div>
               </div>
-              <button onClick={fecharModal} className="btn-close-modal"><X size={24} /></button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <button onClick={baixarDanfeOficial} disabled={baixandoDanfe || !notaSelecionada.numeroNota} className="btn-danfe">
+                      {baixandoDanfe ? <RefreshCw size={18} className="spin" /> : <DownloadCloud size={18} />}
+                      <span className="hide-mobile">Baixar DANFE</span>
+                  </button>
+                  <button onClick={fecharModal} className="btn-close-modal"><X size={24} /></button>
+              </div>
             </div>
 
             <div className="modal-body-resolution custom-scrollbar">
@@ -222,36 +335,33 @@ const HistoricoEntradas = () => {
                     ) : (
                       itensNota.map((item, index) => {
                           const descCompleta = item.produtoDescricao || item.descricaoProduto || item.descricao || "";
-                          const partes = descCompleta.split('|').concat(["", "", "", ""]);
+                          const partes = descCompleta.split('|').concat(["", "", "", "", ""]);
 
                           const nomeXML = partes[0] || "Produto na Nota";
                           const statusIA = partes[1] || "";
                           const vinculoIA = partes[2] || "";
+                          const eanReal = partes[4] || "S/ GTIN";
 
                           const qtd = item.quantidadeMovimentada ?? item.quantidade ?? 0;
                           const custoUn = item.custoMovimentado ?? item.custoUnitario ?? item.valorUnitario ?? item.precoCusto ?? 0;
                           const subtotal = Number(qtd) * Number(custoUn);
+
+                          const isGerado = eanReal.startsWith('20') && eanReal.length === 13;
+                          const textoEan = isGerado ? `EAN Interno: ${eanReal}` : `EAN: ${eanReal}`;
+                          const tooltipEan = isGerado ? "Código gerado automaticamente pelo sistema (Uso Interno)" : "Código Oficial do XML";
 
                           return (
                               <tr key={item.id || index}>
                                   <td>
                                       <div className="flex-col">
                                           <span className="font-bold text-dark">{nomeXML}</span>
-                                          <span className="text-xs text-muted">EAN: {item.codigoBarras || item.chaveAcesso?.substring(0,8) || 'S/ GTIN'}</span>
+                                          <span className="text-xs text-muted" title={tooltipEan}>
+                                              {textoEan}
+                                          </span>
                                       </div>
                                   </td>
                                   <td>
-                                      {statusIA.includes('[IA_DUPLICADA') ? (
-                                          <div className="tooltip-ia">
-                                              <span className="ai-badge badge-warn">🤖 IA Detectou Semelhança:</span>
-                                              <span className="text-xs font-semibold mobile-truncate">{vinculoIA}</span>
-                                              <div className="tooltip-text">Possível duplicação. Analise se é o mesmo produto: {vinculoIA}</div>
-                                          </div>
-                                      ) : statusIA.includes('[NOVO]') ? (
-                                          <span className="ai-badge badge-new">✨ Cadastro Imediato</span>
-                                      ) : (
-                                          <span className="ai-badge badge-ok">✅ Estoque Atualizado</span>
-                                      )}
+                                      {renderIABadge(statusIA, vinculoIA)}
                                   </td>
                                   <td className="text-center font-bold text-success">+ {qtd} un</td>
                                   <td className="text-right font-numeric">{formatarMoeda(custoUn)}</td>
@@ -266,7 +376,7 @@ const HistoricoEntradas = () => {
             </div>
           </div>
         </div>,
-        document.body // Injeta o modal diretamente no body do HTML
+        document.body
       )}
     </div>
   );
