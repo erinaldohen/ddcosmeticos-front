@@ -19,13 +19,13 @@ const ProdutoList = lazy(() => import('./pages/Produtos/ProdutoList'));
 const ProdutoForm = lazy(() => import('./pages/Produtos/ProdutoForm'));
 const HistoricoProduto = lazy(() => import('./pages/Produtos/HistoricoProduto'));
 
-// 🔥 NOVA PÁGINA: AUDITORIA DE GÔNDOLA 🔥
+// 🔥 AUDITORIA DE GÔNDOLA 🔥
 const AuditoriaPreco = lazy(() => import('./pages/Produtos/AuditoriaPreco'));
 
-// 🔥 NOVA PÁGINA: GESTÃO DE NOTAS SEFAZ 🔥
+// 🔥 GESTÃO DE NOTAS SEFAZ 🔥
 const GestaoNotasSefaz = lazy(() => import('./pages/Estoque/GestaoNotasSefaz'));
 
-// 🔥 CORREÇÃO: PÁGINA DE HISTÓRICO DE ENTRADAS (XML) 🔥
+// 🔥 PÁGINA CENTRAL DE ENTRADAS (XML E HISTÓRICO UNIFICADOS) 🔥
 const HistoricoEntradas = lazy(() => import('./pages/Estoque/HistoricoEntradas'));
 
 const Inventario = lazy(() => import('./pages/Inventario/Inventario'));
@@ -34,7 +34,6 @@ const FornecedorForm = lazy(() => import('./pages/Fornecedores/FornecedorForm'))
 const GerenciamentoCaixa = lazy(() => import('./pages/Caixa/GerenciamentoCaixa'));
 const HistoricoCaixa = lazy(() => import('./pages/Caixa/HistoricoCaixa'));
 const HistoricoVendas = lazy(() => import('./pages/Historico/HistoricoVendas'));
-const HistoricoNotas = lazy(() => import('./pages/HistoricoNotas/HistoricoNotas'));
 const Auditoria = lazy(() => import('./pages/Auditoria/Auditoria'));
 const ContasPagar = lazy(() => import('./pages/Financeiro/ContasPagar'));
 const Fiado = lazy(() => import('./pages/Fiado/Fiado'));
@@ -155,13 +154,11 @@ export default function App() {
 
                 <Route path="/estoque" element={<AdminRoute><ProdutoList /></AdminRoute>} />
 
-                {/* 🔥 A TELA DE GESTÃO DA SEFAZ AQUI 🔥 */}
+                {/* TELA DE GESTÃO DA SEFAZ */}
                 <Route path="/estoque/sefaz" element={<AdminRoute><GestaoNotasSefaz /></AdminRoute>} />
 
-                {/* 🔥 CORREÇÃO: TELA DE ENTRADA E IMPORTAÇÃO XML 🔥 */}
+                {/* CENTRAL UNIFICADA DE ENTRADAS E HISTÓRICO XML */}
                 <Route path="/estoque/entrada" element={<AdminRoute><HistoricoEntradas /></AdminRoute>} />
-
-                <Route path="/historico-notas" element={<AdminRoute><HistoricoNotas /></AdminRoute>} />
 
                 <Route path="/inventario" element={<AdminRoute><Inventario /></AdminRoute>} />
                 <Route path="/fornecedores" element={<AdminRoute><FornecedorList /></AdminRoute>} />

@@ -5,7 +5,7 @@ import {
   Settings, LogOut, ChevronLeft, X,
   ShieldCheck, Truck, History, Clock,
   Wallet, TrendingDown, Store, ClipboardList, ShoppingBag,
-  BarChart3, HeartHandshake, TrendingUp, FileText, Inbox, Barcode
+  BarChart3, HeartHandshake, TrendingUp, Inbox, Barcode
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -35,7 +35,7 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
   }, []);
 
   // =========================================================================
-  // MENU REESTRUTURADO
+  // MENU REESTRUTURADO E LIMPO
   // =========================================================================
   const menuGroups = [
       {
@@ -53,8 +53,10 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
           { path: '/produtos', icon: <Package size={20} />, label: 'Produtos', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/auditoria-preco', icon: <Barcode size={20} />, label: 'Auditoria de Gôndola', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/estoque/sefaz', icon: <Inbox size={20} />, label: 'Caixa de Entrada SEFAZ', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
-          { path: '/estoque/entrada', icon: <Truck size={20} />, label: 'Importar XML', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
-          { path: '/historico-notas', icon: <FileText size={20} />, label: 'Histórico XML', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
+
+          // 🔥 Rota Unificada (Upload XML e Histórico)
+          { path: '/estoque/entrada', icon: <Truck size={20} />, label: 'Central de Recebimento', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
+
           { path: '/inventario', icon: <ClipboardList size={20} />, label: 'Inventário (IA)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/fornecedores', icon: <Users size={20} />, label: 'Fornecedores', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
         ]
@@ -140,7 +142,6 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
                   >
                     <span className="nav-icon">
                        {item.icon}
-                       {/* Ponto Vermelho de Alerta na SEFAZ */}
                        {item.path === '/estoque/sefaz' && !isCollapsed && (
                            <span style={{ position:'absolute', top:'8px', left:'26px', background:'#ef4444', width:'8px', height:'8px', borderRadius:'50%' }}></span>
                        )}
