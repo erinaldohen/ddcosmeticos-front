@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import {
     FileText, Eye, UploadCloud, X, Package,
     ChevronLeft, ChevronRight, Sparkles, Loader2, User, Calendar,
-    Search, RefreshCw, DownloadCloud, Hash
+    Search, RefreshCw, DownloadCloud, Hash, Edit3, Save, Info
 } from 'lucide-react';
 import './HistoricoEntradas.css';
 
@@ -25,63 +25,148 @@ const HistoricoEntradas = () => {
   const [loadingItens, setLoadingItens] = useState(false);
   const [baixandoDanfe, setBaixandoDanfe] = useState(false);
 
+  // 🔥 ESTADOS DA EDIÇÃO RÁPIDA, PRECIFICAÇÃO E DICIONÁRIOS
+  const [quickEditItem, setQuickEditItem] = useState(null);
+  const [quickEditForm, setQuickEditForm] = useState({
+      descricao: '', marca: '', categoria: '', subcategoria: '', precoCusto: '0.00', margem: '50.00', precoVenda: '0.00'
+  });
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+  const [dicionarios, setDicionarios] = useState({ marcas: [], categorias: [], subcategorias: [], relacaoSubCat: {} });
+
   useEffect(() => {
-    if (notaSelecionada) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'auto';
-    }
+    carregarHistorico();
+    carregarDicionarios();
+  }, [pagina]);
+
+  useEffect(() => {
+    if (notaSelecionada) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = 'auto';
     return () => { document.body.style.overflow = 'auto'; };
   }, [notaSelecionada]);
 
-  const getDataEmissaoReal = () => {
-      if (itensNota.length > 0 && itensNota[0].produtoDescricao && itensNota[0].produtoDescricao.includes('|')) {
-          const partes = itensNota[0].produtoDescricao.split('|');
-          if (partes.length >= 4) return partes[3];
-      }
-      return notaSelecionada?.dataEmissao || notaSelecionada?.dataEntrada;
+  // =========================================================================
+  // 🔥 LÓGICA DE EXTRAÇÃO E INFERÊNCIA INTELIGENTE
+  // =========================================================================
+  const carregarDicionarios = async () => {
+      try {
+          const res = await api.get('/produtos/quick-edit/dicionarios');
+          setDicionarios({
+              marcas: res.data.marcas || [],
+              categorias: res.data.categorias || [],
+              subcategorias: res.data.subcategorias || [],
+              relacaoSubCat: res.data.relacaoSubCat || {}
+          });
+      } catch (e) { console.error("Erro ao carregar as listas do estoque", e); }
   };
 
-  useEffect(() => { carregarHistorico(); }, [pagina]);
+  const extrairDadosDaDescricao = (nomeXML) => {
+      if (!nomeXML) return { marca: '', categoria: '', subcategoria: '' };
+      const descUpper = nomeXML.toUpperCase();
+      const descTokens = descUpper.split(/\s+/);
 
+      const findSmarterMatch = (lista) => {
+          if (!lista || !Array.isArray(lista)) return '';
+          const sortedList = [...lista].filter(Boolean).sort((a, b) => b.length - a.length);
+
+          for (const item of sortedList) {
+              if (new RegExp(`\\b${item.toUpperCase()}\\b`).test(descUpper)) return item;
+          }
+          for (const item of sortedList) {
+              const itemTokens = item.toUpperCase().split(/\s+/).filter(t => t.length > 3);
+              for (const token of itemTokens) {
+                  if (descTokens.includes(token)) return item;
+              }
+          }
+          return '';
+      };
+
+      const subcatEncontrada = findSmarterMatch(dicionarios.subcategorias);
+      let catEncontrada = '';
+      if (subcatEncontrada && dicionarios.relacaoSubCat) {
+          catEncontrada = dicionarios.relacaoSubCat[subcatEncontrada.toUpperCase()] || '';
+      }
+      if (!catEncontrada) catEncontrada = findSmarterMatch(dicionarios.categorias);
+
+      return {
+          marca: findSmarterMatch(dicionarios.marcas),
+          categoria: catEncontrada,
+          subcategoria: subcatEncontrada
+      };
+  };
+
+  const abrirEdicaoRapida = (eanReal, nomeXML, custoBase) => {
+      const custo = parseFloat(custoBase) || 0.00;
+      const margemInicial = 50.00; // Markup padrão de 50%
+      const precoSugerido = custo * (1 + (margemInicial / 100));
+
+      const inferido = extrairDadosDaDescricao(nomeXML);
+
+      setQuickEditItem(eanReal);
+      setQuickEditForm({
+          descricao: nomeXML || '',
+          marca: inferido.marca,
+          categoria: inferido.categoria,
+          subcategoria: inferido.subcategoria,
+          precoCusto: custo.toFixed(2),
+          margem: margemInicial.toFixed(2),
+          precoVenda: precoSugerido.toFixed(2)
+      });
+  };
+
+  // =========================================================================
+  // 🔥 MATEMÁTICA DE PRECIFICAÇÃO DINÂMICA
+  // =========================================================================
+  const handlePrecificacao = (campo, valor) => {
+      const formAtual = { ...quickEditForm, [campo]: valor };
+
+      const custo = parseFloat(formAtual.precoCusto) || 0;
+      const margem = parseFloat(formAtual.margem) || 0;
+      const venda = parseFloat(formAtual.precoVenda) || 0;
+
+      if (campo === 'precoCusto' || campo === 'margem') {
+          formAtual.precoVenda = (custo * (1 + (margem / 100))).toFixed(2);
+      } else if (campo === 'precoVenda') {
+          formAtual.margem = custo > 0 ? (((venda - custo) / custo) * 100).toFixed(2) : "0.00";
+      }
+
+      setQuickEditForm(formAtual);
+  };
+
+  const salvarEdicaoRapida = async () => {
+      setSalvandoEdicao(true);
+      try {
+          await api.put(`/produtos/quick-edit/ean/${quickEditItem}`, quickEditForm);
+          toast.success("Produto completado e precificado com sucesso!");
+          setQuickEditItem(null);
+          carregarDicionarios();
+      } catch (error) { toast.error("Erro ao salvar o cadastro."); }
+      finally { setSalvandoEdicao(false); }
+  };
+
+  // =========================================================================
+  // MÉTODOS GERAIS DA TELA
+  // =========================================================================
   const carregarHistorico = async () => {
     setLoading(true);
     try {
       const res = await api.get(`estoque/historico-entradas?page=${pagina}&size=10`);
       setEntradas(res.data.content || []);
       setTotalPaginas(res.data.totalPages || 0);
-    } catch (error) {
-      toast.error("Erro ao carregar histórico.");
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { toast.error("Erro ao carregar histórico."); }
+    finally { setLoading(false); }
   };
 
   const processarArquivo = async (file) => {
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.xml')) {
-      toast.error("Formato inválido. Selecione um ficheiro XML.");
-      return;
-    }
-
+    if (!file.name.toLowerCase().endsWith('.xml')) { toast.error("Formato inválido. Selecione um XML."); return; }
     setIsUploading(true);
-    const formData = new FormData();
-    formData.append("arquivo", file);
-
+    const formData = new FormData(); formData.append("arquivo", file);
     try {
       await api.post('importacao-xml/receber-nota', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
-      toast.success("Importação concluída com sucesso!", { icon: "✨" });
-      setPagina(0);
-      carregarHistorico();
-    } catch (error) {
-        let msg = "Erro no processamento da Nota Fiscal.";
-        if (error.response?.data?.mensagem) msg = error.response.data.mensagem;
-        else if (typeof error.response?.data === 'string') msg = error.response.data;
-        toast.error(msg);
-    } finally {
-        setIsUploading(false);
-        if(fileInputRef.current) fileInputRef.current.value = null;
-    }
+      toast.success("Importação concluída!", { icon: "✨" });
+      setPagina(0); carregarHistorico();
+    } catch (error) { toast.error("Erro no processamento da Nota Fiscal."); }
+    finally { setIsUploading(false); if(fileInputRef.current) fileInputRef.current.value = null; }
   };
 
   const abrirDetalhes = async (nota) => {
@@ -90,81 +175,71 @@ const HistoricoEntradas = () => {
     try {
       const res = await api.get(`estoque/historico-entradas/${encodeURIComponent(nota.numeroNota)}/itens`);
       setItensNota(res.data || []);
-    } catch (error) {
-      setItensNota([]);
-      toast.error("Não foi possível carregar os itens desta nota.");
-    } finally {
-      setLoadingItens(false);
-    }
+    } catch (error) { setItensNota([]); toast.error("Falha ao carregar itens da nota."); }
+    finally { setLoadingItens(false); }
   };
 
-  const fecharModal = () => {
-    setNotaSelecionada(null);
-    setItensNota([]);
-  };
+  const fecharModal = () => { setNotaSelecionada(null); setItensNota([]); };
 
   const baixarDanfeOficial = async () => {
       if (!notaSelecionada || !notaSelecionada.numeroNota) return;
       setBaixandoDanfe(true);
       const toastId = toast.loading("Buscando DANFE no Servidor...");
-
       try {
           const res = await api.get(`estoque/historico-entradas/${notaSelecionada.numeroNota}/danfe-oficial`, { responseType: 'blob' });
           const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }));
-          const link = document.createElement('a');
-          link.href = url;
-          link.setAttribute('download', `DANFE_Entrada_${notaSelecionada.numeroNota}.pdf`);
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
+          const link = document.createElement('a'); link.href = url; link.setAttribute('download', `DANFE_${notaSelecionada.numeroNota}.pdf`);
+          document.body.appendChild(link); link.click(); link.remove();
           toast.update(toastId, { render: "DANFE baixada com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
-      } catch (error) {
-          toast.update(toastId, { render: "O Servidor não gerou a DANFE em PDF para esta nota.", type: "error", isLoading: false, autoClose: 4000 });
-      } finally {
-          setBaixandoDanfe(false);
-      }
+      } catch (error) { toast.update(toastId, { render: "O Servidor não gerou a DANFE.", type: "error", isLoading: false, autoClose: 4000 }); }
+      finally { setBaixandoDanfe(false); }
   };
 
   const entradasFiltradas = entradas.filter(n => {
       if (!busca) return true;
       const termo = busca.toLowerCase();
-      const nome = (n.fornecedorNome || '').toLowerCase();
-      const numero = (n.numeroNota || '').toLowerCase();
-      const chave = (n.chaveAcesso || '').toLowerCase();
-      const cnpj = (n.fornecedorCnpj || '').toLowerCase();
-      return nome.includes(termo) || numero.includes(termo) || chave.includes(termo) || cnpj.includes(termo);
+      return (n.fornecedorNome || '').toLowerCase().includes(termo) || (n.numeroNota || '').toLowerCase().includes(termo) || (n.chaveAcesso || '').toLowerCase().includes(termo) || (n.fornecedorCnpj || '').toLowerCase().includes(termo);
   });
 
   const formatarMoeda = (v) => v ? Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
   const formatarCnpj = (cnpj) => cnpj?.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5") || '---';
-
   const formatarData = (d) => {
     if (!d) return "---";
     if (Array.isArray(d)) return `${String(d[2]).padStart(2,'0')}/${String(d[1]).padStart(2,'0')}/${d[0]} ${String(d[3]).padStart(2,'0')}:${String(d[4]||0).padStart(2,'0')}`;
-    try {
-      const dataObj = new Date(d);
-      return dataObj.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-    } catch(e) { return "---"; }
+    try { return new Date(d).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); } catch(e) { return "---"; }
+  };
+  const getDataEmissaoReal = () => {
+      if (itensNota.length > 0 && itensNota[0].produtoDescricao && itensNota[0].produtoDescricao.includes('|')) {
+          const partes = itensNota[0].produtoDescricao.split('|');
+          if (partes.length >= 4) return partes[3];
+      }
+      return notaSelecionada?.dataEmissao || notaSelecionada?.dataEntrada;
   };
 
-  // Função auxiliar para renderizar a etiqueta da IA de forma segura
-  const renderIABadge = (statusIA, vinculoIA) => {
+  const renderIABadge = (statusIA, vinculoIA, eanReal, nomeXML, custoBase) => {
     if (!statusIA) return <span className="ai-badge badge-ok">✅ Estoque Atualizado</span>;
-
     if (statusIA.includes('[IA_DUPLICADA')) {
         return (
             <div className="tooltip-ia">
                 <span className="ai-badge badge-warn">🤖 IA Detectou Semelhança:</span>
                 <span className="text-xs font-semibold mobile-truncate">{vinculoIA}</span>
-                <div className="tooltip-text">Possível duplicação. Analise se é o mesmo produto: {vinculoIA}</div>
             </div>
         );
     }
-
     if (statusIA.includes('[NOVO]')) {
-        return <span className="ai-badge badge-new">✨ Cadastro Imediato</span>;
-    }
-
+            return (
+                <div style={{display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end'}}>
+                    <span className="ai-badge badge-new">✨ Cadastro Imediato</span>
+                    <button
+                        className="btn-quick-edit"
+                        onClick={() => abrirEdicaoRapida(eanReal, nomeXML, custoBase)}
+                        title="Completar Cadastro & Precificar"
+                    >
+                        <Edit3 size={14} />
+                    </button>
+                </div>
+            );
+        }
     return <span className="ai-badge badge-ok">✅ Estoque Atualizado</span>;
   };
 
@@ -179,18 +254,11 @@ const HistoricoEntradas = () => {
 
       <section className="hub-upload-section">
          {!isUploading ? (
-             <div
-                className={`dropzone-area ${isDragging ? 'drag-active' : ''}`}
-                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={(e) => { e.preventDefault(); setIsDragging(false); processarArquivo(e.dataTransfer.files[0]); }}
-                onClick={() => fileInputRef.current?.click()}
-             >
+             <div className={`dropzone-area ${isDragging ? 'drag-active' : ''}`} onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }} onDragLeave={() => setIsDragging(false)} onDrop={(e) => { e.preventDefault(); setIsDragging(false); processarArquivo(e.dataTransfer.files[0]); }} onClick={() => fileInputRef.current?.click()} >
                 <input type="file" accept=".xml" ref={fileInputRef} style={{ display: 'none' }} onChange={(e) => processarArquivo(e.target.files[0])} />
                 <div className="dropzone-content">
                     <div className="icon-circle"><UploadCloud size={40} /></div>
                     <h2>Arraste o XML da Nota Fiscal</h2>
-                    <p>O sistema identificará produtos e fornecedores automaticamente.</p>
                 </div>
              </div>
          ) : (
@@ -207,89 +275,143 @@ const HistoricoEntradas = () => {
             <div className="history-tools">
                 <div className="search-bar-container">
                     <Search size={18} color="var(--text-muted)" />
-                    <input
-                        type="text"
-                        placeholder="Pesquisar Fornecedor, NF ou Chave..."
-                        value={busca}
-                        onChange={(e) => setBusca(e.target.value)}
-                    />
+                    <input type="text" placeholder="Pesquisar NF, Fornecedor..." value={busca} onChange={(e) => setBusca(e.target.value)} />
                     {busca && <X size={16} color="var(--text-muted)" style={{cursor: 'pointer'}} onClick={() => setBusca('')} />}
                 </div>
-                <button className="btn-refresh" onClick={() => { setPagina(0); carregarHistorico(); }} title="Atualizar Lista">
-                    <RefreshCw size={20} className={loading ? 'spin' : ''} />
-                </button>
+                <button className="btn-refresh" onClick={() => { setPagina(0); carregarHistorico(); }}><RefreshCw size={20} className={loading ? 'spin' : ''} /></button>
             </div>
         </div>
 
         <div className="table-wrapper custom-scrollbar">
           <table className="modern-table">
             <thead>
-              <tr>
-                <th>Entrada</th>
-                <th>Número NF</th>
-                <th>Fornecedor</th>
-                <th className="text-center">Volumes</th>
-                <th className="text-right">Valor Total</th>
-                <th className="text-center">Ações</th>
-              </tr>
+              <tr><th>Entrada</th><th>Número NF</th><th>Fornecedor</th><th className="text-center">Volumes</th><th className="text-right">Valor Total</th><th className="text-center">Ações</th></tr>
             </thead>
             <tbody>
               {entradasFiltradas.length === 0 && !loading ? (
-                  <tr>
-                      <td colSpan="6" style={{textAlign: 'center', padding: '40px', color: 'var(--text-muted)', fontWeight: 600}}>
-                          Nenhuma nota encontrada.
-                      </td>
-                  </tr>
+                  <tr><td colSpan="6" style={{textAlign: 'center', padding: '40px'}}>Nenhuma nota encontrada.</td></tr>
               ) : (
                   entradasFiltradas.map((ent, idx) => (
                     <tr key={idx} className="modern-table-row">
                       <td>{formatarData(ent.dataEntrada)}</td>
                       <td><span className="nfe-badge">{ent.numeroNota}</span></td>
                       <td>
-                        <div className="supplier-info">
-                            <strong>{ent.fornecedorNome}</strong>
-                            <span>{formatarCnpj(ent.fornecedorCnpj)}</span>
-                        </div>
+                        <div className="supplier-info"><strong>{ent.fornecedorNome}</strong><span>{formatarCnpj(ent.fornecedorCnpj)}</span></div>
                       </td>
                       <td className="text-center font-bold">{ent.qtdItens} un</td>
                       <td className="text-right font-bold text-primary">{formatarMoeda(ent.valorTotal)}</td>
-                      <td className="text-center">
-                        <button className="btn-view-details" onClick={() => abrirDetalhes(ent)}><Eye size={18} /></button>
-                      </td>
+                      <td className="text-center"><button className="btn-view-details" onClick={() => abrirDetalhes(ent)}><Eye size={18} /></button></td>
                     </tr>
                   ))
               )}
             </tbody>
           </table>
         </div>
-
-        {totalPaginas > 1 && !busca && (
-            <div className="hub-pagination">
-                <button disabled={pagina === 0} onClick={() => setPagina(p => p - 1)}><ChevronLeft size={18}/> Anterior</button>
-                <span>Página {pagina + 1} de {totalPaginas}</span>
-                <button disabled={pagina >= totalPaginas - 1} onClick={() => setPagina(p => p + 1)}>Próxima <ChevronRight size={18}/></button>
-            </div>
-        )}
       </section>
 
+      {/* PORTAL DO MODAL PRINCIPAL */}
       {notaSelecionada && createPortal(
         <div className="modal-overlay">
           <div className="modal-content-resolution slide-up">
+
+            {/* 🔥 MINI MODAL DE EDIÇÃO AVANÇADA (PREÇOS + DATALIST) 🔥 */}
+            {quickEditItem && (
+               <div className="quick-edit-overlay slide-up">
+                   <div className="quick-edit-card shadow-lg" style={{maxWidth: '650px'}}>
+                       <div className="quick-edit-header">
+                           <h3>Completar Cadastro & Precificar</h3>
+                           <button onClick={() => setQuickEditItem(null)}><X size={18}/></button>
+                       </div>
+
+                       <div className="quick-edit-body">
+                           <div className="form-group">
+                               <label>Descrição do Produto</label>
+                               <input type="text" value={quickEditForm.descricao} onChange={e => setQuickEditForm({...quickEditForm, descricao: e.target.value})} />
+                           </div>
+
+                           <div className="form-row-2" style={{display: 'flex', gap: '12px', flexWrap: 'wrap'}}>
+                               <div className="form-group" style={{flex: 1, minWidth: '150px'}}>
+                                   <label style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
+                                       Marca <Info size={12} color="#94a3b8" title="Dê duplo clique na caixa para limpar e ver a lista completa!"/>
+                                   </label>
+                                   <input
+                                       list="lista-marcas" type="text" placeholder="Selecione ou digite..."
+                                       value={quickEditForm.marca}
+                                       onChange={e => setQuickEditForm({...quickEditForm, marca: e.target.value})}
+                                       onDoubleClick={() => setQuickEditForm({...quickEditForm, marca: ''})}
+                                   />
+                                   <datalist id="lista-marcas">
+                                       {dicionarios.marcas.map((m, i) => m && <option key={`m-${i}`} value={m} />)}
+                                   </datalist>
+                               </div>
+                               <div className="form-group" style={{flex: 1, minWidth: '150px'}}>
+                                   <label style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
+                                       Categoria <Info size={12} color="#94a3b8" title="Dê duplo clique para ver a lista completa!"/>
+                                   </label>
+                                   <input
+                                       list="lista-categorias" type="text" placeholder="Selecione ou digite..."
+                                       value={quickEditForm.categoria}
+                                       onChange={e => setQuickEditForm({...quickEditForm, categoria: e.target.value})}
+                                       onDoubleClick={() => setQuickEditForm({...quickEditForm, categoria: ''})}
+                                   />
+                                   <datalist id="lista-categorias">
+                                       {dicionarios.categorias.map((c, i) => c && <option key={`c-${i}`} value={c} />)}
+                                   </datalist>
+                               </div>
+                               <div className="form-group" style={{flex: 1, minWidth: '150px'}}>
+                                   <label style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
+                                       Subcategoria <Info size={12} color="#94a3b8" title="Dê duplo clique para ver a lista completa!"/>
+                                   </label>
+                                   <input
+                                       list="lista-subcategorias" type="text" placeholder="Selecione ou digite..."
+                                       value={quickEditForm.subcategoria}
+                                       onChange={e => setQuickEditForm({...quickEditForm, subcategoria: e.target.value})}
+                                       onDoubleClick={() => setQuickEditForm({...quickEditForm, subcategoria: ''})}
+                                   />
+                                   <datalist id="lista-subcategorias">
+                                       {dicionarios.subcategorias.map((s, i) => s && <option key={`s-${i}`} value={s} />)}
+                                   </datalist>
+                               </div>
+                           </div>
+
+                           <div className="form-row-3" style={{display: 'flex', gap: '12px', background: '#f1f5f9', padding: '16px', borderRadius: '8px', marginTop: '12px', flexWrap: 'wrap', border: '1px solid #e2e8f0'}}>
+                                 <div className="form-group" style={{flex: 1, minWidth: '120px'}}>
+                                     <label>Custo Base (R$)</label>
+                                     <input type="number" step="0.01" value={quickEditForm.precoCusto} onChange={e => handlePrecificacao('precoCusto', e.target.value)} />
+                                 </div>
+                                 <div className="form-group" style={{flex: 1, minWidth: '120px'}}>
+                                     <label>Margem / Markup (%)</label>
+                                     <input type="number" step="0.01" value={quickEditForm.margem} onChange={e => handlePrecificacao('margem', e.target.value)} style={{color: '#10b981', fontWeight: 'bold'}} />
+                                 </div>
+                                 <div className="form-group" style={{flex: 1, minWidth: '120px'}}>
+                                     <label>Preço Venda (R$)</label>
+                                     <input type="number" step="0.01" value={quickEditForm.precoVenda} onChange={e => handlePrecificacao('precoVenda', e.target.value)} style={{color: '#3b82f6', fontWeight: 'bold'}} />
+                                 </div>
+                             </div>
+
+                       </div>
+
+                       <div className="quick-edit-footer">
+                           <button className="btn-cancelar" onClick={() => setQuickEditItem(null)}>Cancelar</button>
+                           <button className="btn-salvar" onClick={salvarEdicaoRapida} disabled={salvandoEdicao}>
+                               {salvandoEdicao ? <Loader2 size={16} className="spin"/> : <Save size={16}/>}
+                               Salvar & Precificar
+                           </button>
+                       </div>
+                   </div>
+               </div>
+            )}
+
             <div className="modal-header-resolution">
               <div className="header-title">
                 <FileText size={26} className="text-primary" />
                 <div>
                   <h2>Auditoria de Nota: {notaSelecionada.numeroNota}</h2>
-                  <span className="text-muted text-xs" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Hash size={12}/> {notaSelecionada.chaveAcesso || `ID Lote Base: ${notaSelecionada.id}`}
-                  </span>
+                  <span className="text-muted text-xs"><Hash size={12}/> {notaSelecionada.chaveAcesso}</span>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <button onClick={baixarDanfeOficial} disabled={baixandoDanfe || !notaSelecionada.numeroNota} className="btn-danfe">
-                      {baixandoDanfe ? <RefreshCw size={18} className="spin" /> : <DownloadCloud size={18} />}
-                      <span className="hide-mobile">Baixar DANFE</span>
-                  </button>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                  <button onClick={baixarDanfeOficial} disabled={baixandoDanfe} className="btn-danfe"><DownloadCloud size={18} /><span className="hide-mobile">Baixar DANFE</span></button>
                   <button onClick={fecharModal} className="btn-close-modal"><X size={24} /></button>
               </div>
             </div>
@@ -297,75 +419,42 @@ const HistoricoEntradas = () => {
             <div className="modal-body-resolution custom-scrollbar">
               <div className="audit-info-grid">
                 <div className="info-card-mini">
-                  <label><Package size={12}/> Fornecedor</label>
-                  <strong>{notaSelecionada.fornecedorNome}</strong>
-                  <span>{formatarCnpj(notaSelecionada.fornecedorCnpj)}</span>
+                  <label><Package size={12}/> Fornecedor</label><strong>{notaSelecionada.fornecedorNome}</strong><span>{formatarCnpj(notaSelecionada.fornecedorCnpj)}</span>
                 </div>
                 <div className="info-card-mini">
-                  <label><Calendar size={12}/> Cronologia</label>
-                  <small><b>Emissão:</b> {formatarData(getDataEmissaoReal())}</small>
-                  <small><b>Entrada:</b> {formatarData(notaSelecionada.dataEntrada)}</small>
+                  <label><Calendar size={12}/> Cronologia</label><small><b>Emissão:</b> {formatarData(getDataEmissaoReal())}</small><small><b>Entrada:</b> {formatarData(notaSelecionada.dataEntrada)}</small>
                 </div>
                 <div className="info-card-mini">
-                  <label><User size={12}/> Responsável</label>
-                  <strong>{notaSelecionada.usuarioNome || "Administrador"}</strong>
-                  <span>Status: Importação Concluída</span>
+                  <label><User size={12}/> Responsável</label><strong>{notaSelecionada.usuarioNome || "Administrador"}</strong><span>Status: Importação Concluída</span>
                 </div>
                 <div className="info-card-mini highlight-blue">
-                  <label>Resumo Financeiro</label>
-                  <strong className="total-highlight">{formatarMoeda(notaSelecionada.valorTotal)}</strong>
-                  <span>{notaSelecionada.qtdItens} volumes integrados</span>
+                  <label>Resumo Financeiro</label><strong className="total-highlight">{formatarMoeda(notaSelecionada.valorTotal)}</strong><span>{notaSelecionada.qtdItens} volumes integrados</span>
                 </div>
               </div>
 
               <div className="table-wrapper border-table">
                 <table className="modern-table">
-                  <thead>
-                    <tr>
-                      <th width="35%">Produto Identificado (XML)</th>
-                      <th width="30%">Ação no Estoque</th>
-                      <th className="text-center">Qtd</th>
-                      <th className="text-right">Custo Un.</th>
-                      <th className="text-right">Subtotal</th>
-                    </tr>
-                  </thead>
+                  <thead><tr><th width="35%">Produto (XML)</th><th width="30%">Ação Estoque</th><th className="text-center">Qtd</th><th className="text-right">Custo Un.</th><th className="text-right">Subtotal</th></tr></thead>
                   <tbody>
-                    {loadingItens ? (
-                       <tr><td colSpan="5" className="text-center py-10"><Loader2 className="spin text-primary" style={{margin: '0 auto'}}/></td></tr>
-                    ) : (
+                    {loadingItens ? (<tr><td colSpan="5" className="text-center py-10"><Loader2 className="spin text-primary" style={{margin: '0 auto'}}/></td></tr>) : (
                       itensNota.map((item, index) => {
-                          const descCompleta = item.produtoDescricao || item.descricaoProduto || item.descricao || "";
-                          const partes = descCompleta.split('|').concat(["", "", "", "", ""]);
-
-                          const nomeXML = partes[0] || "Produto na Nota";
-                          const statusIA = partes[1] || "";
-                          const vinculoIA = partes[2] || "";
+                          const partes = (item.produtoDescricao || "").split('|').concat(["", "", "", "", ""]);
                           const eanReal = partes[4] || "S/ GTIN";
-
-                          const qtd = item.quantidadeMovimentada ?? item.quantidade ?? 0;
-                          const custoUn = item.custoMovimentado ?? item.custoUnitario ?? item.valorUnitario ?? item.precoCusto ?? 0;
-                          const subtotal = Number(qtd) * Number(custoUn);
-
                           const isGerado = eanReal.startsWith('20') && eanReal.length === 13;
                           const textoEan = isGerado ? `EAN Interno: ${eanReal}` : `EAN: ${eanReal}`;
-                          const tooltipEan = isGerado ? "Código gerado automaticamente pelo sistema (Uso Interno)" : "Código Oficial do XML";
 
                           return (
                               <tr key={item.id || index}>
                                   <td>
                                       <div className="flex-col">
-                                          <span className="font-bold text-dark">{nomeXML}</span>
-                                          <span className="text-xs text-muted" title={tooltipEan}>
-                                              {textoEan}
-                                          </span>
+                                          <span className="font-bold text-dark">{partes[0] || "Produto"}</span>
+                                          <span className="text-xs text-muted">{textoEan}</span>
                                       </div>
                                   </td>
-                                  <td>
-                                      {renderIABadge(statusIA, vinculoIA)}
-                                  </td>
-                                  <td className="text-center font-bold text-success">+ {qtd} un</td>
-                                  <td className="text-right font-numeric">{formatarMoeda(custoUn)}</td>
-                                  <td className="text-right font-numeric font-bold">{formatarMoeda(subtotal)}</td>
+                                  <td>{renderIABadge(partes[1], partes[2], eanReal, partes[0], item.custoMovimentado ?? 0)}</td>
+                                  <td className="text-center font-bold text-success">+ {item.quantidadeMovimentada ?? 0} un</td>
+                                  <td className="text-right font-numeric">{formatarMoeda(item.custoMovimentado ?? 0)}</td>
+                                  <td className="text-right font-numeric font-bold">{formatarMoeda((item.quantidadeMovimentada??0) * (item.custoMovimentado??0))}</td>
                               </tr>
                           );
                       })

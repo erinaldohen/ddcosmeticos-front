@@ -101,6 +101,11 @@
 .badge-new { background: #e0e7ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
 .badge-warn { background: #ffedd5; color: #b45309; border: 1px solid #fed7aa; cursor: help;}
 
+/* 🔥 ALINHAMENTO DO CADASTRO IMEDIATO (Força para a esquerda no Desktop) */
+.modern-table td:has(.badge-new) > div[style] {
+    justify-content: flex-start !important;
+}
+
 .tooltip-ia { position: relative; display: inline-block; width: fit-content; }
 .tooltip-ia .tooltip-text {
     visibility: hidden; width: 240px; background-color: #0f172a; color: #fff;
@@ -203,15 +208,73 @@
 .btn-danfe:disabled { opacity: 0.6; cursor: not-allowed; border-color: var(--border); color: var(--text-muted); }
 
 /* ======================================================================
+   🔥 EDIÇÃO RÁPIDA E PRECIFICAÇÃO (QUICK EDIT)
+   ====================================================================== */
+.btn-quick-edit {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text-body);
+    width: 32px; height: 32px; border-radius: 6px; display: inline-flex; justify-content: center; align-items: center;
+    cursor: pointer; transition: 0.2s; flex-shrink: 0;
+}
+.btn-quick-edit:hover { background: var(--primary); color: white; border-color: var(--primary); transform: scale(1.05);}
+
+.quick-edit-overlay {
+    position: absolute; inset: 0; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(2px);
+    display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px;
+}
+.quick-edit-card {
+    background: var(--surface); width: 100%; max-width: 650px; border-radius: 16px;
+    border: 1px solid var(--border); overflow: hidden; display: flex; flex-direction: column;
+}
+.quick-edit-header {
+    background: #f8fafc; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);
+}
+.quick-edit-header h3 { margin: 0; font-size: 1.1rem; font-weight: 800; color: var(--text-dark); }
+.quick-edit-header button { background: none; border: none; cursor: pointer; color: var(--text-muted); display: flex;}
+.quick-edit-header button:hover { color: #ef4444; }
+
+.quick-edit-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+
+.form-group { flex: 1; min-width: 150px; }
+.form-group label { font-size: 0.8rem; font-weight: 700; color: var(--text-body); display: flex; align-items: center; gap: 4px; }
+.form-group input {
+    padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border);
+    font-size: 0.95rem; font-family: inherit; transition: 0.2s; outline: none; background: #fff;
+    width: 100%;
+}
+.form-group input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+
+/* Layout Flexível para as linhas do formulário */
+.form-row-2 { display: flex; gap: 12px; width: 100%; flex-wrap: wrap; }
+.form-row-3 { display: flex; gap: 12px; width: 100%; flex-wrap: wrap; background: #f1f5f9; padding: 16px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 12px;}
+
+/* Estilização específica para os inputs de preço do Quick Edit */
+.form-row-3 .form-group { min-width: 120px; }
+.form-row-3 .form-group input { background: #fff; border: 1px solid #cbd5e1;}
+.form-row-3 .form-group input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+
+.quick-edit-footer {
+    padding: 16px 20px; background: #f8fafc; border-top: 1px solid var(--border);
+    display: flex; justify-content: flex-end; gap: 12px;
+}
+.btn-cancelar {
+    background: white; border: 1px solid var(--border); padding: 10px 16px; border-radius: 8px;
+    font-weight: 600; color: var(--text-body); cursor: pointer; transition: 0.2s;
+}
+.btn-cancelar:hover { background: #f1f5f9; color: var(--text-dark); }
+.btn-salvar {
+    background: var(--primary); border: none; padding: 10px 20px; border-radius: 8px; display: flex; align-items: center; gap: 8px;
+    font-weight: 700; color: white; cursor: pointer; transition: 0.2s;
+}
+.btn-salvar:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px);}
+.btn-salvar:disabled { opacity: 0.7; cursor: not-allowed; }
+
+/* ======================================================================
    📱 RESPONSIVIDADE MOBILE SUPREMA (UI/UX FOCADA)
    ====================================================================== */
 @media (max-width: 1024px) {
     .audit-info-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
-/* ======================================================================
-   📱 RESPONSIVIDADE MOBILE SUPREMA (Correções de Overflow Definitivas)
-   ====================================================================== */
 @media (max-width: 768px) {
     .import-hub-container { padding: 12px; width: 100%; max-width: 100vw; overflow-x: hidden; box-sizing: border-box; }
 
@@ -250,45 +313,33 @@
     .modern-table tr {
         margin-bottom: 16px; background: var(--surface); border: 1px solid var(--border);
         border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow-sm);
-        overflow: hidden; /* Corta qualquer item que tente escapar do card */
+        overflow: hidden;
     }
 
     .modern-table td {
         text-align: right !important; padding: 12px 0; border-bottom: 1px solid #f1f5f9;
-        display: flex; justify-content: space-between; align-items: center; font-size: 0.95rem;
-        gap: 8px; /* Reduzido para evitar somatório > 100% */
+        display: flex; justify-content: space-between; align-items: center; font-size: 0.95rem; gap: 8px;
     }
     .modern-table td:last-child { border-bottom: none; padding-bottom: 0; margin-top: 4px;}
     .modern-table td:first-child { padding-top: 0;}
 
-    /* Labels das Colunas */
     .modern-table td::before {
         font-weight: 800; color: var(--text-muted); font-size: 0.75rem;
-        text-transform: uppercase; letter-spacing: 0.5px;
-        flex: 0 0 auto; /* Não cresce, não encolhe */
-        max-width: 40%; text-align: left;
+        text-transform: uppercase; letter-spacing: 0.5px; flex: 0 0 auto; max-width: 40%; text-align: left;
     }
 
-    /* Labels Tabela Principal */
     .hub-history-section .modern-table td:nth-child(1)::before { content: "Data"; }
     .hub-history-section .modern-table td:nth-child(2)::before { content: "NF"; }
     .hub-history-section .modern-table td:nth-child(3)::before { content: "Fornecedor"; }
     .hub-history-section .modern-table td:nth-child(4)::before { content: "Volumes"; }
     .hub-history-section .modern-table td:nth-child(5)::before { content: "Total"; }
 
-    /* A Mágica do Flexbox para textos longos (min-width: 0) */
     .supplier-info, .flex-col {
-        flex: 1; /* Ocupa todo o espaço restante */
-        min-width: 0; /* Permite que o texto seja esmagado e quebre a linha */
-        align-items: flex-end; text-align: right;
+        flex: 1; min-width: 0; align-items: flex-end; text-align: right;
         overflow-wrap: anywhere; word-break: break-word;
     }
 
-    .nfe-badge {
-        padding: 4px 8px; font-size: 0.8rem;
-        white-space: normal; word-break: break-all; max-width: 100%;
-    }
-
+    .nfe-badge { padding: 4px 8px; font-size: 0.8rem; white-space: normal; word-break: break-all; max-width: 100%; }
     .hub-history-section .modern-table td:nth-child(6) { display: block; }
     .btn-view-details {
         width: 100%; height: 44px; background: var(--primary-light); color: var(--primary);
@@ -296,7 +347,6 @@
     }
     .btn-view-details::after { content: "Abrir Auditoria"; margin-left: 8px;}
 
-    /* Labels Tabela do Modal */
     .modal-body-resolution .modern-table td:nth-child(1) { flex-direction: column; align-items: flex-start; background: #f8fafc; padding: 16px; border-radius: 12px; margin-bottom: 12px; border: 1px solid var(--border);}
     .modal-body-resolution .modern-table td:nth-child(1) .flex-col { align-items: flex-start; text-align: left; width: 100%; gap: 6px;}
     .modal-body-resolution .modern-table td:nth-child(1) .font-bold { font-size: 1.05rem; }
@@ -306,7 +356,6 @@
     .modal-body-resolution .modern-table td:nth-child(4)::before { content: "Custo Un."; }
     .modal-body-resolution .modern-table td:nth-child(5)::before { content: "Subtotal"; }
 
-    /* Ajuste da IA para não quebrar a coluna */
     .ai-badge { font-size: 0.75rem; padding: 6px 10px; max-width: 100%; white-space: normal; text-align: right;}
     .mobile-truncate { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 4px; }
     .tooltip-ia { width: 100%; text-align: right; }
@@ -314,6 +363,14 @@
 
     .hub-pagination { flex-direction: column; gap: 12px; }
     .hub-pagination button { width: 100%; justify-content: center; }
+
+    /* 🔥 ALINHAMENTO DO CADASTRO IMEDIATO (Volta para a direita nos cards mobile) */
+    .modern-table td:has(.badge-new) > div[style] {
+        justify-content: flex-end !important;
+    }
+
+    /* Ajuste responsivo dos grids de Quick Edit */
+    .quick-edit-card { max-height: 90vh; overflow-y: auto; }
 }
 
 @media (max-width: 380px) {
@@ -321,7 +378,5 @@
     .info-card-mini strong { font-size: 0.95rem; }
     .total-highlight { font-size: 1.25rem !important; }
 }
-/* Eleva os alertas de sucesso/erro para o topo absoluto do navegador */
-.Toastify__toast-container {
-    z-index: 9999999 !important;
-}
+
+.Toastify__toast-container { z-index: 9999999 !important; }
