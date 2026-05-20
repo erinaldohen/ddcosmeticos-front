@@ -4,16 +4,17 @@ import api from '../../services/api';
 import { toast } from 'react-toastify';
 import {
     FileText, Eye, UploadCloud, X, Package,
-    Sparkles, Loader2, User, Calendar,
+    ChevronLeft, ChevronRight, Sparkles, Loader2, User, Calendar,
     Search, RefreshCw, DownloadCloud, Hash, Edit3, Save, Info
 } from 'lucide-react';
 import './HistoricoEntradas.css';
 
 const HistoricoEntradas = () => {
   const [entradas, setEntradas] = useState([]);
-  const [totalPaginas, setTotalPaginas] = useState(0);
   const [loading, setLoading] = useState(true);
   const [pagina, setPagina] = useState(0);
+  const [totalPaginas, setTotalPaginas] = useState(0);
+
   const [busca, setBusca] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -24,12 +25,13 @@ const HistoricoEntradas = () => {
   const [loadingItens, setLoadingItens] = useState(false);
   const [baixandoDanfe, setBaixandoDanfe] = useState(false);
 
-  const [quickEditForm, setQuickEditForm] = useState(null);
+  // 🔥 ESTADOS DA EDIÇÃO RÁPIDA, PRECIFICAÇÃO E DICIONÁRIOS
+  const [quickEditItem, setQuickEditItem] = useState(null);
+  const [quickEditForm, setQuickEditForm] = useState({
+      descricao: '', marca: '', categoria: '', subcategoria: '', precoCusto: '0.00', margem: '50.00', precoVenda: '0.00'
+  });
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
   const [dicionarios, setDicionarios] = useState({ marcas: [], categorias: [], subcategorias: [], relacaoSubCat: {} });
-
-  // Memória do navegador para resolver a "Fotografia do XML"
-  const eansAuditados = JSON.parse(localStorage.getItem('eansAuditadosLocal') || '[]');
 
   useEffect(() => {
     carregarHistorico();
@@ -37,11 +39,14 @@ const HistoricoEntradas = () => {
   }, [pagina]);
 
   useEffect(() => {
-    if (notaSelecionada || quickEditForm) document.body.style.overflow = 'hidden';
+    if (notaSelecionada) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = 'auto';
     return () => { document.body.style.overflow = 'auto'; };
-  }, [notaSelecionada, quickEditForm]);
+  }, [notaSelecionada]);
 
+  // =========================================================================
+  // 🔥 LÓGICA DE EXTRAÇÃO E INFERÊNCIA INTELIGENTE
+  // =========================================================================
   const carregarDicionarios = async () => {
       try {
           const res = await api.get('/produtos/quick-edit/dicionarios');
@@ -51,20 +56,7 @@ const HistoricoEntradas = () => {
               subcategorias: res.data.subcategorias || [],
               relacaoSubCat: res.data.relacaoSubCat || {}
           });
-      } catch (e) { console.error("Erro ao carregar dicionários."); }
-  };
-
-  const getMargemColor = (margem) => {
-      const m = parseFloat(margem) || 0;
-      if (m < 20) return '#ef4444';
-      if (m < 40) return '#f59e0b';
-      return '#10b981';
-  };
-
-  // 🔥 Formatador de Máscara Financeira
-  const formatarParaInput = (valorFloat) => {
-      if (valorFloat === null || valorFloat === undefined || isNaN(valorFloat)) return "0,00";
-      return parseFloat(valorFloat).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      } catch (e) { console.error("Erro ao carregar as listas do estoque", e); }
   };
 
   const extrairDadosDaDescricao = (nomeXML) => {
@@ -102,85 +94,67 @@ const HistoricoEntradas = () => {
       };
   };
 
-  const iniciarAuditoria = (item) => {
-      const partes = (item.produtoDescricao || "").split('|');
-      const nomeXML = partes[0] || "";
-      const eanReal = partes[4] || item.ean || "";
-
-      const custo = parseFloat(item.custoMovimentado ?? item.custoUnitario ?? item.vUnCom ?? item.valorUnitario ?? 0) || 0.00;
-      const margemInicial = 50.00;
+  const abrirEdicaoRapida = (eanReal, nomeXML, custoBase) => {
+      const custo = parseFloat(custoBase) || 0.00;
+      const margemInicial = 50.00; // Markup padrão de 50%
       const precoSugerido = custo * (1 + (margemInicial / 100));
 
       const inferido = extrairDadosDaDescricao(nomeXML);
 
-      // O estado guarda SEMPRE Float para facilitar os cálculos
+      setQuickEditItem(eanReal);
       setQuickEditForm({
-          idItemNota: item.id || item.ean,
-          ean: eanReal,
-          descricao: nomeXML,
+          descricao: nomeXML || '',
           marca: inferido.marca,
           categoria: inferido.categoria,
           subcategoria: inferido.subcategoria,
-          precoCusto: custo,
-          margem: margemInicial,
-          precoVenda: precoSugerido
+          precoCusto: custo.toFixed(2),
+          margem: margemInicial.toFixed(2),
+          precoVenda: precoSugerido.toFixed(2)
       });
   };
 
-  const handlePrecificacao = (campo, valorDigitado) => {
-      // Máscara: Converte o que o usuário digita (ex: "10,505") num número real (105.05)
-      const apenasNumeros = valorDigitado.toString().replace(/\D/g, '');
-      const valorReal = parseFloat(apenasNumeros) / 100;
+  // =========================================================================
+  // 🔥 MATEMÁTICA DE PRECIFICAÇÃO DINÂMICA
+  // =========================================================================
+  const handlePrecificacao = (campo, valor) => {
+      const formAtual = { ...quickEditForm, [campo]: valor };
 
-      const formAtual = { ...quickEditForm, [campo]: valorReal };
-
-      const custo = formAtual.precoCusto || 0;
-      const margem = formAtual.margem || 0;
-      const venda = formAtual.precoVenda || 0;
+      const custo = parseFloat(formAtual.precoCusto) || 0;
+      const margem = parseFloat(formAtual.margem) || 0;
+      const venda = parseFloat(formAtual.precoVenda) || 0;
 
       if (campo === 'precoCusto' || campo === 'margem') {
-          formAtual.precoVenda = custo * (1 + (margem / 100));
+          formAtual.precoVenda = (custo * (1 + (margem / 100))).toFixed(2);
       } else if (campo === 'precoVenda') {
-          formAtual.margem = custo > 0 ? (((venda - custo) / custo) * 100) : 0;
+          formAtual.margem = custo > 0 ? (((venda - custo) / custo) * 100).toFixed(2) : "0.00";
       }
+
       setQuickEditForm(formAtual);
   };
 
-  const salvarItemAuditoria = async () => {
+  const salvarEdicaoRapida = async () => {
       setSalvandoEdicao(true);
       try {
-          await api.put(`/produtos/quick-edit/ean/${quickEditForm.ean}`, quickEditForm);
-          toast.success("Produto auditado com sucesso!");
-
-          // 🔥 RESOLUÇÃO DO BUG: Salva o EAN na memória para não depender da string [NOVO] do Backend
-          const novosAuditados = [...eansAuditados, quickEditForm.ean];
-          localStorage.setItem('eansAuditadosLocal', JSON.stringify(novosAuditados));
-
-          setItensNota(prev => prev.map(i => {
-              if ((i.id || i.ean) === quickEditForm.idItemNota) return { ...i, auditadoVisual: true };
-              return i;
-          }));
-
-          setQuickEditForm(null);
+          await api.put(`/produtos/quick-edit/ean/${quickEditItem}`, quickEditForm);
+          toast.success("Produto completado e precificado com sucesso!");
+          setQuickEditItem(null);
           carregarDicionarios();
-      } catch (error) { toast.error("Erro ao salvar o produto."); }
+      } catch (error) { toast.error("Erro ao salvar o cadastro."); }
       finally { setSalvandoEdicao(false); }
   };
 
+  // =========================================================================
+  // MÉTODOS GERAIS DA TELA
+  // =========================================================================
   const carregarHistorico = async () => {
-      setLoading(true);
-      try {
-        const res = await api.get(`estoque/historico-entradas?page=${pagina}&size=10`);
-
-        // Ajuste: Se o seu backend não enviar mais o objeto 'content', altere aqui:
-        setEntradas(res.data.content || res.data || []);
-        setTotalPaginas(res.data.totalPages || 0);
-
-      } catch (error) {
-        toast.error(`Erro: ${error.message}`);
-      }
-      finally { setLoading(false); }
-    };
+    setLoading(true);
+    try {
+      const res = await api.get(`estoque/historico-entradas?page=${pagina}&size=10`);
+      setEntradas(res.data.content || []);
+      setTotalPaginas(res.data.totalPages || 0);
+    } catch (error) { toast.error("Erro ao carregar histórico."); }
+    finally { setLoading(false); }
+  };
 
   const processarArquivo = async (file) => {
     if (!file) return;
@@ -200,14 +174,12 @@ const HistoricoEntradas = () => {
     setLoadingItens(true);
     try {
       const res = await api.get(`estoque/historico-entradas/${encodeURIComponent(nota.numeroNota)}/itens`);
-      const itensComFlag = (res.data || []).map(i => ({...i, auditadoVisual: false}));
-      setItensNota(itensComFlag);
-    } catch (error) { setItensNota([]); toast.error("Falha ao carregar itens."); }
+      setItensNota(res.data || []);
+    } catch (error) { setItensNota([]); toast.error("Falha ao carregar itens da nota."); }
     finally { setLoadingItens(false); }
   };
 
-  const fecharModalSecundario = () => { setQuickEditForm(null); };
-  const fecharModalPrincipal = () => { setNotaSelecionada(null); setItensNota([]); setQuickEditForm(null); };
+  const fecharModal = () => { setNotaSelecionada(null); setItensNota([]); };
 
   const baixarDanfeOficial = async () => {
       if (!notaSelecionada || !notaSelecionada.numeroNota) return;
@@ -223,6 +195,12 @@ const HistoricoEntradas = () => {
       finally { setBaixandoDanfe(false); }
   };
 
+  const entradasFiltradas = entradas.filter(n => {
+      if (!busca) return true;
+      const termo = busca.toLowerCase();
+      return (n.fornecedorNome || '').toLowerCase().includes(termo) || (n.numeroNota || '').toLowerCase().includes(termo) || (n.chaveAcesso || '').toLowerCase().includes(termo) || (n.fornecedorCnpj || '').toLowerCase().includes(termo);
+  });
+
   const formatarMoeda = (v) => v ? Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00';
   const formatarCnpj = (cnpj) => cnpj?.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5") || '---';
   const formatarData = (d) => {
@@ -230,7 +208,6 @@ const HistoricoEntradas = () => {
     if (Array.isArray(d)) return `${String(d[2]).padStart(2,'0')}/${String(d[1]).padStart(2,'0')}/${d[0]} ${String(d[3]).padStart(2,'0')}:${String(d[4]||0).padStart(2,'0')}`;
     try { return new Date(d).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); } catch(e) { return "---"; }
   };
-
   const getDataEmissaoReal = () => {
       if (itensNota.length > 0 && itensNota[0].produtoDescricao && itensNota[0].produtoDescricao.includes('|')) {
           const partes = itensNota[0].produtoDescricao.split('|');
@@ -239,13 +216,8 @@ const HistoricoEntradas = () => {
       return notaSelecionada?.dataEmissao || notaSelecionada?.dataEntrada;
   };
 
-  const renderIABadge = (statusIA, vinculoIA, item, eanReal) => {
-    // Cruza a informação visual e a memória do navegador
-    const isAuditadoLocal = eansAuditados.includes(eanReal);
-
-    if (item.auditadoVisual || isAuditadoLocal) return <span className="ai-badge badge-ok">✅ Auditado</span>;
+  const renderIABadge = (statusIA, vinculoIA, eanReal, nomeXML, custoBase) => {
     if (!statusIA) return <span className="ai-badge badge-ok">✅ Estoque Atualizado</span>;
-
     if (statusIA.includes('[IA_DUPLICADA')) {
         return (
             <div className="tooltip-ia">
@@ -255,32 +227,21 @@ const HistoricoEntradas = () => {
         );
     }
     if (statusIA.includes('[NOVO]')) {
-        return (
-            <div style={{display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-start'}}>
-                <span className="ai-badge badge-new">✨ Cadastro Imediato</span>
-                <button
-                    className="btn-quick-edit"
-                    onClick={() => iniciarAuditoria(item)}
-                    title="Auditar & Precificar"
-                >
-                    <Edit3 size={14} />
-                </button>
-            </div>
-        );
-    }
+            return (
+                <div style={{display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end'}}>
+                    <span className="ai-badge badge-new">✨ Cadastro Imediato</span>
+                    <button
+                        className="btn-quick-edit"
+                        onClick={() => abrirEdicaoRapida(eanReal, nomeXML, custoBase)}
+                        title="Completar Cadastro & Precificar"
+                    >
+                        <Edit3 size={14} />
+                    </button>
+                </div>
+            );
+        }
     return <span className="ai-badge badge-ok">✅ Estoque Atualizado</span>;
   };
-
-  const entradasFiltradas = entradas.filter(n => {
-      if (!busca) return true;
-      const termo = busca.toLowerCase();
-      return (n.fornecedorNome || '').toLowerCase().includes(termo) || (n.numeroNota || '').toLowerCase().includes(termo) || (n.chaveAcesso || '').toLowerCase().includes(termo) || (n.fornecedorCnpj || '').toLowerCase().includes(termo);
-  });
-
-  const pendencias = itensNota.filter(i => {
-      const ean = (i.produtoDescricao || "").split('|')[4] || i.ean;
-      return (i.produtoDescricao || "").includes('[NOVO]') && !i.auditadoVisual && !eansAuditados.includes(ean);
-  }).length;
 
   return (
     <div className="import-hub-container fade-in">
@@ -348,25 +309,110 @@ const HistoricoEntradas = () => {
         </div>
       </section>
 
-      {/* PORTAL DO MODAL PRINCIPAL DE AUDITORIA */}
+      {/* PORTAL DO MODAL PRINCIPAL */}
       {notaSelecionada && createPortal(
         <div className="modal-overlay">
           <div className="modal-content-resolution slide-up">
 
+            {/* 🔥 MINI MODAL DE EDIÇÃO AVANÇADA (PREÇOS + DATALIST) 🔥 */}
+            {quickEditItem && (
+               <div className="quick-edit-overlay slide-up">
+                   <div className="quick-edit-card shadow-lg" style={{maxWidth: '650px'}}>
+                       <div className="quick-edit-header">
+                           <h3>Completar Cadastro & Precificar</h3>
+                           <button onClick={() => setQuickEditItem(null)}><X size={18}/></button>
+                       </div>
+
+                       <div className="quick-edit-body">
+                           <div className="form-group">
+                               <label>Descrição do Produto</label>
+                               <input type="text" value={quickEditForm.descricao} onChange={e => setQuickEditForm({...quickEditForm, descricao: e.target.value})} />
+                           </div>
+
+                           <div className="form-row-2" style={{display: 'flex', gap: '12px', flexWrap: 'wrap'}}>
+                               <div className="form-group" style={{flex: 1, minWidth: '150px'}}>
+                                   <label style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
+                                       Marca <Info size={12} color="#94a3b8" title="Dê duplo clique na caixa para limpar e ver a lista completa!"/>
+                                   </label>
+                                   <input
+                                       list="lista-marcas" type="text" placeholder="Selecione ou digite..."
+                                       value={quickEditForm.marca}
+                                       onChange={e => setQuickEditForm({...quickEditForm, marca: e.target.value})}
+                                       onDoubleClick={() => setQuickEditForm({...quickEditForm, marca: ''})}
+                                   />
+                                   <datalist id="lista-marcas">
+                                       {dicionarios.marcas.map((m, i) => m && <option key={`m-${i}`} value={m} />)}
+                                   </datalist>
+                               </div>
+                               <div className="form-group" style={{flex: 1, minWidth: '150px'}}>
+                                   <label style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
+                                       Categoria <Info size={12} color="#94a3b8" title="Dê duplo clique para ver a lista completa!"/>
+                                   </label>
+                                   <input
+                                       list="lista-categorias" type="text" placeholder="Selecione ou digite..."
+                                       value={quickEditForm.categoria}
+                                       onChange={e => setQuickEditForm({...quickEditForm, categoria: e.target.value})}
+                                       onDoubleClick={() => setQuickEditForm({...quickEditForm, categoria: ''})}
+                                   />
+                                   <datalist id="lista-categorias">
+                                       {dicionarios.categorias.map((c, i) => c && <option key={`c-${i}`} value={c} />)}
+                                   </datalist>
+                               </div>
+                               <div className="form-group" style={{flex: 1, minWidth: '150px'}}>
+                                   <label style={{display: 'flex', alignItems: 'center', gap: '4px'}}>
+                                       Subcategoria <Info size={12} color="#94a3b8" title="Dê duplo clique para ver a lista completa!"/>
+                                   </label>
+                                   <input
+                                       list="lista-subcategorias" type="text" placeholder="Selecione ou digite..."
+                                       value={quickEditForm.subcategoria}
+                                       onChange={e => setQuickEditForm({...quickEditForm, subcategoria: e.target.value})}
+                                       onDoubleClick={() => setQuickEditForm({...quickEditForm, subcategoria: ''})}
+                                   />
+                                   <datalist id="lista-subcategorias">
+                                       {dicionarios.subcategorias.map((s, i) => s && <option key={`s-${i}`} value={s} />)}
+                                   </datalist>
+                               </div>
+                           </div>
+
+                           <div className="form-row-3" style={{display: 'flex', gap: '12px', background: '#f1f5f9', padding: '16px', borderRadius: '8px', marginTop: '12px', flexWrap: 'wrap', border: '1px solid #e2e8f0'}}>
+                                 <div className="form-group" style={{flex: 1, minWidth: '120px'}}>
+                                     <label>Custo Base (R$)</label>
+                                     <input type="number" step="0.01" value={quickEditForm.precoCusto} onChange={e => handlePrecificacao('precoCusto', e.target.value)} />
+                                 </div>
+                                 <div className="form-group" style={{flex: 1, minWidth: '120px'}}>
+                                     <label>Margem / Markup (%)</label>
+                                     <input type="number" step="0.01" value={quickEditForm.margem} onChange={e => handlePrecificacao('margem', e.target.value)} style={{color: '#10b981', fontWeight: 'bold'}} />
+                                 </div>
+                                 <div className="form-group" style={{flex: 1, minWidth: '120px'}}>
+                                     <label>Preço Venda (R$)</label>
+                                     <input type="number" step="0.01" value={quickEditForm.precoVenda} onChange={e => handlePrecificacao('precoVenda', e.target.value)} style={{color: '#3b82f6', fontWeight: 'bold'}} />
+                                 </div>
+                             </div>
+
+                       </div>
+
+                       <div className="quick-edit-footer">
+                           <button className="btn-cancelar" onClick={() => setQuickEditItem(null)}>Cancelar</button>
+                           <button className="btn-salvar" onClick={salvarEdicaoRapida} disabled={salvandoEdicao}>
+                               {salvandoEdicao ? <Loader2 size={16} className="spin"/> : <Save size={16}/>}
+                               Salvar & Precificar
+                           </button>
+                       </div>
+                   </div>
+               </div>
+            )}
+
             <div className="modal-header-resolution">
               <div className="header-title">
                 <FileText size={26} className="text-primary" />
-                <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
-                  <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
-                      <h2>Auditoria da Nota: {notaSelecionada.numeroNota}</h2>
-                      {pendencias > 0 && <span className="badge-pending">{pendencias} Pendentes</span>}
-                  </div>
+                <div>
+                  <h2>Auditoria de Nota: {notaSelecionada.numeroNota}</h2>
                   <span className="text-muted text-xs"><Hash size={12}/> {notaSelecionada.chaveAcesso}</span>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '12px' }}>
                   <button onClick={baixarDanfeOficial} disabled={baixandoDanfe} className="btn-danfe"><DownloadCloud size={18} /><span className="hide-mobile">Baixar DANFE</span></button>
-                  <button onClick={fecharModalPrincipal} className="btn-close-modal"><X size={24} /></button>
+                  <button onClick={fecharModal} className="btn-close-modal"><X size={24} /></button>
               </div>
             </div>
 
@@ -379,7 +425,7 @@ const HistoricoEntradas = () => {
                   <label><Calendar size={12}/> Cronologia</label><small><b>Emissão:</b> {formatarData(getDataEmissaoReal())}</small><small><b>Entrada:</b> {formatarData(notaSelecionada.dataEntrada)}</small>
                 </div>
                 <div className="info-card-mini">
-                  <label><User size={12}/> Responsável</label><strong>{notaSelecionada.usuarioNome || "Administrador"}</strong><span>Status: Integração Concluída</span>
+                  <label><User size={12}/> Responsável</label><strong>{notaSelecionada.usuarioNome || "Administrador"}</strong><span>Status: Importação Concluída</span>
                 </div>
                 <div className="info-card-mini highlight-blue">
                   <label>Resumo Financeiro</label><strong className="total-highlight">{formatarMoeda(notaSelecionada.valorTotal)}</strong><span>{notaSelecionada.qtdItens} volumes integrados</span>
@@ -393,27 +439,22 @@ const HistoricoEntradas = () => {
                     {loadingItens ? (<tr><td colSpan="5" className="text-center py-10"><Loader2 className="spin text-primary" style={{margin: '0 auto'}}/></td></tr>) : (
                       itensNota.map((item, index) => {
                           const partes = (item.produtoDescricao || "").split('|').concat(["", "", "", "", ""]);
-                          const statusIA = partes[1] || "";
-                          const vinculoIA = partes[2] || "";
-                          const eanReal = partes[4] || item.ean || "S/ GTIN";
+                          const eanReal = partes[4] || "S/ GTIN";
                           const isGerado = eanReal.startsWith('20') && eanReal.length === 13;
-
-                          const qtd = item.quantidadeMovimentada ?? item.quantidade ?? item.qCom ?? item.quantidadeComercial ?? 0;
-                          const custoUn = item.custoMovimentado ?? item.custoUnitario ?? item.vUnCom ?? item.valorUnitario ?? 0;
-                          const subtotal = qtd * custoUn;
+                          const textoEan = isGerado ? `EAN Interno: ${eanReal}` : `EAN: ${eanReal}`;
 
                           return (
-                              <tr key={item.id || index} style={{ background: item.auditadoVisual || eansAuditados.includes(eanReal) ? '#f8fafc' : 'inherit' }}>
+                              <tr key={item.id || index}>
                                   <td>
                                       <div className="flex-col">
                                           <span className="font-bold text-dark">{partes[0] || "Produto"}</span>
-                                          <span className="text-xs text-muted">{isGerado ? `EAN Interno: ${eanReal}` : `EAN: ${eanReal}`}</span>
+                                          <span className="text-xs text-muted">{textoEan}</span>
                                       </div>
                                   </td>
-                                  <td>{renderIABadge(statusIA, vinculoIA, item, eanReal)}</td>
-                                  <td className="text-center font-bold text-success">+ {qtd} un</td>
-                                  <td className="text-right font-numeric">{formatarMoeda(custoUn)}</td>
-                                  <td className="text-right font-numeric font-bold">{formatarMoeda(subtotal)}</td>
+                                  <td>{renderIABadge(partes[1], partes[2], eanReal, partes[0], item.custoMovimentado ?? 0)}</td>
+                                  <td className="text-center font-bold text-success">+ {item.quantidadeMovimentada ?? 0} un</td>
+                                  <td className="text-right font-numeric">{formatarMoeda(item.custoMovimentado ?? 0)}</td>
+                                  <td className="text-right font-numeric font-bold">{formatarMoeda((item.quantidadeMovimentada??0) * (item.custoMovimentado??0))}</td>
                               </tr>
                           );
                       })
@@ -423,78 +464,6 @@ const HistoricoEntradas = () => {
               </div>
             </div>
           </div>
-
-          {/* 🔥 MODAL SOBREPOSTO DE PRECIFICAÇÃO (ESTAÇÃO DE AUDITORIA) */}
-          {quickEditForm && (
-              <div className="quick-edit-overlay slide-up">
-                  <div className="quick-edit-card shadow-lg">
-                      <div className="quick-edit-header" style={{background: '#f8fafc', padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between'}}>
-                          <h3 style={{margin: 0, color: '#0f172a'}}>Estação de Auditoria Individual</h3>
-                          <button onClick={fecharModalSecundario} style={{background:'none', border:'none', cursor:'pointer'}}><X size={18}/></button>
-                      </div>
-
-                      <div className="quick-edit-body" style={{padding: '20px'}}>
-                          <div className="form-group" style={{marginBottom: '16px'}}>
-                              <label>Descrição Original do XML</label>
-                              <input type="text" value={quickEditForm.descricao} onChange={e => setQuickEditForm({...quickEditForm, descricao: e.target.value})} style={{background: '#f1f5f9'}} />
-                          </div>
-
-                          <div className="form-row-2">
-                              <div className="form-group">
-                                  <label>Marca</label>
-                                  <input placeholder="Digite ou selecione..." list="lista-marcas" value={quickEditForm.marca} onChange={e => setQuickEditForm({...quickEditForm, marca: e.target.value})} onDoubleClick={e => e.target.value=''} />
-                                  <span className="helper-text">💡 Dê duplo clique para ver a lista</span>
-                                  <datalist id="lista-marcas">{dicionarios.marcas.map((m, i) => m && <option key={i} value={m} />)}</datalist>
-                              </div>
-                              <div className="form-group">
-                                  <label>Categoria</label>
-                                  <input placeholder="Digite ou selecione..." list="lista-categorias" value={quickEditForm.categoria} onChange={e => setQuickEditForm({...quickEditForm, categoria: e.target.value})} onDoubleClick={e => e.target.value=''} />
-                                  <span className="helper-text">💡 Dê duplo clique para ver a lista</span>
-                                  <datalist id="lista-categorias">{dicionarios.categorias.map((c, i) => c && <option key={i} value={c} />)}</datalist>
-                              </div>
-                              <div className="form-group">
-                                  <label>Subcategoria</label>
-                                  <input placeholder="Digite ou selecione..." list="lista-subcategorias" value={quickEditForm.subcategoria} onChange={e => setQuickEditForm({...quickEditForm, subcategoria: e.target.value})} onDoubleClick={e => e.target.value=''} />
-                                  <span className="helper-text">💡 Dê duplo clique para ver a lista</span>
-                                  <datalist id="lista-subcategorias">{dicionarios.subcategorias.map((s, i) => s && <option key={i} value={s} />)}</datalist>
-                              </div>
-                          </div>
-
-                          <div className="form-row-3">
-                              <div className="form-group">
-                                  <label>Custo Unitário</label>
-                                  <div className="input-masked">
-                                      <span className="prefix">R$</span>
-                                      <input type="text" value={formatarParaInput(quickEditForm.precoCusto)} onChange={e => handlePrecificacao('precoCusto', e.target.value)} />
-                                  </div>
-                              </div>
-                              <div className="form-group">
-                                  <label>Margem / Markup</label>
-                                  <div className="input-masked">
-                                      <input type="text" value={formatarParaInput(quickEditForm.margem)} onChange={e => handlePrecificacao('margem', e.target.value)} style={{color: getMargemColor(quickEditForm.margem), fontWeight: 'bold'}} />
-                                      <span className="suffix">%</span>
-                                  </div>
-                              </div>
-                              <div className="form-group">
-                                  <label>Preço Venda</label>
-                                  <div className="input-masked">
-                                      <span className="prefix">R$</span>
-                                      <input type="text" value={formatarParaInput(quickEditForm.precoVenda)} onChange={e => handlePrecificacao('precoVenda', e.target.value)} style={{color: '#2563eb', fontWeight: 'bold'}} />
-                                  </div>
-                              </div>
-                          </div>
-
-                          <div style={{display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '24px'}}>
-                              <button className="btn-cancelar" onClick={fecharModalSecundario}>Cancelar</button>
-                              <button className="btn-salvar" onClick={salvarItemAuditoria} disabled={salvandoEdicao}>
-                                  {salvandoEdicao ? <Loader2 size={16} className="spin"/> : <Save size={16}/>}
-                                  Confirmar Item
-                              </button>
-                          </div>
-                      </div>
-                  </div>
-              </div>
-          )}
         </div>,
         document.body
       )}

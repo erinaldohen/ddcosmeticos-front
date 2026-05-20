@@ -116,9 +116,10 @@ const GestaoNotasSefaz = () => {
   useEffect(() => {
     const init = async () => {
         try {
+            // CORREÇÃO: Removido o '/dropdown' para forçar o Backend a enviar o CNPJ na lista.
             const [resProd, resForn] = await Promise.all([
                 api.get('/produtos?size=5000'),
-                api.get('/fornecedores/dropdown').catch(() => api.get('/fornecedores?size=500'))
+                api.get('/fornecedores?size=2000')
             ]);
             setListaProdutosDb(resProd.data?.content || resProd.data || []);
             setListaFornecedores(Array.isArray(resForn.data) ? resForn.data : (resForn.data?.content || []));
@@ -270,39 +271,59 @@ const GestaoNotasSefaz = () => {
           }
 
           const res = await api.get(`/estoque/notas-pendentes/${nota.id}/xml-parse`);
-          const { cnpjFornecedor, razaoSocialFornecedor, itensXml, dataEmissao, fornecedorId } = res.data;
+          const parsed = res.data || {};
 
-          let fornecedorSalvoId = fornecedorId || '';
+          // CORREÇÃO: Salva-Vidas Duplo. Se o parser falhou, pega da nota original.
+          const cnpjReal = parsed.cnpjFornecedor || nota.cnpjFornecedor || '';
+          const nomeReal = parsed.razaoSocialFornecedor || nota.nomeFornecedor || 'FORNECEDOR DESCONHECIDO';
+          let fornecedorSalvoId = parsed.fornecedorId || nota.fornecedorId || '';
 
-          if (!fornecedorSalvoId && cnpjFornecedor) {
-               setDadosPreForn({ cnpj: maskCNPJ(cnpjFornecedor), razaoSocial: razaoSocialFornecedor || nota.nomeFornecedor });
+          // Match Implacável local ignorando formatação
+          if (!fornecedorSalvoId && cnpjReal) {
+              const cnpjLimpoTarget = String(cnpjReal).replace(/\D/g, '');
+              const fornecedorEncontrado = listaFornecedores.find(f => {
+                  if (!f.cnpj) return false;
+                  return String(f.cnpj).replace(/\D/g, '') === cnpjLimpoTarget;
+              });
+
+              if (fornecedorEncontrado) {
+                  fornecedorSalvoId = fornecedorEncontrado.id;
+              }
+          }
+
+          // Se continuou sem ID, aciona o modal de Novo Fornecedor automaticamente
+          if (!fornecedorSalvoId && cnpjReal) {
+              const cnpjFormatado = maskCNPJ(String(cnpjReal).replace(/\D/g, ''));
+              setDadosPreForn({ cnpj: cnpjFormatado, razaoSocial: nomeReal });
+              setTimeout(() => setModalFornecedorAberto(true), 400);
           }
 
           if (fornecedorSalvoId && !listaFornecedores.some(f => String(f.id) === String(fornecedorSalvoId))) {
               setListaFornecedores(prev => [...prev, {
                   id: fornecedorSalvoId,
-                  razaoSocial: razaoSocialFornecedor || nota.nomeFornecedor,
-                  cnpj: maskCNPJ(cnpjFornecedor)
+                  razaoSocial: nomeReal,
+                  cnpj: maskCNPJ(cnpjReal)
               }].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || '')));
           }
 
-          const itensProcessados = processarInteligenciaProdutos(itensXml || [], razaoSocialFornecedor || nota.nomeFornecedor);
+          const itensProcessados = processarInteligenciaProdutos(parsed.itensXml || [], nomeReal);
 
           setCabecalhoModal({
               fornecedorId: fornecedorSalvoId,
               numeroDocumento: extrairNumeroNota(nota.chaveAcesso),
-              dataEmissao: dataEmissao ? dataEmissao.split('T')[0] : (nota.dataEmissao?.split('T')[0] || new Date().toISOString().split('T')[0])
+              dataEmissao: parsed.dataEmissao ? parsed.dataEmissao.split('T')[0] : (nota.dataEmissao?.split('T')[0] || new Date().toISOString().split('T')[0])
           });
 
           setItensImportacao(itensProcessados);
           setNotaSelecionada(nota);
           setModalAberto(true);
 
-          if (fornecedorSalvoId && cnpjFornecedor) {
-              enriquecerFornecedorSilenciosamente(fornecedorSalvoId, cnpjFornecedor);
+          if (fornecedorSalvoId && cnpjReal) {
+              enriquecerFornecedorSilenciosamente(fornecedorSalvoId, cnpjReal);
           }
 
       } catch (err) {
+          console.error("Erro no processamento:", err);
           toast.error("Falha ao preparar importação. Verifique a comunicação com a SEFAZ.");
       } finally {
           setLoadingCardId(null);
@@ -345,24 +366,17 @@ const GestaoNotasSefaz = () => {
       setItensImportacao(lista);
   };
 
-  // ============================================================================
-  // 🔥 EAN AUTOMÁTICO INTELIGENTE COM CÁLCULO GS1 LOCAL 🔥
-  // ============================================================================
   const gerarEanNoModal = async (index) => {
       try {
-          // 1. Puxa o EAN base que o Java acha que é o próximo
           const eanBaseBackend = await produtoService.gerarEanInterno();
           let eanSugerido = String(eanBaseBackend);
 
-          // 2. Procura se algum produto DENTRO DO MODAL já recebeu um EAN (Começado em 2)
           const eansInternosLocais = itensImportacao
               .map(item => item.codigoBarras)
               .filter(c => c && String(c).startsWith('2') && String(c).length === eanSugerido.length);
 
           if (eansInternosLocais.length > 0) {
-              // 3. Se encontrar EANs no modal, pegamos a "Base" do maior (ignorando o último dígito verificador)
               let maiorBase = BigInt(eanSugerido.substring(0, eanSugerido.length - 1));
-
               eansInternosLocais.forEach(ean => {
                   let baseAtual = BigInt(ean.substring(0, ean.length - 1));
                   if (baseAtual > maiorBase) {
@@ -370,10 +384,8 @@ const GestaoNotasSefaz = () => {
                   }
               });
 
-              // 4. Somamos +1 na base para gerar o próximo código da sequência
               let novaBase = String(maiorBase + 1n).padStart(eanSugerido.length - 1, '0');
 
-              // 5. Cálculo do Dígito Verificador (Algoritmo Oficial EAN-13/GS1)
               let soma = 0;
               let multiplicador = 3;
               for (let i = novaBase.length - 1; i >= 0; i--) {
@@ -383,7 +395,6 @@ const GestaoNotasSefaz = () => {
               const resto = soma % 10;
               const dv = resto === 0 ? 0 : 10 - resto;
 
-              // 6. Junta a nova base com o Dígito Verificador correto
               eanSugerido = novaBase + String(dv);
           }
 
@@ -415,7 +426,7 @@ const GestaoNotasSefaz = () => {
 
       try {
           await api.post('/estoque/entrada', {
-              fornecedorId: cabecalhoModal.fornecedorId,
+              fornecedorId: Number(cabecalhoModal.fornecedorId),
               numeroDocumento: cabecalhoModal.numeroDocumento || "S/N",
               dataVencimento: cabecalhoModal.dataEmissao,
               chaveAcesso: notaSelecionada.chaveAcesso,
@@ -628,7 +639,7 @@ const GestaoNotasSefaz = () => {
                                   <select
                                       id="fornecedor-modal-select"
                                       className="dp-select-premium"
-                                      value={cabecalhoModal.fornecedorId}
+                                      value={cabecalhoModal.fornecedorId || ''}
                                       onChange={(e) => setCabecalhoModal({...cabecalhoModal, fornecedorId: e.target.value})}
                                       style={{border: !cabecalhoModal.fornecedorId ? '2px solid #f59e0b' : '1px solid #cbd5e1'}}
                                   >
