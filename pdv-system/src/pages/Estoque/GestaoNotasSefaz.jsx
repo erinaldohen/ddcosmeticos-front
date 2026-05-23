@@ -262,103 +262,170 @@ const GestaoNotasSefaz = () => {
   };
 
   const iniciarProcessamento = async (nota) => {
-      setLoadingCardId(nota.id);
+        setChaveBusca(''); // Limpa buscas residuais
+        setLoadingCardId(nota.id);
 
-      try {
-          if (nota.status === 'PENDENTE_MANIFESTACAO') {
-              toast.info("Autorizando download na SEFAZ...");
-              await api.post(`/estoque/notas-pendentes/${nota.id}/manifestar`);
-          }
+        try {
+            if (nota.status === 'PENDENTE_MANIFESTACAO') {
+                toast.info("Autorizando download na SEFAZ...");
+                await api.post(`/estoque/notas-pendentes/${nota.id}/manifestar`);
+            }
 
-          const res = await api.get(`/estoque/notas-pendentes/${nota.id}/xml-parse`);
-          const parsed = res.data || {};
+            const res = await api.get(`/estoque/notas-pendentes/${nota.id}/xml-parse`);
+            const parsed = res.data || {};
 
-          // CORREÇÃO: Salva-Vidas Duplo. Se o parser falhou, pega da nota original.
-          const cnpjReal = parsed.cnpjFornecedor || nota.cnpjFornecedor || '';
-          const nomeReal = parsed.razaoSocialFornecedor || nota.nomeFornecedor || 'FORNECEDOR DESCONHECIDO';
-          let fornecedorSalvoId = parsed.fornecedorId || nota.fornecedorId || '';
+            const cnpjReal = parsed.cnpjFornecedor || nota.cnpjFornecedor || '';
+            const nomeReal = parsed.razaoSocialFornecedor || nota.nomeFornecedor || 'FORNECEDOR DESCONHECIDO';
+            const itensXml = parsed.itensXml || [];
+            const dataEmissao = parsed.dataEmissao || nota.dataEmissao;
 
-          // Match Implacável local ignorando formatação
-          if (!fornecedorSalvoId && cnpjReal) {
-              const cnpjLimpoTarget = String(cnpjReal).replace(/\D/g, '');
-              const fornecedorEncontrado = listaFornecedores.find(f => {
-                  if (!f.cnpj) return false;
-                  return String(f.cnpj).replace(/\D/g, '') === cnpjLimpoTarget;
-              });
+            let fornecedorFinalId = parsed.fornecedorId || nota.fornecedorId || '';
+            const cnpjLimpoTarget = String(cnpjReal).replace(/\D/g, '');
 
-              if (fornecedorEncontrado) {
-                  fornecedorSalvoId = fornecedorEncontrado.id;
-              }
-          }
+            // 1. Procura match na lista local carregada
+            const localMatch = listaFornecedores.find(f => f.cnpj && f.cnpj.replace(/\D/g, '') === cnpjLimpoTarget);
 
-          // Se continuou sem ID, aciona o modal de Novo Fornecedor automaticamente
-          if (!fornecedorSalvoId && cnpjReal) {
-              const cnpjFormatado = maskCNPJ(String(cnpjReal).replace(/\D/g, ''));
-              setDadosPreForn({ cnpj: cnpjFormatado, razaoSocial: nomeReal });
-              setTimeout(() => setModalFornecedorAberto(true), 400);
-          }
+            if (localMatch) {
+                fornecedorFinalId = localMatch.id;
+            } else if (cnpjLimpoTarget) {
+                // 2. Se o fornecedor não existe, cria em segundo plano com a API completa de Receita/WS
+                try {
+                    let payloadCompletoForn = {
+                        cnpj: maskCNPJ(cnpjLimpoTarget),
+                        razaoSocial: nomeReal.toUpperCase(),
+                        nomeFantasia: nomeReal.toUpperCase(),
+                        ativo: true,
+                        inscricaoEstadual: "ISENTO", // Fallback padrão
+                        telefone: "",
+                        email: "",
+                        logradouro: "",
+                        numero: "",
+                        bairro: "",
+                        cidade: "RECIFE",
+                        estado: "PE",
+                        cep: ""
+                    };
 
-          if (fornecedorSalvoId && !listaFornecedores.some(f => String(f.id) === String(fornecedorSalvoId))) {
-              setListaFornecedores(prev => [...prev, {
-                  id: fornecedorSalvoId,
-                  razaoSocial: nomeReal,
-                  cnpj: maskCNPJ(cnpjReal)
-              }].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || '')));
-          }
+                    // 🔥 Executa a chamada do botão "Receita" (Consumo completo do WS)
+                    try {
+                        const resApi = await fetchWithTimeout(`https://publica.cnpj.ws/cnpj/${cnpjLimpoTarget}`, { timeout: 4000 });
+                        if (resApi.ok) {
+                            const ws = await resApi.json();
 
-          const itensProcessados = processarInteligenciaProdutos(parsed.itensXml || [], nomeReal);
+                            payloadCompletoForn.razaoSocial = ws.razao_social || ws.estabelecimento?.nome_fantasia || payloadCompletoForn.razaoSocial;
+                            payloadCompletoForn.nomeFantasia = ws.estabelecimento?.nome_fantasia || ws.razao_social || payloadCompletoForn.nomeFantasia;
+                            payloadCompletoForn.email = ws.estabelecimento?.email?.toLowerCase() || "";
 
-          setCabecalhoModal({
-              fornecedorId: fornecedorSalvoId,
-              numeroDocumento: extrairNumeroNota(nota.chaveAcesso),
-              dataEmissao: parsed.dataEmissao ? parsed.dataEmissao.split('T')[0] : (nota.dataEmissao?.split('T')[0] || new Date().toISOString().split('T')[0])
-          });
+                            const ddd = ws.estabelecimento?.ddd1 || "";
+                            const tel = ws.estabelecimento?.telefone1 || "";
+                            if (ddd && tel) payloadCompletoForn.telefone = maskPhone(ddd + tel);
 
-          setItensImportacao(itensProcessados);
-          setNotaSelecionada(nota);
-          setModalAberto(true);
+                            // Puxa a Inscrição Estadual ativa se houver
+                            if (ws.estabelecimento?.inscricoes_estaduais && ws.estabelecimento.inscricoes_estaduais.length > 0) {
+                                payloadCompletoForn.inscricaoEstadual = ws.estabelecimento.inscricoes_estaduais[0].inscricao_estaduais || "ISENTO";
+                            }
 
-          if (fornecedorSalvoId && cnpjReal) {
-              enriquecerFornecedorSilenciosamente(fornecedorSalvoId, cnpjReal);
-          }
+                            // Mapeamento de Endereço Completo para não abrir vazio
+                            payloadCompletoForn.logradouro = ws.estabelecimento?.logradouro || "";
+                            payloadCompletoForn.numero = ws.estabelecimento?.numero || "";
+                            payloadCompletoForn.bairro = ws.estabelecimento?.bairro || "";
+                            payloadCompletoForn.cidade = ws.estabelecimento?.cidade?.nome?.toUpperCase() || "RECIFE";
+                            payloadCompletoForn.estado = ws.estabelecimento?.estado?.sigla?.toUpperCase() || "PE";
+                            payloadCompletoForn.cep = ws.estabelecimento?.cep || "";
+                        }
+                    } catch (e) {
+                        console.log("WS público temporariamente ocupado, salvando com dados do XML.");
+                    }
 
-      } catch (err) {
-          console.error("Erro no processamento:", err);
-          toast.error("Falha ao preparar importação. Verifique a comunicação com a SEFAZ.");
-      } finally {
-          setLoadingCardId(null);
-      }
-  };
+                    // Envia o payload completo para o banco de dados
+                    const resNovo = await api.post('/fornecedores', payloadCompletoForn);
+                    if (resNovo.data && resNovo.data.id) {
+                        fornecedorFinalId = resNovo.data.id;
+                        setListaFornecedores(prev => [...prev, resNovo.data].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || '')));
+                    }
+                } catch (errForn) {
+                    console.error("Erro no cadastro em lote de fornecedor:", errForn);
+                }
+            }
 
-  const handleFornecedorCriado = (novoForn) => {
-      setListaFornecedores(prev => [...prev, novoForn].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || '')));
-      setCabecalhoModal(prev => ({ ...prev, fornecedorId: novoForn.id }));
-      setModalFornecedorAberto(false);
-      toast.success("Fornecedor cadastrado com sucesso!");
-  };
+            const itensProcessados = await processarInteligenciaProdutos(itensXml, nomeReal);
 
-  const processarInteligenciaProdutos = (itensXml, fornecedorNome) => {
-      const dbSearch = listaProdutosDb || [];
-      return itensXml.map(xmlItem => {
-          const fiscal = inferirDadosFiscais(xmlItem, fornecedorNome);
+            setCabecalhoModal({
+                fornecedorId: fornecedorFinalId ? String(fornecedorFinalId) : '',
+                numeroDocumento: extrairNumeroNota(nota.chaveAcesso),
+                dataEmissao: dataEmissao ? dataEmissao.split('T')[0] : new Date().toISOString().split('T')[0]
+            });
 
-          if (dbSearch.length > 0) {
-              const matchEan = dbSearch.find(db => db.codigoBarras && xmlItem.codigoBarras && db.codigoBarras.length > 7 && String(db.codigoBarras) === String(xmlItem.codigoBarras));
-              if (matchEan) return { ...xmlItem, idProduto: matchEan.id, descricao: matchEan.descricao, status: 'vinculado', match: matchEan, estoqueAtual: matchEan.quantidadeEmEstoque || 0, ...fiscal, confianca: '100% (EAN)' };
+            setItensImportacao(itensProcessados);
+            setNotaSelecionada(nota);
+            setModalAberto(true);
 
-              let melhor = null;
-              let maiorScore = 0;
-              dbSearch.forEach(db => {
-                  let score = calcularSimilaridade(xmlItem.descricao, db.descricao);
-                  if (score > 0.4 && db.ncm === xmlItem.ncm) score += 0.2;
-                  if (score > maiorScore) { maiorScore = score; melhor = db; }
-              });
+        } catch (err) {
+            toast.error("Falha ao preparar importação de mercadorias.");
+        } finally {
+            setLoadingCardId(null);
+        }
+    };
 
-              if (maiorScore >= 0.65 && melhor) return { ...xmlItem, idProduto: null, status: 'semelhante', match: melhor, estoqueAtual: 0, ...fiscal, confianca: `${Math.round(maiorScore * 100)}% (IA)` };
-          }
-          return { ...xmlItem, idProduto: null, status: 'novo', match: null, estoqueAtual: 0, ...fiscal, confianca: '0%' };
-      });
-  };
+    const processarInteligenciaProdutos = async (itensXml, fornecedorNome) => {
+        const dbSearch = listaProdutosDb || [];
+
+        // Mapeia os itens do XML executando a lógica de preenchimento automático
+        const resultadoPromessas = itensXml.map(async (xmlItem, idx) => {
+            const fiscal = inferirDadosFiscais(xmlItem, fornecedorNome);
+
+            if (dbSearch.length > 0) {
+                // Match direto por EAN
+                const matchEan = dbSearch.find(db => db.codigoBarras && xmlItem.codigoBarras && db.codigoBarras.length > 7 && String(db.codigoBarras) === String(xmlItem.codigoBarras));
+                if (matchEan) {
+                    return { ...xmlItem, idProduto: matchEan.id, descricao: matchEan.descricao, status: 'vinculado', match: matchEan, estoqueAtual: matchEan.quantidadeEmEstoque || 0, ...fiscal, confianca: '100% (EAN)' };
+                }
+
+                // Match por proximidade de texto (IA local)
+                let melhor = null;
+                let maiorScore = 0;
+                dbSearch.forEach(db => {
+                    let score = calcularSimilaridade(xmlItem.descricao, db.descricao);
+                    if (score > 0.4 && db.ncm === xmlItem.ncm) score += 0.2;
+                    if (score > maiorScore) { maiorScore = score; melhor = db; }
+                });
+
+                if (maiorScore >= 0.65 && melhor) {
+                    return { ...xmlItem, idProduto: null, status: 'semelhante', match: melhor, estoqueAtual: 0, ...fiscal, confianca: `${Math.round(maiorScore * 100)}% (IA)` };
+                }
+            }
+
+            // Se cair aqui, o produto é [NOVO] -> Executa a geração automática de EAN sequencial imediata
+            let eanGerado = xmlItem.codigoBarras || '';
+            if (!eanGerado || eanGerado.trim() === '' || eanGerado === 'S/N') {
+                try {
+                    const eanBaseBackend = await produtoService.gerarEanInterno();
+                    let eanSugerido = String(eanBaseBackend);
+
+                    // Evita colisão sequencial entre itens dentro da mesma nota
+                    let shift = BigInt(idx);
+                    let maiorBase = BigInt(eanSugerido.substring(0, eanSugerido.length - 1)) + shift;
+                    let novaBase = String(maiorBase).padStart(eanSugerido.length - 1, '0');
+
+                    let s = 0;
+                    let mult = 3;
+                    for (let i = novaBase.length - 1; i >= 0; i--) {
+                        s += parseInt(novaBase.charAt(i)) * mult;
+                        mult = mult === 3 ? 1 : 3;
+                    }
+                    const r = s % 10;
+                    const dv = r === 0 ? 0 : 10 - r;
+                    eanGerado = novaBase + String(dv);
+                } catch (e) {
+                    eanGerado = 'S/N';
+                }
+            }
+
+            return { ...xmlItem, codigoBarras: eanGerado, idProduto: null, status: 'novo', match: null, estoqueAtual: 0, ...fiscal, confianca: '0%' };
+        });
+
+        return Promise.all(resultadoPromessas);
+    };
 
   const atualizarCampoItem = (index, campo, valor) => {
       const lista = [...itensImportacao];
@@ -639,13 +706,12 @@ const GestaoNotasSefaz = () => {
                                   <select
                                       id="fornecedor-modal-select"
                                       className="dp-select-premium"
-                                      value={cabecalhoModal.fornecedorId || ''}
+                                      value={cabecalhoModal.fornecedorId ? String(cabecalhoModal.fornecedorId) : ""}
                                       onChange={(e) => setCabecalhoModal({...cabecalhoModal, fornecedorId: e.target.value})}
-                                      style={{border: !cabecalhoModal.fornecedorId ? '2px solid #f59e0b' : '1px solid #cbd5e1'}}
                                   >
-                                      <option value="">{cabecalhoModal.fornecedorId ? "Selecione..." : "⚠️ FORNECEDOR AUSENTE - CADASTRE PARA CONTINUAR"}</option>
+                                      <option value="">Selecione um Fornecedor...</option>
                                       {listaFornecedores.map(f => (
-                                          <option key={f.id} value={f.id}>{f.razaoSocial || f.nomeFantasia}</option>
+                                          <option key={f.id} value={String(f.id)}>{f.razaoSocial || f.nomeFantasia}</option>
                                       ))}
                                   </select>
                               </div>
