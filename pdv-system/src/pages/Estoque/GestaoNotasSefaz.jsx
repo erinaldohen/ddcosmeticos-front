@@ -1,21 +1,20 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import produtoService from '../../services/produtoService';
 import { toast } from 'react-toastify';
-import { maskCNPJ, maskPhone } from '../../utils/masks';
+import { maskCNPJ } from '../../utils/masks';
 import {
-  Search, RefreshCw, CheckCircle,
-  FileText, Calendar, Building,
-  DownloadCloud, Filter, Inbox, Package,
-  X, AlertTriangle, Link as LinkIcon, Wand2, Save, Barcode, ChevronRight, Plus
+  Search, RefreshCw, CheckCircle, FileText, Calendar, Building,
+  DownloadCloud, Filter, Inbox, Package, X, AlertTriangle, Link as LinkIcon,
+  Wand2, Save, Barcode, ChevronRight, Plus, Loader2, Hash, Edit3, Sparkles, Eye
 } from 'lucide-react';
 
 import FornecedorForm from '../Fornecedores/FornecedorForm';
 import './GestaoNotasSefaz.css';
 
 // ============================================================================
-// 🧠 HELPERS FISCAIS E I.A.
+// 🧠 HELPERS E MÁSCARAS
 // ============================================================================
 const extrairNumeroNota = (chave) => {
     if (!chave || chave.length !== 44) return "S/N";
@@ -25,6 +24,32 @@ const extrairNumeroNota = (chave) => {
 const limparTexto = (str) => {
     if (!str) return "";
     return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 ]/g, "").toUpperCase().replace(/\s+/g, ' ').trim();
+};
+
+const parseNumber = (val) => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    const cleanStr = String(val).replace(',', '.');
+    const parsed = parseFloat(cleanStr);
+    return isNaN(parsed) ? 0 : parsed;
+};
+
+const formatMoney = (num) => Number(num || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const parseMoneyInput = (str) => Number(String(str).replace(/\D/g, '')) / 100;
+
+const formatarDataBR = (dataIso) => {
+    if (!dataIso) return '';
+    if (dataIso.includes('/')) return dataIso;
+    const partes = dataIso.split('-');
+    if (partes.length !== 3) return dataIso;
+    return `${partes[2]}/${partes[1]}/${partes[0]}`;
+};
+
+const formatarDataHora = (dataStr) => {
+    if (!dataStr) return "---";
+    try {
+        return new Date(dataStr).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    } catch(e) { return "---"; }
 };
 
 const calcularSimilaridade = (nomeXml, nomeDb) => {
@@ -41,48 +66,27 @@ const calcularSimilaridade = (nomeXml, nomeDb) => {
     return palavrasEmComum / Math.min(tokensXml.length, tokensDb.length);
 };
 
-const inferirDadosFiscais = (xmlItem, fornecedorNome) => {
-    let marca = "GENERICA";
-    const nomeUpper = fornecedorNome?.toUpperCase() || "";
-    if (nomeUpper.includes("EUDORA")) marca = "EUDORA";
-    else if (nomeUpper.includes("BOTICARIO")) marca = "BOTICARIO";
-    else if (nomeUpper.includes("NATURA")) marca = "NATURA";
-    else if (nomeUpper.includes("AVON")) marca = "AVON";
-
-    const ncm = xmlItem.ncm ? xmlItem.ncm.replace(/\./g, '') : '00000000';
-    let fiscal = { csosn: '102', pisCofins: '01' };
-    if (ncm.startsWith('3401')) fiscal = { csosn: '500', pisCofins: '04' };
-
-    const prefixo = ncm.substring(0, 4);
-    const mapa = { '3303': 'PERFUMARIA', '3304': 'MAQUIAGEM', '3305': 'CAPILAR', '3307': 'CORPO E BANHO' };
-    return { marca, categoria: mapa[prefixo] || "GERAL", fiscal };
-};
-
-const fetchWithTimeout = async (resource, options = {}) => {
-  const { timeout = 4000 } = options;
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-  try {
-      const response = await fetch(resource, { ...options, signal: controller.signal });
-      clearTimeout(id);
-      return response;
-  } catch (error) {
-      clearTimeout(id);
-      throw error;
-  }
+const findDictionaryMatch = (texto, listaAlvo) => {
+    if (!listaAlvo || listaAlvo.length === 0) return '';
+    const descUpper = texto.toUpperCase();
+    const sortedList = [...listaAlvo].sort((a, b) => b.length - a.length);
+    for (const item of sortedList) {
+        if (new RegExp(`\\b${item.toUpperCase()}\\b`).test(descUpper)) return item;
+    }
+    return '';
 };
 
 // ============================================================================
 // COMPONENTE PRINCIPAL
 // ============================================================================
 const GestaoNotasSefaz = () => {
-
   const navigate = useNavigate();
 
   const [todasNotas, setTodasNotas] = useState([]);
   const [notasExibidas, setNotasExibidas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+
   const [listaProdutosDb, setListaProdutosDb] = useState([]);
   const [listaFornecedores, setListaFornecedores] = useState([]);
 
@@ -103,20 +107,49 @@ const GestaoNotasSefaz = () => {
       localStorage.setItem('ddcosmeticos_ver_importadas', JSON.stringify(verImportadas));
   }, [verImportadas]);
 
+  // Estados do Modal de Auditoria e Importação
   const [modalAberto, setModalAberto] = useState(false);
   const [notaSelecionada, setNotaSelecionada] = useState(null);
   const [loadingModal, setLoadingModal] = useState(false);
   const [loadingCardId, setLoadingCardId] = useState(null);
   const [itensImportacao, setItensImportacao] = useState([]);
   const [cabecalhoModal, setCabecalhoModal] = useState({ fornecedorId: '', numeroDocumento: '', dataEmissao: '' });
+  const [editingPriceIndex, setEditingPriceIndex] = useState(null);
 
+  // Estados do Modal de Cadastro Rápido de Fornecedor
   const [modalFornecedorAberto, setModalFornecedorAberto] = useState(false);
   const [dadosPreForn, setDadosPreForn] = useState(null);
+
+  // Estados do Modal Quick Edit (Criar Produto)
+  const [quickEditIndex, setQuickEditIndex] = useState(null);
+  const [quickEditForm, setQuickEditForm] = useState({
+      descricao: '', codigoBarras: '', marca: '', categoria: '', subcategoria: '', precoCusto: 0, margem: 50.00, precoVenda: 0
+  });
+
+  // Estados do Modal de Visualização de Notas Já Registradas
+  const [modalRegistroAberto, setModalRegistroAberto] = useState(false);
+  const [detalhesRegistro, setDetalhesRegistro] = useState([]);
+
+  // 🧠 DICIONÁRIO DINÂMICO
+  const dicionarios = useMemo(() => {
+      const defMarcas = ["EUDORA", "O BOTICÁRIO", "NATURA", "AVON", "VULT", "QUEM DISSE BERENICE", "RUBY ROSE", "GENERICA"];
+      const defCat = ["PERFUMARIA", "MAQUIAGEM", "CABELOS", "CORPO E BANHO", "ROSTO", "INFANTIL", "SKINCARE", "GERAL"];
+      const defSub = ["COLÔNIA", "SHAMPOO", "SABONETE", "CREME", "BATOM", "MÁSCARA", "SÉRUM", "CONDICIONADOR", "GERAL"];
+
+      const dbMarcas = (listaProdutosDb || []).map(p => p.marca).filter(Boolean);
+      const dbCat = (listaProdutosDb || []).map(p => p.categoria).filter(Boolean);
+      const dbSub = (listaProdutosDb || []).map(p => p.subcategoria).filter(Boolean);
+
+      return {
+          marcas: [...new Set([...defMarcas, ...dbMarcas])].sort(),
+          categorias: [...new Set([...defCat, ...dbCat])].sort(),
+          subcategorias: [...new Set([...defSub, ...dbSub])].sort()
+      };
+  }, [listaProdutosDb]);
 
   useEffect(() => {
     const init = async () => {
         try {
-            // CORREÇÃO: Removido o '/dropdown' para forçar o Backend a enviar o CNPJ na lista.
             const [resProd, resForn] = await Promise.all([
                 api.get('/produtos?size=5000'),
                 api.get('/fornecedores?size=2000')
@@ -127,30 +160,23 @@ const GestaoNotasSefaz = () => {
         carregarNotasDoBackend();
     };
     init();
-    // eslint-disable-next-line
   }, []);
 
   useEffect(() => {
       carregarNotasDoBackend();
-      // eslint-disable-next-line
   }, [verImportadas]);
 
   useEffect(() => {
       if (!Array.isArray(todasNotas)) return;
-
       let notasFiltradas = todasNotas;
       let isSearching = false;
-
       if (chaveBusca && chaveBusca.length > 5) {
           const chaveLimpa = chaveBusca.replace(/\D/g, '');
           notasFiltradas = todasNotas.filter(n => n.chaveAcesso?.replace(/\D/g, '').includes(chaveLimpa));
           isSearching = true;
       }
-
       setBuscaLocalAtiva(isSearching);
-      const inicio = paginaAtual * itensPorPagina;
-      const fim = inicio + itensPorPagina;
-      setNotasExibidas(notasFiltradas.slice(inicio, fim));
+      setNotasExibidas(notasFiltradas.slice(paginaAtual * itensPorPagina, (paginaAtual + 1) * itensPorPagina));
   }, [todasNotas, paginaAtual, chaveBusca]);
 
   const carregarNotasDoBackend = async () => {
@@ -158,21 +184,16 @@ const GestaoNotasSefaz = () => {
     try {
       let url = `/estoque/notas-pendentes?incluirImportadas=${verImportadas}`;
       if (dataInicio && dataFim) url += `&dataInicio=${dataInicio}&dataFim=${dataFim}`;
-
       const res = await api.get(url);
       let dadosExtraidos = [];
       if (Array.isArray(res.data)) dadosExtraidos = res.data;
       else if (res.data?.content) dadosExtraidos = res.data.content;
       else if (res.data?.data) dadosExtraidos = res.data.data;
       else if (res.data?.id) dadosExtraidos = [res.data];
-
       setTodasNotas(dadosExtraidos);
       setPaginaAtual(0);
-    } catch (error) {
-      toast.error("Não foi possível carregar as notas.");
-    } finally {
-      setLoading(false);
-    }
+    } catch (error) { toast.error("Não foi possível carregar as notas."); }
+    finally { setLoading(false); }
   };
 
   const aplicarFiltroDatas = () => {
@@ -194,75 +215,112 @@ const GestaoNotasSefaz = () => {
       toast.update(toastId, { render: "Sincronização concluída com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
       carregarNotasDoBackend();
     } catch (error) {
-      toast.update(toastId, { render: error.response?.data || "Bloqueio temporário da SEFAZ. Tente mais tarde.", type: "warning", isLoading: false, autoClose: 5000 });
+      toast.update(toastId, { render: error.response?.data || "Bloqueio temporário da SEFAZ.", type: "warning", isLoading: false, autoClose: 5000 });
       carregarNotasDoBackend();
-    } finally {
-      setSyncing(false);
-    }
+    } finally { setSyncing(false); }
   };
 
   const buscarNaSefazForcado = async () => {
     const chaveLimpa = chaveBusca.replace(/\D/g, '');
     if (chaveLimpa.length !== 44) return toast.warn("A Chave deve conter 44 números.");
-
     setLoading(true);
     try {
       await api.post(`/estoque/notas-pendentes/buscar-chave/${chaveLimpa}`);
       toast.success("Nota localizada na SEFAZ com sucesso!");
-      setChaveBusca('');
-      carregarNotasDoBackend();
-    } catch (error) {
-      toast.error(error.response?.data || "Nota não encontrada na Base Nacional da SEFAZ.");
-    } finally {
-      setLoading(false);
-    }
+      setChaveBusca(''); carregarNotasDoBackend();
+    } catch (error) { toast.error("Nota não encontrada na Base Nacional da SEFAZ."); }
+    finally { setLoading(false); }
   };
 
-  const enriquecerFornecedorSilenciosamente = async (idForn, cnpjForn) => {
-      if (!idForn || !cnpjForn) return;
-      const docLimpo = cnpjForn.replace(/\D/g, '');
+  const handleFornecedorCriado = (novoFornecedor) => {
+      setListaFornecedores(prev => [...prev, novoFornecedor].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || '')));
+      setCabecalhoModal(prev => ({ ...prev, fornecedorId: String(novoFornecedor.id) }));
+      setModalFornecedorAberto(false);
+  };
 
-      try {
-          const resApi = await fetchWithTimeout(`https://publica.cnpj.ws/cnpj/${docLimpo}`, { timeout: 4000 });
-          if (!resApi.ok) return;
-
-          const data = await resApi.json();
-          const emailApi = data.estabelecimento?.email?.toLowerCase() || '';
-          const ddd = data.estabelecimento?.ddd1 || '';
-          const tel = data.estabelecimento?.telefone1 || '';
-          const telefoneApi = (ddd && tel) ? maskPhone(ddd + tel) : '';
-
-          const resForn = await api.get(`/fornecedores/${idForn}`);
-          const fornAtual = resForn.data;
-          let precisaAtualizar = false;
-
-          if (!fornAtual.email || fornAtual.email.trim() === '') {
-              fornAtual.email = emailApi;
-              precisaAtualizar = true;
-          }
-          if (!fornAtual.telefone || fornAtual.telefone.trim() === '' || !fornAtual.telefone.includes('(')) {
-              fornAtual.telefone = telefoneApi || maskPhone(fornAtual.telefone || '');
-              precisaAtualizar = true;
-          }
-          if (fornAtual.cnpj && !fornAtual.cnpj.includes('.')) {
-              fornAtual.cnpj = maskCNPJ(fornAtual.cnpj);
-              precisaAtualizar = true;
-          }
-
-          if (precisaAtualizar) {
-              const result = await api.put(`/fornecedores/${idForn}`, fornAtual);
-              setListaFornecedores(prev => {
-                  const newList = prev.filter(p => p.id !== idForn);
-                  return [...newList, result.data].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || ''));
-              });
-          }
-      } catch (e) {
-          console.log("Enriquecimento secundário falhou silenciosamente.", e);
-      }
+  // 🔥 ESPELHO DE CONFERÊNCIA (Rico, visual, com checklist)
+  const gerarEspelhoConferencia = () => {
+      const printWindow = window.open('', '_blank');
+      const html = `
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <title>Espelho de Conferência - NF-e ${cabecalhoModal.numeroDocumento}</title>
+              <style>
+                  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+                  body { font-family: 'Inter', sans-serif; padding: 40px; color: #1e293b; background: #fff; margin: 0; }
+                  .header { text-align: center; border-bottom: 3px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 30px; }
+                  .header h1 { margin: 0; font-size: 24px; color: #0f172a; text-transform: uppercase; letter-spacing: 1px; }
+                  .header p { margin: 8px 0 0 0; color: #64748b; font-size: 14px; }
+                  .info-box { display: flex; justify-content: space-between; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 30px; }
+                  .info-box div { flex: 1; }
+                  .info-box strong { display: block; font-size: 12px; color: #64748b; text-transform: uppercase; margin-bottom: 4px; }
+                  .info-box span { font-size: 16px; font-weight: 600; color: #0f172a; }
+                  table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+                  th { background: #f1f5f9; color: #475569; padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; border-bottom: 2px solid #cbd5e1; }
+                  td { padding: 12px; border-bottom: 1px solid #e2e8f0; font-size: 14px; vertical-align: middle; }
+                  .checkbox { width: 20px; height: 20px; border: 2px solid #94a3b8; border-radius: 4px; display: inline-block; }
+                  .total-section { text-align: right; font-size: 20px; font-weight: 800; color: #0f172a; padding-top: 20px; border-top: 2px solid #e2e8f0; }
+                  .total-section small { display: block; font-size: 14px; font-weight: 600; color: #64748b; margin-bottom: 8px; }
+                  .signatures { display: flex; justify-content: space-between; margin-top: 60px; padding-top: 40px; }
+                  .sign-line { width: 45%; border-top: 1px solid #94a3b8; text-align: center; padding-top: 8px; font-size: 14px; color: #475569; font-weight: 600; }
+                  @media print { body { padding: 0; } }
+              </style>
+          </head>
+          <body>
+              <div class="header">
+                  <h1>Espelho de Conferência Física de Estoque</h1>
+                  <p>Documento Interno Auxiliar (Para uso do Estoquista)</p>
+                  <p style="font-family: monospace; font-size: 12px; margin-top: 10px;">CHAVE: ${notaSelecionada?.chaveAcesso || 'N/A'}</p>
+              </div>
+              <div class="info-box">
+                  <div><strong>Fornecedor</strong><span>${notaSelecionada?.nomeFornecedor || 'N/A'}</span></div>
+                  <div><strong>CNPJ</strong><span>${maskCNPJ(notaSelecionada?.cnpjFornecedor || '')}</span></div>
+                  <div><strong>NF-e</strong><span>${cabecalhoModal.numeroDocumento}</span></div>
+                  <div><strong>Emissão</strong><span>${formatarDataBR(cabecalhoModal.dataEmissao)}</span></div>
+              </div>
+              <table>
+                  <thead>
+                      <tr>
+                          <th width="5%" style="text-align: center;">Conf</th>
+                          <th width="20%">EAN / Código</th>
+                          <th width="45%">Descrição do Produto</th>
+                          <th width="10%">Qtd NF</th>
+                          <th width="20%">Custo Unit. (NF)</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      ${itensImportacao.map(i => {
+                          const q = parseNumber(i.quantidade || i.qCom);
+                          const v = parseNumber(i.precoCusto || i.valorUnitario || i.vUnCom);
+                          return `<tr>
+                              <td style="text-align: center;"><div class="checkbox"></div></td>
+                              <td style="font-family: monospace;">${i.codigoBarras || 'S/N'}</td>
+                              <td><strong>${i.descricao}</strong></td>
+                              <td><strong>${q} UN</strong></td>
+                              <td>R$ ${formatMoney(v)}</td>
+                          </tr>`;
+                      }).join('')}
+                  </tbody>
+              </table>
+              <div class="total-section">
+                  <small>Total de Volumes Físicos a Conferir: ${totalQuantidadeModal} UN</small>
+                  Total Financeiro: R$ ${(notaSelecionada?.valorTotal || totalGeralModal).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+              </div>
+              <div class="signatures">
+                  <div class="sign-line">Assinatura do Conferente</div>
+                  <div class="sign-line">Data e Hora da Conferência</div>
+              </div>
+              <script>window.onload = () => window.print();</script>
+          </body>
+          </html>
+      `;
+      printWindow.document.write(html);
+      printWindow.document.close();
   };
 
   const iniciarProcessamento = async (nota) => {
-        setChaveBusca(''); // Limpa buscas residuais
+        setChaveBusca('');
         setLoadingCardId(nota.id);
 
         try {
@@ -281,74 +339,13 @@ const GestaoNotasSefaz = () => {
 
             let fornecedorFinalId = parsed.fornecedorId || nota.fornecedorId || '';
             const cnpjLimpoTarget = String(cnpjReal).replace(/\D/g, '');
-
-            // 1. Procura match na lista local carregada
             const localMatch = listaFornecedores.find(f => f.cnpj && f.cnpj.replace(/\D/g, '') === cnpjLimpoTarget);
 
             if (localMatch) {
                 fornecedorFinalId = localMatch.id;
-            } else if (cnpjLimpoTarget) {
-                // 2. Se o fornecedor não existe, cria em segundo plano com a API completa de Receita/WS
-                try {
-                    let payloadCompletoForn = {
-                        cnpj: maskCNPJ(cnpjLimpoTarget),
-                        razaoSocial: nomeReal.toUpperCase(),
-                        nomeFantasia: nomeReal.toUpperCase(),
-                        ativo: true,
-                        inscricaoEstadual: "ISENTO", // Fallback padrão
-                        telefone: "",
-                        email: "",
-                        logradouro: "",
-                        numero: "",
-                        bairro: "",
-                        cidade: "RECIFE",
-                        estado: "PE",
-                        cep: ""
-                    };
-
-                    // 🔥 Executa a chamada do botão "Receita" (Consumo completo do WS)
-                    try {
-                        const resApi = await fetchWithTimeout(`https://publica.cnpj.ws/cnpj/${cnpjLimpoTarget}`, { timeout: 4000 });
-                        if (resApi.ok) {
-                            const ws = await resApi.json();
-
-                            payloadCompletoForn.razaoSocial = ws.razao_social || ws.estabelecimento?.nome_fantasia || payloadCompletoForn.razaoSocial;
-                            payloadCompletoForn.nomeFantasia = ws.estabelecimento?.nome_fantasia || ws.razao_social || payloadCompletoForn.nomeFantasia;
-                            payloadCompletoForn.email = ws.estabelecimento?.email?.toLowerCase() || "";
-
-                            const ddd = ws.estabelecimento?.ddd1 || "";
-                            const tel = ws.estabelecimento?.telefone1 || "";
-                            if (ddd && tel) payloadCompletoForn.telefone = maskPhone(ddd + tel);
-
-                            // Puxa a Inscrição Estadual ativa se houver
-                            if (ws.estabelecimento?.inscricoes_estaduais && ws.estabelecimento.inscricoes_estaduais.length > 0) {
-                                payloadCompletoForn.inscricaoEstadual = ws.estabelecimento.inscricoes_estaduais[0].inscricao_estaduais || "ISENTO";
-                            }
-
-                            // Mapeamento de Endereço Completo para não abrir vazio
-                            payloadCompletoForn.logradouro = ws.estabelecimento?.logradouro || "";
-                            payloadCompletoForn.numero = ws.estabelecimento?.numero || "";
-                            payloadCompletoForn.bairro = ws.estabelecimento?.bairro || "";
-                            payloadCompletoForn.cidade = ws.estabelecimento?.cidade?.nome?.toUpperCase() || "RECIFE";
-                            payloadCompletoForn.estado = ws.estabelecimento?.estado?.sigla?.toUpperCase() || "PE";
-                            payloadCompletoForn.cep = ws.estabelecimento?.cep || "";
-                        }
-                    } catch (e) {
-                        console.log("WS público temporariamente ocupado, salvando com dados do XML.");
-                    }
-
-                    // Envia o payload completo para o banco de dados
-                    const resNovo = await api.post('/fornecedores', payloadCompletoForn);
-                    if (resNovo.data && resNovo.data.id) {
-                        fornecedorFinalId = resNovo.data.id;
-                        setListaFornecedores(prev => [...prev, resNovo.data].sort((a, b) => (a.razaoSocial || '').localeCompare(b.razaoSocial || '')));
-                    }
-                } catch (errForn) {
-                    console.error("Erro no cadastro em lote de fornecedor:", errForn);
-                }
             }
 
-            const itensProcessados = await processarInteligenciaProdutos(itensXml, nomeReal);
+            const itensProcessados = await processarInteligenciaProdutos(itensXml);
 
             setCabecalhoModal({
                 fornecedorId: fornecedorFinalId ? String(fornecedorFinalId) : '',
@@ -360,6 +357,11 @@ const GestaoNotasSefaz = () => {
             setNotaSelecionada(nota);
             setModalAberto(true);
 
+            if(!fornecedorFinalId) {
+                setDadosPreForn({ cnpj: maskCNPJ(cnpjLimpoTarget), razaoSocial: nomeReal.toUpperCase() });
+                setModalFornecedorAberto(true);
+            }
+
         } catch (err) {
             toast.error("Falha ao preparar importação de mercadorias.");
         } finally {
@@ -367,23 +369,44 @@ const GestaoNotasSefaz = () => {
         }
     };
 
-    const processarInteligenciaProdutos = async (itensXml, fornecedorNome) => {
+    // 🔥 VISUALIZAR NOTA JÁ REGISTRADA
+    const visualizarNotaRegistrada = async (nota) => {
+        setLoadingCardId(nota.id);
+        try {
+            const numeroDoc = extrairNumeroNota(nota.chaveAcesso);
+            const res = await api.get(`/estoque/historico-entradas/${numeroDoc}/itens`);
+            setDetalhesRegistro(Array.isArray(res.data) ? res.data : []);
+            setNotaSelecionada(nota);
+            setModalRegistroAberto(true);
+        } catch (e) {
+            toast.error("Não foi possível carregar os detalhes do registro.");
+        } finally {
+            setLoadingCardId(null);
+        }
+    };
+
+    const processarInteligenciaProdutos = async (itensXml) => {
         const dbSearch = listaProdutosDb || [];
 
-        // Mapeia os itens do XML executando a lógica de preenchimento automático
         const resultadoPromessas = itensXml.map(async (xmlItem, idx) => {
-            const fiscal = inferirDadosFiscais(xmlItem, fornecedorNome);
+            const custoXml = parseNumber(xmlItem.vUnCom || xmlItem.valorUnitario || xmlItem.precoCusto || 0);
 
             if (dbSearch.length > 0) {
-                // Match direto por EAN
                 const matchEan = dbSearch.find(db => db.codigoBarras && xmlItem.codigoBarras && db.codigoBarras.length > 7 && String(db.codigoBarras) === String(xmlItem.codigoBarras));
+
                 if (matchEan) {
-                    return { ...xmlItem, idProduto: matchEan.id, descricao: matchEan.descricao, status: 'vinculado', match: matchEan, estoqueAtual: matchEan.quantidadeEmEstoque || 0, ...fiscal, confianca: '100% (EAN)' };
+                    const precoVendaAtual = parseNumber(matchEan.precoVenda || (custoXml * 1.5));
+                    const margemCalculada = custoXml > 0 ? (((precoVendaAtual - custoXml) / custoXml) * 100).toFixed(2) : '50.00';
+                    // 🔥 CORREÇÃO: Se for zero no banco, o custo médio real é o da nota atual.
+                    const custoMedioBanco = parseNumber(matchEan.precoMedioPonderado || matchEan.precoCusto) || custoXml;
+
+                    return {
+                        ...xmlItem, idProduto: matchEan.id, descricao: matchEan.descricao, status: 'vinculado', match: matchEan,
+                        precoCusto: custoXml, custoMedioAtual: custoMedioBanco, precoVenda: precoVendaAtual, margem: margemCalculada, confianca: '100% (EAN)'
+                    };
                 }
 
-                // Match por proximidade de texto (IA local)
-                let melhor = null;
-                let maiorScore = 0;
+                let melhor = null; let maiorScore = 0;
                 dbSearch.forEach(db => {
                     let score = calcularSimilaridade(xmlItem.descricao, db.descricao);
                     if (score > 0.4 && db.ncm === xmlItem.ncm) score += 0.2;
@@ -391,37 +414,26 @@ const GestaoNotasSefaz = () => {
                 });
 
                 if (maiorScore >= 0.65 && melhor) {
-                    return { ...xmlItem, idProduto: null, status: 'semelhante', match: melhor, estoqueAtual: 0, ...fiscal, confianca: `${Math.round(maiorScore * 100)}% (IA)` };
+                    return { ...xmlItem, idProduto: null, status: 'semelhante', match: melhor, precoCusto: custoXml, confianca: `${Math.round(maiorScore * 100)}% (IA)` };
                 }
             }
 
-            // Se cair aqui, o produto é [NOVO] -> Executa a geração automática de EAN sequencial imediata
             let eanGerado = xmlItem.codigoBarras || '';
             if (!eanGerado || eanGerado.trim() === '' || eanGerado === 'S/N') {
                 try {
-                    const eanBaseBackend = await produtoService.gerarEanInterno();
-                    let eanSugerido = String(eanBaseBackend);
-
-                    // Evita colisão sequencial entre itens dentro da mesma nota
-                    let shift = BigInt(idx);
-                    let maiorBase = BigInt(eanSugerido.substring(0, eanSugerido.length - 1)) + shift;
-                    let novaBase = String(maiorBase).padStart(eanSugerido.length - 1, '0');
-
-                    let s = 0;
-                    let mult = 3;
-                    for (let i = novaBase.length - 1; i >= 0; i--) {
-                        s += parseInt(novaBase.charAt(i)) * mult;
-                        mult = mult === 3 ? 1 : 3;
-                    }
-                    const r = s % 10;
-                    const dv = r === 0 ? 0 : 10 - r;
-                    eanGerado = novaBase + String(dv);
-                } catch (e) {
-                    eanGerado = 'S/N';
-                }
+                    const base = await produtoService.gerarEanInterno();
+                    eanGerado = String(BigInt(base) + BigInt(idx));
+                } catch (e) { eanGerado = 'S/N'; }
             }
 
-            return { ...xmlItem, codigoBarras: eanGerado, idProduto: null, status: 'novo', match: null, estoqueAtual: 0, ...fiscal, confianca: '0%' };
+            const marcaInferida = findDictionaryMatch(xmlItem.descricao, dicionarios.marcas) || 'GENERICA';
+            const catInferida = findDictionaryMatch(xmlItem.descricao, dicionarios.categorias) || 'GERAL';
+            const subcatInferida = findDictionaryMatch(xmlItem.descricao, dicionarios.subcategorias) || '';
+
+            return {
+                ...xmlItem, codigoBarras: eanGerado, idProduto: null, status: 'novo', match: null,
+                precoCusto: custoXml, marca: marcaInferida, categoria: catInferida, subcategoria: subcatInferida, preenchidoViaIA: false
+            };
         });
 
         return Promise.all(resultadoPromessas);
@@ -429,52 +441,86 @@ const GestaoNotasSefaz = () => {
 
   const atualizarCampoItem = (index, campo, valor) => {
       const lista = [...itensImportacao];
-      lista[index][campo] = campo === 'descricao' ? valor.toUpperCase() : valor;
+      if (campo === 'precoCusto') {
+          lista[index][campo] = parseNumber(valor);
+      } else {
+          lista[index][campo] = campo === 'descricao' ? valor.toUpperCase() : valor;
+      }
       setItensImportacao(lista);
   };
 
-  const gerarEanNoModal = async (index) => {
-      try {
-          const eanBaseBackend = await produtoService.gerarEanInterno();
-          let eanSugerido = String(eanBaseBackend);
+  const handleInlineEditValores = (index, campo, valorNumerico) => {
+      const lista = [...itensImportacao];
+      const item = lista[index];
+      item[campo] = valorNumerico;
 
-          const eansInternosLocais = itensImportacao
-              .map(item => item.codigoBarras)
-              .filter(c => c && String(c).startsWith('2') && String(c).length === eanSugerido.length);
+      const custo = parseNumber(item.precoCusto);
 
-          if (eansInternosLocais.length > 0) {
-              let maiorBase = BigInt(eanSugerido.substring(0, eanSugerido.length - 1));
-              eansInternosLocais.forEach(ean => {
-                  let baseAtual = BigInt(ean.substring(0, ean.length - 1));
-                  if (baseAtual > maiorBase) {
-                      maiorBase = baseAtual;
-                  }
-              });
-
-              let novaBase = String(maiorBase + 1n).padStart(eanSugerido.length - 1, '0');
-
-              let soma = 0;
-              let multiplicador = 3;
-              for (let i = novaBase.length - 1; i >= 0; i--) {
-                  soma += parseInt(novaBase.charAt(i)) * multiplicador;
-                  multiplicador = multiplicador === 3 ? 1 : 3;
-              }
-              const resto = soma % 10;
-              const dv = resto === 0 ? 0 : 10 - resto;
-
-              eanSugerido = novaBase + String(dv);
-          }
-
-          atualizarCampoItem(index, 'codigoBarras', eanSugerido);
-      } catch(e) {
-          toast.error("Erro ao gerar EAN Automático.");
+      if (campo === 'precoVenda') {
+          const pv = parseNumber(valorNumerico);
+          item.margem = custo > 0 ? (((pv - custo) / custo) * 100).toFixed(2) : "0.00";
+      } else if (campo === 'margem') {
+          const mg = parseNumber(valorNumerico);
+          item.precoVenda = (custo * (1 + (mg / 100))).toFixed(2);
       }
+      setItensImportacao(lista);
   };
 
   const vincularSugestao = (index, dbProd) => {
       const lista = [...itensImportacao];
-      lista[index] = { ...lista[index], idProduto: dbProd.id, descricao: dbProd.descricao, codigoBarras: dbProd.codigoBarras, status: 'vinculado', estoqueAtual: dbProd.quantidadeEmEstoque || 0 };
+      const custoXml = parseNumber(lista[index].precoCusto || lista[index].valorUnitario || lista[index].vUnCom);
+      const precoVendaAtual = parseNumber(dbProd.precoVenda || (custoXml * 1.5));
+      const margemCalc = custoXml > 0 ? (((precoVendaAtual - custoXml) / custoXml) * 100).toFixed(2) : '50.00';
+      const custoMedioBanco = parseNumber(dbProd.precoMedioPonderado || dbProd.precoCusto) || custoXml;
+
+      lista[index] = {
+          ...lista[index], idProduto: dbProd.id, descricao: dbProd.descricao, codigoBarras: dbProd.codigoBarras,
+          status: 'vinculado', precoCusto: custoXml, custoMedioAtual: custoMedioBanco, precoVenda: precoVendaAtual, margem: margemCalc
+      };
       setItensImportacao(lista);
+  };
+
+  const abrirEdicaoRapida = async (idx, item) => {
+      const custo = parseNumber(item.precoCusto);
+      const margemInicial = 50.00;
+      const precoVenda = custo * (1 + (margemInicial / 100));
+
+      setQuickEditIndex(idx);
+      setQuickEditForm({
+          descricao: item.descricao || '', codigoBarras: item.codigoBarras || '',
+          marca: item.marca || 'GENERICA', categoria: item.categoria || 'GERAL', subcategoria: item.subcategoria || '',
+          precoCusto: custo, margem: margemInicial, precoVenda: precoVenda
+      });
+  };
+
+  const handlePrecificacaoQuickEdit = (campo, valorNumerico) => {
+      const form = { ...quickEditForm, [campo]: valorNumerico };
+      const custo = parseFloat(form.precoCusto) || 0;
+      const margem = parseFloat(form.margem) || 0;
+      const venda = parseFloat(form.precoVenda) || 0;
+
+      if (campo === 'precoCusto' || campo === 'margem') form.precoVenda = custo * (1 + (margem / 100));
+      else if (campo === 'precoVenda') form.margem = custo > 0 ? ((venda - custo) / custo) * 100 : 0;
+
+      setQuickEditForm(form);
+  };
+
+  const salvarEdicaoRapida = () => {
+      const lista = [...itensImportacao];
+      lista[quickEditIndex] = {
+          ...lista[quickEditIndex],
+          descricao: quickEditForm.descricao.toUpperCase(),
+          codigoBarras: quickEditForm.codigoBarras,
+          marca: quickEditForm.marca.toUpperCase(),
+          categoria: quickEditForm.categoria.toUpperCase(),
+          subcategoria: quickEditForm.subcategoria.toUpperCase(),
+          precoCusto: parseNumber(quickEditForm.precoCusto),
+          precoVenda: parseNumber(quickEditForm.precoVenda),
+          margem: quickEditForm.margem,
+          preenchidoViaIA: true
+      };
+      setItensImportacao(lista);
+      setQuickEditIndex(null);
   };
 
   const confirmarEntradaModal = async () => {
@@ -492,29 +538,38 @@ const GestaoNotasSefaz = () => {
       const toastId = toast.loading("A Efetivar Estoque e Financeiro...");
 
       try {
-          await api.post('/estoque/entrada', {
+          const payload = {
               fornecedorId: Number(cabecalhoModal.fornecedorId),
-              numeroDocumento: cabecalhoModal.numeroDocumento || "S/N",
-              dataVencimento: cabecalhoModal.dataEmissao,
-              chaveAcesso: notaSelecionada.chaveAcesso,
+              numeroDocumento: String(cabecalhoModal.numeroDocumento || "S/N"),
+              dataEntrada: cabecalhoModal.dataEmissao,
+              chaveAcesso: String(notaSelecionada.chaveAcesso || ""),
               itens: itensImportacao.map(i => ({
-                  produtoId: i.idProduto, codigoBarras: i.codigoBarras || "S/N",
-                  descricao: i.descricao, quantidade: i.quantidade || 0, valorUnitario: i.precoCusto || 0,
-                  ncm: i.ncm || "00000000", origem: i.origem || '0', cst: i.fiscal?.csosn || i.cst || '102',
-                  marca: i.marca || 'GENERICA', categoria: i.categoria || 'GERAL', unidade: 'UN'
+                  produtoId: i.idProduto ? Number(i.idProduto) : null,
+                  codigoBarras: String(i.codigoBarras || "S/N"),
+                  descricao: String(i.descricao || "PRODUTO SEM NOME"),
+                  quantidade: parseNumber(i.quantidade || i.qCom || 0),
+                  valorUnitario: parseNumber(i.precoCusto || 0),
+                  ncm: String(i.ncm || "00000000"),
+                  origem: "0", cst: "102",
+                  marca: String(i.marca || "GENERICA"),
+                  categoria: String(i.categoria || "GERAL"),
+                  subcategoria: String(i.subcategoria || "GERAL"),
+                  unidade: "UN"
               }))
-          });
+          };
 
-          await api.post(`/estoque/notas-pendentes/${notaSelecionada.id}/importar`);
+          await api.post('/estoque/entrada', payload);
 
-          setTodasNotas(prev => prev.map(n =>
-              n.id === notaSelecionada.id ? { ...n, status: 'IMPORTADA' } : n
-          ));
+          if (notaSelecionada && notaSelecionada.id !== 'MANUAL') {
+              await api.post(`/estoque/notas-pendentes/${notaSelecionada.id}/importar`);
+          }
 
           toast.update(toastId, { render: "Estoque Atualizado com Sucesso!", type: "success", isLoading: false, autoClose: 2000 });
           setModalAberto(false);
+          carregarNotasDoBackend();
       } catch(e) {
-          toast.update(toastId, { render: e.response?.data?.message || "Erro Crítico ao salvar estoque.", type: "error", isLoading: false, autoClose: 5000 });
+          console.error(e);
+          toast.update(toastId, { render: "Erro Crítico ao salvar estoque. Verifique a formatação.", type: "error", isLoading: false, autoClose: 5000 });
       } finally {
           setLoadingModal(false);
       }
@@ -530,7 +585,9 @@ const GestaoNotasSefaz = () => {
   };
 
   const totalPaginasCalculado = Math.max(1, Math.ceil((todasNotas.filter(n => chaveBusca ? n.chaveAcesso?.replace(/\D/g, '').includes(chaveBusca.replace(/\D/g, '')) : true)).length / itensPorPagina));
-  const totalGeralModal = itensImportacao?.reduce((a, b) => a + (Number(b?.total) || 0), 0) || 0;
+  const totalQuantidadeModal = itensImportacao.reduce((acc, curr) => acc + parseNumber(curr.quantidade || curr.qCom || 0), 0);
+  const totalItensModal = itensImportacao.length;
+  const totalGeralModal = itensImportacao.reduce((acc, curr) => acc + (parseNumber(curr.quantidade || curr.qCom || 0) * parseNumber(curr.precoCusto || 0)), 0);
 
   return (
     <div className="gestao-notas-container">
@@ -540,13 +597,14 @@ const GestaoNotasSefaz = () => {
             <div className="gns-icon-box"><Inbox size={36} color="#60a5fa" /></div>
             <div>
               <h1>Caixa de Entrada Fiscal</h1>
-              <p>Gestão unificada de faturamentos e importação de XML.</p>
+              <p>Gestão unificada de faturamentos da SEFAZ.</p>
             </div>
         </div>
-        <button onClick={sincronizarSefaz} disabled={syncing} className={`btn-sync ${!syncing ? 'active' : ''}`}>
-          <RefreshCw size={18} className={syncing ? "animate-spin" : ""} />
-          {syncing ? "Consultando SEFAZ..." : "Puxar Novas Notas"}
-        </button>
+        <div className="gns-header-actions">
+            <button onClick={sincronizarSefaz} disabled={syncing} className={`btn-sync ${!syncing ? 'active' : ''}`}>
+                <RefreshCw size={18} className={syncing ? "animate-spin" : ""} /> {syncing ? "Consultando SEFAZ..." : "Puxar Novas Notas"}
+            </button>
+        </div>
       </div>
 
       <div className="gns-filters-grid">
@@ -555,11 +613,7 @@ const GestaoNotasSefaz = () => {
             <div className="form-busca">
               <div className="input-wrapper">
                 <Search size={18} className="icon-busca" />
-                <input
-                    type="text" placeholder="Cole a chave ou digite..."
-                    value={chaveBusca} onChange={(e) => setChaveBusca(e.target.value)}
-                    maxLength={44} className="search-input"
-                />
+                <input type="text" placeholder="Cole a chave ou digite..." value={chaveBusca} onChange={(e) => setChaveBusca(e.target.value)} maxLength={44} className="search-input" />
               </div>
             </div>
           </div>
@@ -575,8 +629,7 @@ const GestaoNotasSefaz = () => {
                 <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="date-input" />
                 <button onClick={aplicarFiltroDatas} className="btn-aplicar-filtro">Filtrar</button>
             </div>
-
-            <div className="toggle-view" style={{marginTop: '15px'}}>
+            <div className="toggle-view">
                 <label className="switch-ui">
                     <input type="checkbox" checked={verImportadas} onChange={(e) => setVerImportadas(e.target.checked)} />
                     <span className="switch-text">Exibir Histórico de Notas Já Registradas</span>
@@ -585,29 +638,13 @@ const GestaoNotasSefaz = () => {
           </div>
       </div>
 
-      {buscaLocalAtiva && (
-          <div className="busca-inteligente-alert fade-in">
-              <div className="pulse-dot"></div>
-              <span>Busca em Tempo Real: <strong>{notasExibidas.length}</strong> nota(s) localizada(s) na tela.</span>
-          </div>
-      )}
-
       {loading ? (
-        <div className="state-container loading">
-          <RefreshCw size={40} className="animate-spin" style={{ margin: '0 auto 15px', color: '#3b82f6' }} />
-          <h2>Lendo Base de Dados...</h2>
-        </div>
+        <div className="state-container loading"><RefreshCw size={40} className="animate-spin" /><h2>Lendo Base de Dados...</h2></div>
       ) : notasExibidas.length === 0 ? (
         <div className="state-container empty fade-in">
-          <FileText size={48} style={{ color: '#cbd5e1', margin: '0 auto 20px' }} />
+          <FileText size={48} color="#cbd5e1" />
           <h2>Nenhuma nota encontrada na tela.</h2>
-          {chaveBusca.length === 44 ? (
-             <button onClick={buscarNaSefazForcado} className="btn-aplicar-filtro" style={{marginTop: '15px'}}>
-                 🔍 Buscar esta Chave na SEFAZ Nacional
-             </button>
-          ) : (
-             <p>Se tem faturamentos recentes, clique em <strong>"Puxar Novas Notas"</strong> no topo.</p>
-          )}
+          {chaveBusca.length === 44 && <button onClick={buscarNaSefazForcado} className="btn-aplicar-filtro">🔍 Buscar Chave na SEFAZ Nacional</button>}
         </div>
       ) : (
         <div className="notas-list">
@@ -618,7 +655,6 @@ const GestaoNotasSefaz = () => {
 
             return (
               <div key={nota.id} className={`nota-card-ui ${isImportada ? 'importada' : isResumo ? 'resumo' : 'pendente'} ${buscaLocalAtiva ? 'glow-card' : ''}`}>
-
                 <div className="ncu-fornecedor">
                     <div className="ncu-title-row">
                         <Building size={20} color={isImportada ? '#10b981' : '#64748b'}/>
@@ -627,33 +663,22 @@ const GestaoNotasSefaz = () => {
                     </div>
                     <span className="ncu-cnpj">CNPJ: {maskCNPJ(nota.cnpjFornecedor)}</span>
                 </div>
-
                 <div className="ncu-body">
                     <div className="ncu-fiscal">
-                        <div className="ncu-item">
-                            <span className="ncu-label">Documento</span>
-                            <strong className="ncu-value"><FileText size={14}/> NF-e {extrairNumeroNota(nota.chaveAcesso)}</strong>
-                        </div>
-                        <div className="ncu-item full-width">
-                            <span className="ncu-label">Chave de Acesso</span>
-                            <span className="ncu-chave">{nota.chaveAcesso}</span>
-                        </div>
+                        <div className="ncu-item"><span className="ncu-label">Documento</span><strong className="ncu-value"><FileText size={14}/> NF-e {extrairNumeroNota(nota.chaveAcesso)}</strong></div>
+                        <div className="ncu-item"><span className="ncu-label">Chave de Acesso</span><span className="ncu-chave">{nota.chaveAcesso}</span></div>
                     </div>
-
                     <div className="ncu-financeiro">
-                        <div className="ncu-item">
-                            <span className="ncu-label">Data de Emissão</span>
-                            <span className="ncu-value"><Calendar size={14}/> {nota.dataEmissao ? new Date(nota.dataEmissao).toLocaleDateString('pt-BR') : 'N/A'}</span>
-                        </div>
-                        <div className="ncu-item">
-                            <span className="ncu-label">Faturamento Total</span>
-                            <strong className="ncu-valor-destaque">R$ {nota.valorTotal ? nota.valorTotal.toFixed(2).replace('.',',') : '0,00'}</strong>
-                        </div>
+                        <div className="ncu-item"><span className="ncu-label">Data de Emissão</span><span className="ncu-value"><Calendar size={14}/> {nota.dataEmissao ? new Date(nota.dataEmissao).toLocaleDateString('pt-BR') : 'N/A'}</span></div>
+                        <div className="ncu-item"><span className="ncu-label">Faturamento Total</span><strong className="ncu-valor-destaque">R$ {nota.valorTotal ? nota.valorTotal.toFixed(2).replace('.',',') : '0,00'}</strong></div>
                     </div>
-
                     <div className="ncu-acao">
+                        {/* 🔥 SE ESTIVER IMPORTADA, MOSTRA BOTÃO DE VER REGISTRO */}
                         {isImportada ? (
-                          <button disabled className="btn-acao disabled"><CheckCircle size={18} /> Entrada Confirmada</button>
+                          <button onClick={() => visualizarNotaRegistrada(nota)} disabled={isLoadingThis} className={`btn-acao importada-view`}>
+                              {isLoadingThis ? <RefreshCw size={18} className="animate-spin" /> : <Eye size={18} />}
+                              Ver Registro <ChevronRight size={18} />
+                          </button>
                         ) : (
                           <button onClick={() => iniciarProcessamento(nota)} disabled={isLoadingThis} className={`btn-acao ${isResumo ? 'resumo' : 'importar'}`}>
                             {isLoadingThis ? <RefreshCw size={18} className="animate-spin" /> : isResumo ? <DownloadCloud size={18} /> : <Package size={18} />}
@@ -668,138 +693,184 @@ const GestaoNotasSefaz = () => {
         </div>
       )}
 
-      {!loading && totalPaginasCalculado > 1 && !buscaLocalAtiva && (
-        <div className="paginacao">
-            <button onClick={() => setPaginaAtual(p => Math.max(0, p - 1))} disabled={paginaAtual === 0} className={`btn-page ${paginaAtual === 0 ? '' : 'active'}`}>Anterior</button>
-            <span className="paginacao-info">Página {paginaAtual + 1} de {totalPaginasCalculado}</span>
-            <button onClick={() => setPaginaAtual(p => Math.min(totalPaginasCalculado - 1, p + 1))} disabled={paginaAtual >= totalPaginasCalculado - 1} className={`btn-page ${paginaAtual >= totalPaginasCalculado - 1 ? '' : 'active'}`}>Próxima</button>
-        </div>
-      )}
-
       {/* ============================================================================ */}
-      {/* MODAL GIGANTE PREMIUM REFORMULADO (UI/UX) */}
+      {/* MODAL PRINCIPAL: IMPORTAÇÃO E AUDITORIA */}
       {/* ============================================================================ */}
       {modalAberto && (
           <div className="modal-overlay fade-in">
               <div className="import-modal scale-in">
 
-                  <div className="modal-header-premium">
-                      <div>
-                          <h2>Importação de Estoque</h2>
-                          <p>Auditoria Fiscal e Inteligência Artificial</p>
+                  <div className="mi-header-top">
+                      <div className="mi-title-box">
+                          <div className="mi-icon"><FileText size={32}/></div>
+                          <div>
+                              <h2>Importação de NF-e {cabecalhoModal.numeroDocumento}</h2>
+                              <span className="mi-chave"><Hash size={14}/> Chave: {notaSelecionada?.chaveAcesso || "S/N"}</span>
+                          </div>
                       </div>
-                      <button className="btn-close-modal" onClick={() => setModalAberto(false)}><X size={24}/></button>
+
+                      <div className="mi-actions">
+                          <button onClick={gerarEspelhoConferencia} className="btn-baixar-danfe">
+                              <DownloadCloud size={18} /> Imprimir Espelho de Conferência
+                          </button>
+                          <button onClick={() => setModalAberto(false)} className="btn-close-modal"><X size={24}/></button>
+                      </div>
                   </div>
 
-                  <div className="modal-body-premium">
-                      <div className="modal-content-wrapper">
+                  <div className="mi-info-grid">
+                      <div className="mi-info-item">
+                          <span className="mi-label"><Building size={12}/> Razão Social do Fornecedor</span>
+                          <strong className="mi-value">{notaSelecionada?.nomeFornecedor || "Fornecedor da Nota Manual"}</strong>
+                      </div>
+                      <div className="mi-info-item">
+                          <span className="mi-label">CNPJ Identificado</span>
+                          <strong className="mi-value monospace">{maskCNPJ(notaSelecionada?.cnpjFornecedor || dadosPreForn?.cnpj)}</strong>
+                      </div>
+                      <div className="mi-info-item">
+                          <span className="mi-label"><Calendar size={12}/> Emissão</span>
+                          <strong className="mi-value">{formatarDataBR(cabecalhoModal.dataEmissao)}</strong>
+                      </div>
+                      <div className="mi-info-item">
+                          <span className="mi-label"><Package size={12}/> Volumes da Nota</span>
+                          <strong className="mi-value">{totalItensModal} Itens ({totalQuantidadeModal} UN)</strong>
+                      </div>
+                      <div className="mi-info-item highlight">
+                          <span className="mi-label">Valor Total da Nota</span>
+                          <strong className="mi-value valor-total">R$ {(notaSelecionada?.valorTotal || totalGeralModal).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
+                      </div>
+                  </div>
 
-                          <div className="stepper-header">Passo 1: Identificação</div>
-                          <div className="dashboard-panel-glass">
-                              <div className="dp-col dp-col-fornecedor">
-                                  <div style={{display:'flex', justifyContent:'space-between', alignItems: 'center', marginBottom: '6px'}}>
-                                      <label style={{margin:0}}>Fornecedor</label>
-                                      {!cabecalhoModal.fornecedorId && (
-                                          <button onClick={() => setModalFornecedorAberto(true)} className="btn-add-forn"><Plus size={12}/> ADICIONAR MANUALMENTE</button>
-                                      )}
-                                  </div>
-                                  <select
-                                      id="fornecedor-modal-select"
-                                      className="dp-select-premium"
-                                      value={cabecalhoModal.fornecedorId ? String(cabecalhoModal.fornecedorId) : ""}
-                                      onChange={(e) => setCabecalhoModal({...cabecalhoModal, fornecedorId: e.target.value})}
-                                  >
-                                      <option value="">Selecione um Fornecedor...</option>
-                                      {listaFornecedores.map(f => (
-                                          <option key={f.id} value={String(f.id)}>{f.razaoSocial || f.nomeFantasia}</option>
-                                      ))}
-                                  </select>
+                  <div className="modal-body-premium custom-scrollbar">
+
+                      <div className="panel-fornecedor">
+                          <div className="dp-col dp-col-large">
+                              <div className="filter-header">
+                                  <label>Fornecedor (Vínculo no Sistema)</label>
+                                  {!cabecalhoModal.fornecedorId && (
+                                      <button onClick={() => setModalFornecedorAberto(true)} className="btn-add-forn"><Plus size={12}/> Cadastrar Manual</button>
+                                  )}
                               </div>
-                              <div className="dp-col dp-col-small">
-                                  <label>NF-e</label>
-                                  <input className="dp-input-premium" value={cabecalhoModal.numeroDocumento} readOnly />
-                              </div>
-                              <div className="dp-col dp-col-small">
-                                  <label>Data Faturamento</label>
-                                  <input type="date" className="dp-input-premium" value={cabecalhoModal.dataEmissao} onChange={(e) => setCabecalhoModal({...cabecalhoModal, dataEmissao: e.target.value})} />
-                              </div>
+                              <select
+                                  id="fornecedor-modal-select"
+                                  className="dp-select-premium"
+                                  value={cabecalhoModal.fornecedorId ? String(cabecalhoModal.fornecedorId) : ""}
+                                  onChange={(e) => setCabecalhoModal({...cabecalhoModal, fornecedorId: e.target.value})}
+                              >
+                                  <option value="">Selecione para Vincular...</option>
+                                  {listaFornecedores.map(f => (
+                                      <option key={f.id} value={String(f.id)}>{f.razaoSocial || f.nomeFantasia}</option>
+                                  ))}
+                              </select>
                           </div>
+                      </div>
 
-                          <div className="stepper-header" style={{marginTop: '10px'}}>Passo 2: Mercadorias</div>
-                          <div className="modal-table-area">
-                              <table className="modern-table">
-                                  <thead>
-                                      <tr>
-                                          <th width="15%">Auditoria IA</th>
-                                          <th width="45%">Mercadoria</th>
-                                          <th width="20%">Custo / Volume</th>
-                                          <th width="20%">Ação Requerida</th>
-                                      </tr>
-                                  </thead>
-                                  <tbody>
-                                      {itensImportacao.map((item, idx) => (
-                                              <tr key={idx} className={`tr-${item.status}`}>
-                                                  <td className="td-status">
-                                                      {item.status === 'vinculado' && <span className="badge-status importada"><CheckCircle size={14}/> VINCULADO</span>}
-                                                      {item.status === 'semelhante' && <span className="badge-status resumo"><AlertTriangle size={14}/> REVISAR</span>}
-                                                      {item.status === 'novo' && <span className="badge-status pendente"><Package size={14}/> CRIAR</span>}
-                                                  </td>
+                      <div className="stepper-header">Auditoria e Vínculo de Mercadorias</div>
+                      <div className="modal-table-area">
+                          <table className="modern-table">
+                              <thead>
+                                  <tr>
+                                      <th width="15%">Auditoria IA</th>
+                                      <th width="40%">Mercadoria no XML</th>
+                                      <th width="25%">Custo Unitário / Volume</th>
+                                      <th width="20%">Ação Requerida</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  {itensImportacao.map((item, idx) => {
+                                      const qtdNum = parseNumber(item.quantidade || item.qCom || 0);
+                                      const custoNum = parseNumber(item.precoCusto || 0);
+                                      const subtotalLinha = qtdNum * custoNum;
 
-                                                  <td>
-                                                      {item.status === 'novo' ? (
-                                                          <div className="novo-produto-form">
-                                                              <input value={item.descricao} onChange={(e) => atualizarCampoItem(idx, 'descricao', e.target.value)} className="input-elegante focus-blue" placeholder="Nome no seu sistema"/>
-                                                              <div className="ean-generator">
-                                                                  <input value={item.codigoBarras} onChange={(e) => atualizarCampoItem(idx, 'codigoBarras', e.target.value)} className="input-elegante" placeholder="EAN / Cód. Barras"/>
-                                                                  <button onClick={() => gerarEanNoModal(idx)} className="btn-magic" title="Gerar EAN Automático (Sequencial)"><Wand2 size={16}/></button>
-                                                              </div>
+                                      return (
+                                          <tr key={idx} className={`tr-${item.status}`}>
+                                              <td className="td-status">
+                                                  {item.status === 'vinculado' && <span className="badge-status importada"><CheckCircle size={14}/> VINCULADO</span>}
+                                                  {item.status === 'semelhante' && <span className="badge-status resumo"><AlertTriangle size={14}/> REVISAR</span>}
+                                                  {item.status === 'novo' && <span className="badge-status pendente"><Package size={14}/> NOVO (CRIAR)</span>}
+                                              </td>
+
+                                              <td>
+                                                  <div className="produto-leitura">
+                                                      <strong>{item.descricao}</strong>
+                                                      <div className="prod-meta">
+                                                          <span className="pill-gray"><Barcode size={12}/> {item.codigoBarras || "S/ GTIN"}</span>
+                                                          <span className="pill-gray"><FileText size={12}/> NCM: {item.ncm}</span>
+                                                          {item.preenchidoViaIA && <span className="pill-gray pill-ia"><Sparkles size={12}/> Atributos Prontos</span>}
+                                                      </div>
+                                                  </div>
+                                              </td>
+
+                                              <td className="td-valores" onDoubleClick={() => setEditingPriceIndex(idx)}>
+                                                  <span className="qtd-badge">{qtdNum} UN</span>
+
+                                                  {editingPriceIndex === idx ? (
+                                                      <input
+                                                          type="number" step="0.01" autoFocus defaultValue={custoNum}
+                                                          onBlur={(e) => {
+                                                              atualizarCampoItem(idx, 'precoCusto', e.target.value);
+                                                              setEditingPriceIndex(null);
+                                                          }}
+                                                          onKeyDown={(e) => {
+                                                              if (e.key === 'Enter') {
+                                                                  atualizarCampoItem(idx, 'precoCusto', e.target.value);
+                                                                  setEditingPriceIndex(null);
+                                                              }
+                                                          }}
+                                                          className="input-elegante focus-blue"
+                                                      />
+                                                  ) : (
+                                                      <span className="unit-cost" title="Duplo clique para editar">Custo NF: R$ {formatMoney(custoNum)} / un</span>
+                                                  )}
+
+                                                  {item.status === 'vinculado' && (
+                                                      <span className="custo-medio-label" title="Puxado do banco de dados (Ou NF atual se era inédito)">
+                                                          Custo Médio DB: R$ {formatMoney(item.custoMedioAtual)}
+                                                      </span>
+                                                  )}
+
+                                                  <strong className="total-cost text-primary" style={{marginTop: '4px'}}>Subtotal: R$ {formatMoney(subtotalLinha)}</strong>
+
+                                                  {item.status === 'vinculado' && (
+                                                      <div className="inline-edit-container">
+                                                          <div className="inline-form-group">
+                                                              <label className="inline-label">Margem (%)</label>
+                                                              <input type="text" value={formatMoney(item.margem)} onChange={(e) => handleInlineEditValores(idx, 'margem', parseMoneyInput(e.target.value))} className="inline-input margem" />
                                                           </div>
-                                                      ) : (
-                                                          <div className="produto-leitura">
-                                                              <strong>{item.descricao}</strong>
-                                                              <div className="prod-meta">
-                                                                  <span className="pill-gray"><Barcode size={12}/> {item.codigoBarras}</span>
-                                                                  <span className="pill-gray"><FileText size={12}/> NCM: {item.ncm}</span>
-                                                              </div>
+                                                          <div className="inline-form-group">
+                                                              <label className="inline-label">Venda (R$)</label>
+                                                              <input type="text" value={formatMoney(item.precoVenda)} onChange={(e) => handleInlineEditValores(idx, 'precoVenda', parseMoneyInput(e.target.value))} className="inline-input venda" />
                                                           </div>
-                                                      )}
-                                                  </td>
+                                                      </div>
+                                                  )}
+                                              </td>
 
-                                                  <td className="td-valores">
-                                                      <span className="qtd-badge">{item.quantidade} UN</span>
-                                                      <span className="unit-cost">R$ {Number(item.precoCusto).toFixed(2)} / un</span>
-                                                      <strong className="total-cost">Tot: R$ {item.total?.toFixed(2)}</strong>
-                                                  </td>
-
-                                                  <td>
-                                                      {item.status === 'semelhante' && (
-                                                          <div className="card-sugestao-ia">
-                                                              <span className="ia-label">Identificado ({item.confianca})</span>
-                                                              <strong title={item.match?.descricao}>{item.match?.descricao?.substring(0,35)}...</strong>
-                                                              <button onClick={() => vincularSugestao(idx, item.match)} className="btn-aceitar-sugestao pulse-btn"><LinkIcon size={14}/> Vincular Agora</button>
-                                                          </div>
-                                                      )}
-                                                      {item.status === 'vinculado' && (
-                                                          <div className="txt-sucesso-ia"><CheckCircle size={16}/> <span>Tudo Certo</span></div>
-                                                      )}
-                                                      {item.status === 'novo' && (
-                                                          <div className="txt-info-novo"><Package size={16}/> <span>Registar Estoque</span></div>
-                                                      )}
-                                                  </td>
-                                              </tr>
-                                          ))}
-                                  </tbody>
-                              </table>
-                          </div>
+                                              <td>
+                                                  {item.status === 'semelhante' && (
+                                                      <div className="card-sugestao-ia">
+                                                          <span className="ia-label">Identificado ({item.confianca})</span>
+                                                          <strong title={item.match?.descricao}>{item.match?.descricao?.substring(0,35)}...</strong>
+                                                          <button onClick={() => vincularSugestao(idx, item.match)} className="btn-aceitar-sugestao pulse-btn"><LinkIcon size={14}/> Vincular Agora</button>
+                                                      </div>
+                                                  )}
+                                                  {item.status === 'vinculado' && (
+                                                      <div className="txt-sucesso-ia"><CheckCircle size={16}/> <span>Tudo Certo. +{qtdNum} no estoque.</span></div>
+                                                  )}
+                                                  {item.status === 'novo' && (
+                                                      <button onClick={() => abrirEdicaoRapida(idx, item)} className="btn-completar-cadastro">
+                                                          <Edit3 size={16}/> {item.preenchidoViaIA ? "Revisar Atributos" : "Completar Cadastro"}
+                                                      </button>
+                                                  )}
+                                              </td>
+                                          </tr>
+                                      )
+                                  })}
+                              </tbody>
+                          </table>
                       </div>
                   </div>
 
                   {!loadingModal && (
                       <div className="modal-footer-premium">
-                          <div className="resumo-financeiro">
-                              <span>Investimento Líquido</span>
-                              <strong>R$ {totalGeralModal.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</strong>
-                          </div>
                           <button className="btn-confirmar-gigante" onClick={confirmarEntradaModal} disabled={loadingModal}>
                               <Save size={22}/> Confirmar Atualização do Estoque
                           </button>
@@ -810,22 +881,132 @@ const GestaoNotasSefaz = () => {
       )}
 
       {/* ============================================================================ */}
-      {/* MODAL DE CADASTRO MANUAL DE FORNECEDOR (BYPASS SEGURO) */}
+      {/* MODAL DE LEITURA (VER NOTA JÁ REGISTRADA) */}
       {/* ============================================================================ */}
+      {modalRegistroAberto && (
+          <div className="modal-overlay fade-in">
+              <div className="import-modal scale-in" style={{maxWidth: '900px', height: 'auto', maxHeight: '85vh'}}>
+                  <div className="mi-header-top">
+                      <div className="mi-title-box">
+                          <div className="mi-icon" style={{background: '#dcfce7', color: '#10b981'}}><CheckCircle size={32}/></div>
+                          <div>
+                              <h2 style={{color: '#064e3b'}}>Registro Finalizado: {notaSelecionada?.numeroNota || extrairNumeroNota(notaSelecionada?.chaveAcesso)}</h2>
+                              <span className="mi-chave"><Hash size={14}/> Chave: {notaSelecionada?.chaveAcesso}</span>
+                          </div>
+                      </div>
+                      <button onClick={() => setModalRegistroAberto(false)} className="btn-close-modal"><X size={24}/></button>
+                  </div>
+
+                  <div className="modal-body-premium custom-scrollbar" style={{background: '#fff'}}>
+                      <p style={{color: '#64748b', marginBottom: '20px'}}>Esta nota já foi processada, os produtos já somaram ao estoque e o financeiro já foi provisionado.</p>
+
+                      <table className="modern-table" style={{border: '1px solid #e2e8f0'}}>
+                          <thead style={{background: '#f8fafc'}}>
+                              <tr><th>Produto (No Sistema)</th><th>Qtd Entrou</th><th>Custo Lançado</th><th>Subtotal</th></tr>
+                          </thead>
+                          <tbody>
+                              {detalhesRegistro.map((item, idx) => {
+                                  const partes = (item.infoParaFront || item.produtoDescricao || "").split('|');
+                                  const nome = partes[0] || "Produto";
+                                  const q = parseNumber(item.quantidade || item.quantidadeMovimentada);
+                                  const c = parseNumber(item.custoUnitario || item.custoMovimentado);
+                                  return (
+                                      <tr key={idx}>
+                                          <td><strong>{nome}</strong></td>
+                                          <td><span className="qtd-badge">{q} UN</span></td>
+                                          <td>R$ {formatMoney(c)}</td>
+                                          <td style={{fontWeight: 'bold', color: '#3b82f6'}}>R$ {formatMoney(q * c)}</td>
+                                      </tr>
+                                  )
+                              })}
+                          </tbody>
+                      </table>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* ============================================================================ */}
+      {/* MODAL QUICK EDIT (CRIAR PRODUTO NOVO NO MESMO CONTEXTO) */}
+      {/* ============================================================================ */}
+      {quickEditIndex !== null && (
+          <div className="qe-overlay">
+              <div className="qe-card scale-in">
+                  <div className="qe-header">
+                      <h3><Sparkles size={18} className="text-primary"/> Configurar Atributos do Novo Produto</h3>
+                      <button onClick={() => setQuickEditIndex(null)} className="btn-close-modal"><X size={20}/></button>
+                  </div>
+
+                  <div className="qe-body">
+                      <div className="qe-form-group">
+                          <label>Descrição Oficial (Como ficará no sistema)</label>
+                          <input type="text" value={quickEditForm.descricao} onChange={e => setQuickEditForm({...quickEditForm, descricao: e.target.value})} className="qe-input" />
+                      </div>
+
+                      <div className="qe-grid-2">
+                          <div className="qe-form-group">
+                              <label>EAN / Código de Barras</label>
+                              <div className="qe-ean-row">
+                                  <input type="text" value={quickEditForm.codigoBarras} onChange={e => setQuickEditForm({...quickEditForm, codigoBarras: e.target.value})} className="qe-input" style={{flex: 1}} />
+                                  <button onClick={async () => {
+                                      try { const base = await produtoService.gerarEanInterno(); setQuickEditForm({...quickEditForm, codigoBarras: String(base)}); } catch(e){}
+                                  }} className="btn-qe-magic" title="Gerar Novo Sequencial"><Wand2 size={18}/></button>
+                              </div>
+                          </div>
+                          <div className="qe-form-group">
+                              <label>Marca <span style={{fontSize: '0.65rem', textTransform: 'none'}}>(Duplo clique p/ listar)</span></label>
+                              <input list="lista-marcas-qe" value={quickEditForm.marca} onChange={e => setQuickEditForm({...quickEditForm, marca: e.target.value})} onDoubleClick={() => setQuickEditForm({...quickEditForm, marca: ''})} className="qe-input" placeholder="Selecione ou digite..." />
+                              <datalist id="lista-marcas-qe">{dicionarios.marcas.map((m, i) => <option key={i} value={m} />)}</datalist>
+                          </div>
+                      </div>
+
+                      <div className="qe-grid-2">
+                          <div className="qe-form-group">
+                              <label>Categoria <span style={{fontSize: '0.65rem', textTransform: 'none'}}>(Duplo clique p/ listar)</span></label>
+                              <input list="lista-cat-qe" value={quickEditForm.categoria} onChange={e => setQuickEditForm({...quickEditForm, categoria: e.target.value})} onDoubleClick={() => setQuickEditForm({...quickEditForm, categoria: ''})} className="qe-input" placeholder="Selecione ou digite..." />
+                              <datalist id="lista-cat-qe">{dicionarios.categorias.map((c, i) => <option key={i} value={c} />)}</datalist>
+                          </div>
+                          <div className="qe-form-group">
+                              <label>Subcategoria <span style={{fontSize: '0.65rem', textTransform: 'none'}}>(Duplo clique p/ listar)</span></label>
+                              <input list="lista-subcat-qe" value={quickEditForm.subcategoria} onChange={e => setQuickEditForm({...quickEditForm, subcategoria: e.target.value})} onDoubleClick={() => setQuickEditForm({...quickEditForm, subcategoria: ''})} className="qe-input" placeholder="Selecione ou digite..." />
+                              <datalist id="lista-subcat-qe">{dicionarios.subcategorias.map((s, i) => <option key={i} value={s} />)}</datalist>
+                          </div>
+                      </div>
+
+                      <div className="qe-grid-3">
+                          <div className="qe-form-group">
+                              <label>Custo Base (R$)</label>
+                              <input type="text" value={formatMoney(quickEditForm.precoCusto)} onChange={e => handlePrecificacaoQuickEdit('precoCusto', parseMoneyInput(e.target.value))} className="qe-input" style={{fontFamily:'monospace'}} />
+                          </div>
+                          <div className="qe-form-group">
+                              <label>Margem Lícita (%)</label>
+                              <input type="text" value={formatMoney(quickEditForm.margem)} onChange={e => handlePrecificacaoQuickEdit('margem', parseMoneyInput(e.target.value))} className="qe-input" style={{color:'#047857', borderColor:'#6ee7b7', fontFamily:'monospace'}} />
+                          </div>
+                          <div className="qe-form-group">
+                              <label>Preço Venda (R$)</label>
+                              <input type="text" value={formatMoney(quickEditForm.precoVenda)} onChange={e => handlePrecificacaoQuickEdit('precoVenda', parseMoneyInput(e.target.value))} className="qe-input" style={{color:'#1e40af', background:'#eff6ff', borderColor:'#bfdbfe', fontFamily:'monospace'}} />
+                          </div>
+                      </div>
+                  </div>
+
+                  <div className="qe-footer">
+                      <button onClick={() => setQuickEditIndex(null)} className="btn-qe-cancel">Cancelar</button>
+                      <button onClick={salvarEdicaoRapida} className="btn-qe-save"><CheckCircle size={18}/> Salvar Atributos</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* MODAL FORNECEDOR MANUAL */}
       {modalFornecedorAberto && (
           <div className="modal-overlay" style={{zIndex: 99999}}>
-              <div className="modal-card scale-in" style={{ maxWidth: '800px', width: '95%', padding: '0', background: '#fff' }}>
-                  <div className="modal-header-premium" style={{ padding: '15px 20px' }}>
-                      <h3 style={{margin:0}}>Completar Registo do Fornecedor</h3>
+              <div className="modal-card scale-in" style={{ maxWidth: '800px', width: '95%', padding: '0', background: '#fff', borderRadius: '16px', overflow: 'hidden' }}>
+                  <div className="modal-header-premium">
+                      <h2 style={{margin:0}}>Completar Registo do Fornecedor</h2>
                       <button onClick={() => setModalFornecedorAberto(false)} className="btn-close-modal"><X size={20}/></button>
                   </div>
                   <div style={{ padding: '20px' }}>
-                      <p style={{marginBottom: '20px', color: '#64748b'}}>A SEFAZ não devolveu dados completos. Por favor, confirme o cadastro para continuar a importação.</p>
-                      <FornecedorForm
-                          isModal={true}
-                          prefillData={dadosPreForn}
-                          onSuccess={handleFornecedorCriado}
-                      />
+                      <FornecedorForm isModal={true} prefillData={dadosPreForn} onSuccess={handleFornecedorCriado} />
                   </div>
               </div>
           </div>
