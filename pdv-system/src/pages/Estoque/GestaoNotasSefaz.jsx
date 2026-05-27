@@ -7,7 +7,7 @@ import { maskCNPJ } from '../../utils/masks';
 import {
   Search, RefreshCw, CheckCircle, FileText, Calendar, Building,
   DownloadCloud, Filter, Inbox, Package, X, AlertTriangle, Link as LinkIcon,
-  Wand2, Save, Barcode, ChevronRight, Plus, Loader2, Hash, Edit3, Sparkles, Eye
+  Wand2, Save, Barcode, ChevronRight, Plus, Loader2, Hash, Edit3, Sparkles, Eye, Clock, User
 } from 'lucide-react';
 
 import FornecedorForm from '../Fornecedores/FornecedorForm';
@@ -107,20 +107,21 @@ const GestaoNotasSefaz = () => {
       localStorage.setItem('ddcosmeticos_ver_importadas', JSON.stringify(verImportadas));
   }, [verImportadas]);
 
-  // Estados do Modal de Auditoria e Importação
+  // Estados do Modal
   const [modalAberto, setModalAberto] = useState(false);
   const [notaSelecionada, setNotaSelecionada] = useState(null);
   const [loadingModal, setLoadingModal] = useState(false);
+  const [baixandoDanfe, setBaixandoDanfe] = useState(false);
   const [loadingCardId, setLoadingCardId] = useState(null);
   const [itensImportacao, setItensImportacao] = useState([]);
   const [cabecalhoModal, setCabecalhoModal] = useState({ fornecedorId: '', numeroDocumento: '', dataEmissao: '' });
+
+  // Estado para Edição Inline (Duplo Clique)
   const [editingPriceIndex, setEditingPriceIndex] = useState(null);
 
-  // Estados do Modal de Cadastro Rápido de Fornecedor
   const [modalFornecedorAberto, setModalFornecedorAberto] = useState(false);
   const [dadosPreForn, setDadosPreForn] = useState(null);
 
-  // Estados do Modal Quick Edit (Criar Produto)
   const [quickEditIndex, setQuickEditIndex] = useState(null);
   const [quickEditForm, setQuickEditForm] = useState({
       descricao: '', codigoBarras: '', marca: '', categoria: '', subcategoria: '', precoCusto: 0, margem: 50.00, precoVenda: 0
@@ -130,20 +131,18 @@ const GestaoNotasSefaz = () => {
   const [modalRegistroAberto, setModalRegistroAberto] = useState(false);
   const [detalhesRegistro, setDetalhesRegistro] = useState([]);
 
-  // 🧠 DICIONÁRIO DINÂMICO
+  // 🔥 DICIONÁRIO DINÂMICO REAL: Extrai exclusivamente o que está registado no BD local.
   const dicionarios = useMemo(() => {
-      const defMarcas = ["EUDORA", "O BOTICÁRIO", "NATURA", "AVON", "VULT", "QUEM DISSE BERENICE", "RUBY ROSE", "GENERICA"];
-      const defCat = ["PERFUMARIA", "MAQUIAGEM", "CABELOS", "CORPO E BANHO", "ROSTO", "INFANTIL", "SKINCARE", "GERAL"];
-      const defSub = ["COLÔNIA", "SHAMPOO", "SABONETE", "CREME", "BATOM", "MÁSCARA", "SÉRUM", "CONDICIONADOR", "GERAL"];
+      if (!listaProdutosDb || listaProdutosDb.length === 0) return { marcas: [], categorias: [], subcategorias: [] };
 
-      const dbMarcas = (listaProdutosDb || []).map(p => p.marca).filter(Boolean);
-      const dbCat = (listaProdutosDb || []).map(p => p.categoria).filter(Boolean);
-      const dbSub = (listaProdutosDb || []).map(p => p.subcategoria).filter(Boolean);
+      const dbMarcas = listaProdutosDb.map(p => p.marca).filter(Boolean);
+      const dbCat = listaProdutosDb.map(p => p.categoria).filter(Boolean);
+      const dbSub = listaProdutosDb.map(p => p.subcategoria).filter(Boolean);
 
       return {
-          marcas: [...new Set([...defMarcas, ...dbMarcas])].sort(),
-          categorias: [...new Set([...defCat, ...dbCat])].sort(),
-          subcategorias: [...new Set([...defSub, ...dbSub])].sort()
+          marcas: [...new Set(dbMarcas)].sort(),
+          categorias: [...new Set(dbCat)].sort(),
+          subcategorias: [...new Set(dbSub)].sort()
       };
   }, [listaProdutosDb]);
 
@@ -215,7 +214,7 @@ const GestaoNotasSefaz = () => {
       toast.update(toastId, { render: "Sincronização concluída com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
       carregarNotasDoBackend();
     } catch (error) {
-      toast.update(toastId, { render: error.response?.data || "Bloqueio temporário da SEFAZ.", type: "warning", isLoading: false, autoClose: 5000 });
+      toast.update(toastId, { render: error.response?.data || "Bloqueio temporário da SEFAZ. Tente mais tarde.", type: "warning", isLoading: false, autoClose: 5000 });
       carregarNotasDoBackend();
     } finally { setSyncing(false); }
   };
@@ -238,7 +237,6 @@ const GestaoNotasSefaz = () => {
       setModalFornecedorAberto(false);
   };
 
-  // 🔥 ESPELHO DE CONFERÊNCIA (Rico, visual, com checklist)
   const gerarEspelhoConferencia = () => {
       const printWindow = window.open('', '_blank');
       const html = `
@@ -304,8 +302,8 @@ const GestaoNotasSefaz = () => {
                   </tbody>
               </table>
               <div class="total-section">
-                  <small>Total de Volumes Físicos a Conferir: ${totalQuantidadeModal} UN</small>
-                  Total Financeiro: R$ ${(notaSelecionada?.valorTotal || totalGeralModal).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                  <small>Total de Volumes Físicos a Conferir: ${itensImportacao.reduce((a, b) => a + parseNumber(b.quantidade || b.qCom), 0)} UN</small>
+                  Total Financeiro: R$ ${(notaSelecionada?.valorTotal || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
               </div>
               <div class="signatures">
                   <div class="sign-line">Assinatura do Conferente</div>
@@ -397,7 +395,6 @@ const GestaoNotasSefaz = () => {
                 if (matchEan) {
                     const precoVendaAtual = parseNumber(matchEan.precoVenda || (custoXml * 1.5));
                     const margemCalculada = custoXml > 0 ? (((precoVendaAtual - custoXml) / custoXml) * 100).toFixed(2) : '50.00';
-                    // 🔥 CORREÇÃO: Se for zero no banco, o custo médio real é o da nota atual.
                     const custoMedioBanco = parseNumber(matchEan.precoMedioPonderado || matchEan.precoCusto) || custoXml;
 
                     return {
@@ -550,7 +547,8 @@ const GestaoNotasSefaz = () => {
                   quantidade: parseNumber(i.quantidade || i.qCom || 0),
                   valorUnitario: parseNumber(i.precoCusto || 0),
                   ncm: String(i.ncm || "00000000"),
-                  origem: "0", cst: "102",
+                  origem: "0",
+                  cst: "102",
                   marca: String(i.marca || "GENERICA"),
                   categoria: String(i.categoria || "GERAL"),
                   subcategoria: String(i.subcategoria || "GERAL"),
@@ -588,6 +586,10 @@ const GestaoNotasSefaz = () => {
   const totalQuantidadeModal = itensImportacao.reduce((acc, curr) => acc + parseNumber(curr.quantidade || curr.qCom || 0), 0);
   const totalItensModal = itensImportacao.length;
   const totalGeralModal = itensImportacao.reduce((acc, curr) => acc + (parseNumber(curr.quantidade || curr.qCom || 0) * parseNumber(curr.precoCusto || 0)), 0);
+
+  const detalhesQtdItens = detalhesRegistro.reduce((acc, i) => acc + parseNumber(i.quantidade || i.quantidadeMovimentada), 0);
+  const detalhesValorTotal = detalhesRegistro.reduce((acc, i) => acc + (parseNumber(i.quantidade || i.quantidadeMovimentada) * parseNumber(i.custoUnitario || i.custoMovimentado)), 0);
+  const dataCadastroNota = detalhesRegistro.length > 0 ? formatarDataHora(detalhesRegistro[0].dataMovimento) : "---";
 
   return (
     <div className="gestao-notas-container">
@@ -673,9 +675,8 @@ const GestaoNotasSefaz = () => {
                         <div className="ncu-item"><span className="ncu-label">Faturamento Total</span><strong className="ncu-valor-destaque">R$ {nota.valorTotal ? nota.valorTotal.toFixed(2).replace('.',',') : '0,00'}</strong></div>
                     </div>
                     <div className="ncu-acao">
-                        {/* 🔥 SE ESTIVER IMPORTADA, MOSTRA BOTÃO DE VER REGISTRO */}
                         {isImportada ? (
-                          <button onClick={() => visualizarNotaRegistrada(nota)} disabled={isLoadingThis} className={`btn-acao importada-view`}>
+                          <button onClick={() => visualizarNotaRegistrada(nota)} disabled={isLoadingThis} className="btn-acao importada-view">
                               {isLoadingThis ? <RefreshCw size={18} className="animate-spin" /> : <Eye size={18} />}
                               Ver Registro <ChevronRight size={18} />
                           </button>
@@ -711,7 +712,7 @@ const GestaoNotasSefaz = () => {
 
                       <div className="mi-actions">
                           <button onClick={gerarEspelhoConferencia} className="btn-baixar-danfe">
-                              <DownloadCloud size={18} /> Imprimir Espelho de Conferência
+                              <DownloadCloud size={18} /> Espelho de Conferência
                           </button>
                           <button onClick={() => setModalAberto(false)} className="btn-close-modal"><X size={24}/></button>
                       </div>
@@ -885,37 +886,70 @@ const GestaoNotasSefaz = () => {
       {/* ============================================================================ */}
       {modalRegistroAberto && (
           <div className="modal-overlay fade-in">
-              <div className="import-modal scale-in" style={{maxWidth: '900px', height: 'auto', maxHeight: '85vh'}}>
+              <div className="import-modal scale-in" style={{maxWidth: '1200px', height: '90vh'}}>
                   <div className="mi-header-top">
                       <div className="mi-title-box">
                           <div className="mi-icon" style={{background: '#dcfce7', color: '#10b981'}}><CheckCircle size={32}/></div>
                           <div>
-                              <h2 style={{color: '#064e3b'}}>Registro Finalizado: {notaSelecionada?.numeroNota || extrairNumeroNota(notaSelecionada?.chaveAcesso)}</h2>
+                              <h2 style={{color: '#064e3b'}}>Registro Finalizado: NF-e {notaSelecionada?.numeroNota || extrairNumeroNota(notaSelecionada?.chaveAcesso)}</h2>
                               <span className="mi-chave"><Hash size={14}/> Chave: {notaSelecionada?.chaveAcesso}</span>
                           </div>
                       </div>
                       <button onClick={() => setModalRegistroAberto(false)} className="btn-close-modal"><X size={24}/></button>
                   </div>
 
-                  <div className="modal-body-premium custom-scrollbar" style={{background: '#fff'}}>
-                      <p style={{color: '#64748b', marginBottom: '20px'}}>Esta nota já foi processada, os produtos já somaram ao estoque e o financeiro já foi provisionado.</p>
+                  <div className="mi-info-grid" style={{ padding: '15px 30px', gap: '15px', background: '#fff' }}>
+                      <div className="mi-info-item">
+                          <span className="mi-label"><Building size={12}/> Fornecedor</span>
+                          <strong className="mi-value">{notaSelecionada?.nomeFornecedor || "N/A"}</strong>
+                      </div>
+                      <div className="mi-info-item">
+                          <span className="mi-label">CNPJ</span>
+                          <strong className="mi-value monospace">{maskCNPJ(notaSelecionada?.cnpjFornecedor)}</strong>
+                      </div>
+                      <div className="mi-info-item">
+                          <span className="mi-label"><Calendar size={12}/> Emissão NF</span>
+                          <strong className="mi-value">{formatarDataBR(notaSelecionada?.dataEmissao)}</strong>
+                      </div>
+                      <div className="mi-info-item">
+                          <span className="mi-label"><Clock size={12}/> Cadastrado em</span>
+                          <strong className="mi-value" style={{color: '#3b82f6'}}>{dataCadastroNota}</strong>
+                      </div>
+                      <div className="mi-info-item">
+                          <span className="mi-label"><User size={12}/> Responsável</span>
+                          <strong className="mi-value">{notaSelecionada?.usuarioCadastro || "Administrador"}</strong>
+                      </div>
+                      <div className="mi-info-item">
+                          <span className="mi-label"><Package size={12}/> Volumes</span>
+                          <strong className="mi-value">{detalhesRegistro.length} Ref. / {detalhesQtdItens} UN</strong>
+                      </div>
+                      <div className="mi-info-item highlight">
+                          <span className="mi-label">Custo Total Lançado</span>
+                          <strong className="mi-value valor-total">R$ {formatMoney(detalhesValorTotal || notaSelecionada?.valorTotal)}</strong>
+                      </div>
+                  </div>
 
-                      <table className="modern-table" style={{border: '1px solid #e2e8f0'}}>
-                          <thead style={{background: '#f8fafc'}}>
-                              <tr><th>Produto (No Sistema)</th><th>Qtd Entrou</th><th>Custo Lançado</th><th>Subtotal</th></tr>
+                  <div className="modal-body-premium custom-scrollbar" style={{background: '#f8fafc'}}>
+                      <table className="modern-table" style={{border: '1px solid #e2e8f0', background: '#fff'}}>
+                          <thead style={{background: '#f1f5f9'}}>
+                              <tr><th width="50%">Produto Registrado no Sistema</th><th width="15%">Qtd Entrou</th><th width="15%">Custo Lançado</th><th width="20%">Subtotal Calculado</th></tr>
                           </thead>
                           <tbody>
                               {detalhesRegistro.map((item, idx) => {
                                   const partes = (item.infoParaFront || item.produtoDescricao || "").split('|');
                                   const nome = partes[0] || "Produto";
+                                  const eanVal = partes.length >= 5 ? partes[4] : (item.codigoBarras || "S/ GTIN");
                                   const q = parseNumber(item.quantidade || item.quantidadeMovimentada);
                                   const c = parseNumber(item.custoUnitario || item.custoMovimentado);
                                   return (
                                       <tr key={idx}>
-                                          <td><strong>{nome}</strong></td>
+                                          <td>
+                                              <strong style={{color: '#0f172a', fontSize: '0.95rem'}}>{nome}</strong>
+                                              <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', color: '#64748b', marginTop: '4px', fontFamily: 'monospace' }}><Barcode size={14}/> {eanVal}</span>
+                                          </td>
                                           <td><span className="qtd-badge">{q} UN</span></td>
-                                          <td>R$ {formatMoney(c)}</td>
-                                          <td style={{fontWeight: 'bold', color: '#3b82f6'}}>R$ {formatMoney(q * c)}</td>
+                                          <td style={{color: '#475569', fontWeight: '600'}}>R$ {formatMoney(c)}</td>
+                                          <td style={{fontWeight: '900', color: '#10b981', fontSize: '1.05rem'}}>R$ {formatMoney(q * c)}</td>
                                       </tr>
                                   )
                               })}
