@@ -22,11 +22,8 @@ const HistoricoProduto = lazy(() => import('./pages/Produtos/HistoricoProduto'))
 // 🔥 AUDITORIA DE GÔNDOLA 🔥
 const AuditoriaPreco = lazy(() => import('./pages/Produtos/AuditoriaPreco'));
 
-// 🔥 GESTÃO DE NOTAS SEFAZ 🔥
+// 🔥 GESTÃO DE NOTAS SEFAZ (Agora é a Central de Entradas) 🔥
 const GestaoNotasSefaz = lazy(() => import('./pages/Estoque/GestaoNotasSefaz'));
-
-// 🔥 PÁGINA CENTRAL DE ENTRADAS (XML E HISTÓRICO UNIFICADOS) 🔥
-const HistoricoEntradas = lazy(() => import('./pages/Estoque/HistoricoEntradas'));
 
 const Inventario = lazy(() => import('./pages/Inventario/Inventario'));
 const FornecedorList = lazy(() => import('./pages/Fornecedores/FornecedorList'));
@@ -154,11 +151,13 @@ export default function App() {
 
                 <Route path="/estoque" element={<AdminRoute><ProdutoList /></AdminRoute>} />
 
-                {/* TELA DE GESTÃO DA SEFAZ */}
+                {/* TELA DE GESTÃO DA SEFAZ (Agora é a tela principal de Notas) */}
                 <Route path="/estoque/sefaz" element={<AdminRoute><GestaoNotasSefaz /></AdminRoute>} />
 
-                {/* CENTRAL UNIFICADA DE ENTRADAS E HISTÓRICO XML */}
-                <Route path="/estoque/entrada" element={<AdminRoute><HistoricoEntradas /></AdminRoute>} />
+                {/* 🛡️ ROTA DE REDIRECIONAMENTO DE SEGURANÇA 🛡️
+                    Se alguém tentar aceder ao antigo histórico de entradas, é redirecionado para a nova Sefaz
+                */}
+                <Route path="/estoque/entrada" element={<Navigate to="/estoque/sefaz" replace />} />
 
                 <Route path="/inventario" element={<AdminRoute><Inventario /></AdminRoute>} />
                 <Route path="/fornecedores" element={<AdminRoute><FornecedorList /></AdminRoute>} />

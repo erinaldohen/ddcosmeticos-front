@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingCart, Package, Users,
   Settings, LogOut, ChevronLeft, X,
-  ShieldCheck, Truck, History, Clock,
+  ShieldCheck, History, Clock,
   Wallet, TrendingDown, Store, ClipboardList, ShoppingBag,
   BarChart3, HeartHandshake, TrendingUp, Inbox, Barcode
 } from 'lucide-react';
@@ -35,7 +35,7 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
   }, []);
 
   // =========================================================================
-  // MENU REESTRUTURADO E LIMPO
+  // MENU REESTRUTURADO E LIMPO (Redundância removida)
   // =========================================================================
   const menuGroups = [
       {
@@ -52,10 +52,9 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
         items: [
           { path: '/produtos', icon: <Package size={20} />, label: 'Produtos', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/auditoria-preco', icon: <Barcode size={20} />, label: 'Auditoria de Gôndola', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
-          { path: '/estoque/sefaz', icon: <Inbox size={20} />, label: 'Caixa de Entrada SEFAZ', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
 
-          // 🔥 Rota Unificada (Upload XML e Histórico)
-          { path: '/estoque/entrada', icon: <Truck size={20} />, label: 'Central de Recebimento', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
+          // 🔥 Central Unificada SEFAZ e Importação
+          { path: '/estoque/sefaz', icon: <Inbox size={20} />, label: 'Caixa de Entrada SEFAZ', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
 
           { path: '/inventario', icon: <ClipboardList size={20} />, label: 'Inventário (IA)', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_ESTOQUISTA'] },
           { path: '/fornecedores', icon: <Users size={20} />, label: 'Fornecedores', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
