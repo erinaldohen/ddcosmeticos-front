@@ -49,6 +49,17 @@ const ProdutoForm = ({ id: propsId, onSave }) => {
   const aplicarMascara = (v) => { const n = v.replace(/\D/g, ""); if(n === "") return ""; return (Number(n)/100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
   const getImageUrl = (url) => { if(!url) return null; if(url.startsWith('blob:') || url.startsWith('http')) return url; return `http://localhost:8080${url.startsWith('/')?'':'/'}${url}`; };
 
+  // 🔥 RAIO-X DE INTEGRIDADE DO FRONTEND
+  // Define se o produto tem todas as premissas válidas (Ignora a flag cega do banco)
+  const isProdutoIntegro = () => {
+      const pVenda = parseMoeda(formData.precoVenda);
+      const temPrecoVenda = pVenda > 0;
+      const temNcmValido = formData.ncm && formData.ncm.length >= 8 && formData.ncm !== '00000000';
+      const temEanValido = formData.codigoBarras && formData.codigoBarras.length >= 8 && formData.codigoBarras !== 'S/N';
+
+      return temPrecoVenda && temNcmValido && temEanValido;
+  };
+
   useEffect(() => {
     const handleKeyDown = (e) => { if(e.altKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveProduct(false); }};
     window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown);
@@ -151,7 +162,6 @@ const ProdutoForm = ({ id: propsId, onSave }) => {
     });
   };
 
-  // 🔥 INTEGRAÇÃO BRASILAPI: A melhor e mais rápida do mercado para NCM
   const triggerNcmSearch = async (termoBusca) => {
       if (!termoBusca || termoBusca.trim().length < 2) {
           setSugestoesNcm([]);
@@ -160,11 +170,9 @@ const ProdutoForm = ({ id: propsId, onSave }) => {
 
       setBuscandoNcm(true);
       try {
-          // Chamada direta à BrasilAPI para evitar sobrecarga no seu backend
           const response = await fetch(`https://brasilapi.com.br/api/ncm/v1?search=${encodeURIComponent(termoBusca)}`);
           if (response.ok) {
               const data = await response.json();
-              // A BrasilAPI retorna um array enorme, limitamos a 15 para a tela não travar
               const formatado = data.slice(0, 15).map(item => ({
                   codigo: item.codigo,
                   descricao: item.descricao
@@ -174,7 +182,6 @@ const ProdutoForm = ({ id: propsId, onSave }) => {
               setSugestoesNcm([]);
           }
       } catch (e) {
-          console.error("Falha na busca inteligente de NCM:", e);
           setSugestoesNcm([]);
       } finally {
           setBuscandoNcm(false);
@@ -184,27 +191,25 @@ const ProdutoForm = ({ id: propsId, onSave }) => {
   const handleNcmChange = (e) => {
       const v = e.target.value;
       setFormData(prev => ({...prev, ncm: v}));
-      setDescricaoNcmSelecionado(''); // Limpa a descrição ao editar
+      setDescricaoNcmSelecionado('');
 
       if (v.length >= 2) setErrors(prev => ({...prev, ncm: ''}));
 
-      // 🔥 BLINDAGEM DO DEBOUNCE: Impede o loop cancelando o cronómetro anterior
       if (typingTimer.current) clearTimeout(typingTimer.current);
 
       if (v.length >= 2) {
           typingTimer.current = setTimeout(() => {
               triggerNcmSearch(v);
-          }, 400); // Só chama a API 400ms após parar de digitar
+          }, 400);
       } else {
           setSugestoesNcm([]);
       }
   };
 
-  // 🔥 SELECIONAR NCM ÚNICO: Removemos a duplicação que havia no seu código
   const selecionarNcm = (item) => {
       setFormData(prev => ({...prev, ncm: item.codigo}));
-      setDescricaoNcmSelecionado(item.descricao); // Guarda a descrição na tela
-      setSugestoesNcm([]); // Esconde o dropdown
+      setDescricaoNcmSelecionado(item.descricao);
+      setSugestoesNcm([]);
       setErrors(prev => ({...prev, ncm: ''}));
       setTimeout(handleValidacaoFiscal, 100);
   };
@@ -230,7 +235,7 @@ const ProdutoForm = ({ id: propsId, onSave }) => {
             toast.success("Dados Fiscais Ajustados pela IA Tributária! 🤖");
         }
       } catch(e) {
-          console.warn("Validação fiscal ignorada (Backend indisponível ou erro 404).");
+          console.warn("Validação fiscal ignorada.");
       } finally {
           setValidandoFiscal(false);
       }
@@ -313,14 +318,15 @@ const ProdutoForm = ({ id: propsId, onSave }) => {
         ...formData, precoCusto: parseMoeda(formData.precoCusto), precoVenda: parseMoeda(formData.precoVenda),
         diasParaReposicao: Number(formData.diasParaReposicao)||0, estoqueMinimo: Number(formData.estoqueMinimo)||0, origem: Number(formData.origem),
         validade: dataValidade,
-        revisaoPendente: false
+        // 🔥 A GRANDE SACADA: O Frontend envia a instrução para limpar a pendência baseando-se na integridade real
+        revisaoPendente: !isProdutoIntegro()
       };
 
       delete p.margemLucro; delete p.markup; delete p.estoqueFiscal; delete p.estoqueNaoFiscal; delete p.quantidadeEmEstoque;
       let res = isEditMode ? await produtoService.atualizar(id, p) : await produtoService.salvar(p);
       if(arquivoImagem && (res.id || id)) await produtoService.uploadImagem(res.id||id, arquivoImagem);
       toast.success("Produto gravado com sucesso!");
-      if (onSave) onSave(); // 🔥 Resolve o comportamento se estiver no Modal
+      if (onSave) onSave();
       else if(stay) window.location.reload();
       else navigate('/produtos');
     } catch(e) {
@@ -344,7 +350,9 @@ const ProdutoForm = ({ id: propsId, onSave }) => {
       )}
 
       <div className="form-container" style={onSave ? { padding: '0', boxShadow: 'none', border: 'none', background: 'transparent' } : {}}>
-        {formData.revisaoPendente && isEditMode && (
+
+        {/* 🔥 BANNER INTELIGENTE: Só exibe se a integridade falhar! */}
+        {formData.revisaoPendente && isEditMode && !isProdutoIntegro() && (
             <div className="alert-ribbon-warning">
                 <AlertTriangle size={24} />
                 <div className="alert-text">
@@ -461,7 +469,7 @@ const ProdutoForm = ({ id: propsId, onSave }) => {
               <div className="pf-layout-inputs">
                   <div className="pf-row-fluid">
 
-                    {/* 🔥 CAIXA DO NCM: Agora com estilo de dropdown e API Integrada */}
+                    {/* CAIXA DO NCM: Com dropdown e API */}
                     <div className="form-group-modern input-action-group" ref={ncmRef} style={{position: 'relative'}}>
                         <div className="label-row"><label>NCM *</label><Info size={14} className="info-icon" title="Nomenclatura Comum do Mercosul" /></div>
                         <div className="input-action-wrapper">

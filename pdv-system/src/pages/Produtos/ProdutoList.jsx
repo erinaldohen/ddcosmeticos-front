@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, memo } from 'react';
 import api from '../../services/api';
 import { produtoService } from '../../services/produtoService';
 import { toast } from 'react-toastify';
@@ -12,13 +12,14 @@ import {
 import './ProdutoList.css';
 
 // =========================================================================
-// 🧩 COMPONENTES AUXILIARES
+// 🧩 COMPONENTES AUXILIARES (Otimizados com memo para Performance)
 // =========================================================================
 
-const SearchBar = ({ onSearch }) => {
+const SearchBar = memo(({ onSearch }) => {
   const [localTerm, setLocalTerm] = useState('');
+
   useEffect(() => {
-      const handler = setTimeout(() => onSearch(localTerm), 500);
+      const handler = setTimeout(() => onSearch(localTerm), 400);
       return () => clearTimeout(handler);
   }, [localTerm, onSearch]);
 
@@ -29,9 +30,9 @@ const SearchBar = ({ onSearch }) => {
       {localTerm && <button className="clear-search-btn" onClick={() => setLocalTerm('')} title="Limpar busca"><X size={14}/></button>}
     </div>
   );
-};
+});
 
-const Pagination = ({ page, totalPages, setPage }) => {
+const Pagination = memo(({ page, totalPages, setPage }) => {
   if (totalPages <= 1) return null;
   return (
     <div className="pagination-modern">
@@ -40,9 +41,9 @@ const Pagination = ({ page, totalPages, setPage }) => {
       <button className="btn-page" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}><span className="hide-mobile">Próxima</span> <ChevronRight size={18} /></button>
     </div>
   );
-};
+});
 
-const TableSkeleton = () => (
+const TableSkeleton = memo(() => (
   <>{[1, 2, 3, 4, 5].map((i) => (
       <tr key={i} className="ux-table-row skeleton-row">
         <td className="checkbox-cell"><div className="sk-box sm"></div></td>
@@ -61,20 +62,20 @@ const TableSkeleton = () => (
         <td className="align-right"><div className="sk-line w-80 ml-auto"></div></td>
       </tr>
   ))}</>
-);
+));
 
-const ProductImage = ({ src, alt, onZoom }) => {
+const ProductImage = memo(({ src, alt, onZoom }) => {
   const [error, setError] = useState(false);
   if (!src || error) return <div className="img-placeholder"><ImageOff size={20} /></div>;
   return (
     <div className="img-zoom-wrapper" onClick={(e) => { e.stopPropagation(); onZoom(src); }}>
-      <img src={src} alt={alt} className="img-product" onError={() => setError(true)} />
+      <img src={src} alt={alt} className="img-product" onError={() => setError(true)} loading="lazy" />
       <div className="img-zoom-overlay"><ZoomIn size={16} /></div>
     </div>
   );
-};
+});
 
-const CopyableCode = ({ code }) => {
+const CopyableCode = memo(({ code }) => {
   const [copied, setCopied] = useState(false);
   const handleCopy = (e) => {
     e.stopPropagation(); if (!code) return;
@@ -89,9 +90,9 @@ const CopyableCode = ({ code }) => {
       {code && (copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} className="icon-copy" />)}
     </div>
   );
-};
+});
 
-const ActionMenu = ({ prod, onEdit, onDelete, onPrint, onHistory, loadingPrint }) => {
+const ActionMenu = memo(({ prod, onEdit, onDelete, onPrint, onHistory, loadingPrint }) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef(null);
 
@@ -122,9 +123,9 @@ const ActionMenu = ({ prod, onEdit, onDelete, onPrint, onHistory, loadingPrint }
             )}
         </div>
     );
-};
+});
 
-const StockHealthBar = ({ estoque, minimo }) => {
+const StockHealthBar = memo(({ estoque, minimo }) => {
     const maxBar = minimo > 0 ? minimo * 3 : 20;
     const percent = Math.min(100, Math.max(0, (estoque / maxBar) * 100));
     let colorClass = 'bg-emerald-500';
@@ -141,32 +142,55 @@ const StockHealthBar = ({ estoque, minimo }) => {
             </div>
         </div>
     );
-};
+});
 
-const StatusIndicator = ({ prod }) => {
+const StatusIndicator = memo(({ prod }) => {
   const isAtivo = prod.ativo !== undefined ? prod.ativo : true;
   if (!isAtivo) return <span className="badge badge-inactive">Inativo</span>;
   if ((prod.quantidadeEmEstoque || 0) === 0) return <span className="badge badge-danger">Zerado</span>;
   if ((prod.quantidadeEmEstoque || 0) <= (prod.estoqueMinimo || 5)) return <span className="badge badge-warning">Baixo</span>;
   return <span className="badge badge-active">Ativo</span>;
-};
+});
 
-const DiagnosticoAlertas = ({ prod, filtroAtivo }) => {
+// 🔥 O NOVO "JUIZ" DO FRONTEND: Ignora a flag cega do Backend e atua pelos dados reais.
+const DiagnosticoAlertas = memo(({ prod }) => {
     const alertas = [];
-    if (prod.alertaGondola || prod.revisaoPendente) {
+
+    // 1. O Frontend inspeciona a integridade real do produto
+    const temPrecoVenda = prod.precoVenda && prod.precoVenda > 0;
+    const temNcmValido = prod.ncm && prod.ncm.length >= 8 && prod.ncm !== '00000000';
+    const temEanValido = prod.codigoBarras && prod.codigoBarras.length >= 8 && prod.codigoBarras !== 'S/N';
+    const temImagem = !!prod.urlImagem;
+
+    // Apenas se faltar NCM, Preço ou EAN é que o produto tem uma falha grave
+    const possuiFalhaGrave = !temPrecoVenda || !temNcmValido || !temEanValido;
+
+    // 2. Disparo de Alertas Específicos
+    if (prod.alertaGondola) {
         alertas.push({ id: 'gondola', texto: "🚨 DIVERGÊNCIA FÍSICA", classe: "badge-divergence-glow" });
     }
-    if (filtroAtivo || prod.alertaGondola || prod.revisaoPendente) {
-        if (!prod.precoVenda || prod.precoVenda <= 0) {
-            alertas.push({ id: 'preco', texto: "Preço Zerado", classe: "bg-rose-100 text-rose-700 border-rose-200" });
-        }
-        if (!prod.ncm || prod.ncm.length < 8 || prod.ncm === '00000000') {
-            alertas.push({ id: 'ncm', texto: "NCM Pendente/Inválido", classe: "bg-amber-100 text-amber-700 border-amber-200" });
-        }
-        if (!prod.urlImagem) {
-            alertas.push({ id: 'img', texto: "Sem Imagem", classe: "bg-purple-100 text-purple-700 border-purple-200" });
-        }
+
+    if (!temPrecoVenda) {
+        alertas.push({ id: 'preco', texto: "Preço Zerado", classe: "bg-rose-100 text-rose-700 border-rose-200" });
     }
+
+    if (!temNcmValido) {
+        alertas.push({ id: 'ncm', texto: "NCM Pendente/Inválido", classe: "bg-amber-100 text-amber-700 border-amber-200" });
+    }
+
+    if (!temEanValido) {
+        alertas.push({ id: 'ean', texto: "Sem EAN GS1", classe: "bg-orange-100 text-orange-700 border-orange-200" });
+    }
+
+    if (!temImagem) {
+        alertas.push({ id: 'img', texto: "Sem Imagem", classe: "bg-purple-100 text-purple-700 border-purple-200" });
+    }
+
+    // 3. A GRANDE JOGADA: A "Revisão Pendente" só aparece se o backend mandou E o frontend concorda.
+    if (prod.revisaoPendente && possuiFalhaGrave && !prod.alertaGondola) {
+        alertas.push({ id: 'revisao', texto: "⚠️ Revisão Pendente", classe: "bg-blue-100 text-blue-700 border-blue-200" });
+    }
+
     if (alertas.length === 0) return null;
     return (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}>
@@ -177,44 +201,54 @@ const DiagnosticoAlertas = ({ prod, filtroAtivo }) => {
             ))}
         </div>
     );
-};
+});
 
 // ==================================================================================
 // 🚀 COMPONENTE PRINCIPAL
 // ==================================================================================
-const ProdutoList = () => {
+export default function ProdutoList() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
 
+  // Estados Base
   const [produtos, setProdutos] = useState([]);
   const [raioXIa, setRaioXIa] = useState({ totalAnomalias: 0, semCusto: 0, precoVendaZerado: 0, semNcm: 0, ncmInvalido: 0, semDescricao: 0, semMarca: 0, divergenciaGondola: 0 });
   const [qtdLixeira, setQtdLixeira] = useState(0);
+
+  // Estados de UI e Modais
   const [loading, setLoading] = useState(true);
   const [loadingPrint, setLoadingPrint] = useState(null);
   const [modoLixeira, setModoLixeira] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
   const [zoomedImage, setZoomedImage] = useState(null);
-
   const [editingCell, setEditingCell] = useState({ id: null, field: null, value: '' });
 
+  // Estados de Divergência
   const [showDivergenceModal, setShowDivergenceModal] = useState(false);
   const [divergentProducts, setDivergentProducts] = useState([]);
   const [newPrices, setNewPrices] = useState({});
 
+  // Paginação e Filtros
   const [filtros, setFiltros] = useState({ estoque: 'todos', marca: '', categoria: '', semImagem: false, semNcm: false, precoZerado: false, revisaoPendente: false });
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [termoBusca, setTermoBusca] = useState('');
+
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, type: 'danger', confirmText: 'Confirmar' });
 
-  const getImageUrl = (url) => url ? (url.startsWith('blob:') || url.startsWith('http') ? url : `http://localhost:8080${url}`) : null;
+  // Conta filtros ativos para o Badge UI
+  const activeFiltersCount = Object.keys(filtros).filter(k => (typeof filtros[k] === 'boolean' && filtros[k]) || (typeof filtros[k] === 'string' && filtros[k] !== '' && filtros[k] !== 'todos')).length;
 
+  const getImageUrl = useCallback((url) => url ? (url.startsWith('blob:') || url.startsWith('http') ? url : `http://localhost:8080${url}`) : null, []);
+
+  // 🔄 CARREGAMENTO DE DADOS (Otimizado)
   const carregarProdutos = useCallback(async (pagina, termo) => {
     setLoading(true);
     try {
       try { const lix = await produtoService.buscarLixeira(); setQtdLixeira(Array.isArray(lix) ? lix.length : 0); } catch(e) {}
+
       if (modoLixeira) {
         const listaBruta = await produtoService.buscarLixeira();
         const listaInativos = Array.isArray(listaBruta) ? listaBruta : [];
@@ -222,10 +256,7 @@ const ProdutoList = () => {
         setProdutos(filtrados); setTotalPages(1); setTotalElements(filtrados.length);
       } else {
         const dados = await produtoService.listar(pagina, 50, termo, filtros);
-        let listaProdutos = [];
-        if (Array.isArray(dados)) listaProdutos = dados;
-        else if (dados && dados.content && Array.isArray(dados.content)) listaProdutos = dados.content;
-        else if (dados && dados.itens && Array.isArray(dados.itens)) listaProdutos = dados.itens;
+        let listaProdutos = Array.isArray(dados) ? dados : (dados?.content || dados?.itens || []);
 
         setProdutos(listaProdutos);
         setTotalPages(dados?.totalPages || dados?.totalPaginas || 1);
@@ -240,52 +271,49 @@ const ProdutoList = () => {
     finally { setLoading(false); }
   }, [modoLixeira, filtros]);
 
-  useEffect(() => { if (page !== 0) setPage(0); carregarProdutos(0, termoBusca); }, [termoBusca, filtros, modoLixeira]);
-  useEffect(() => { carregarProdutos(page, termoBusca); }, [page]);
+  useEffect(() => { if (page !== 0) setPage(0); else carregarProdutos(0, termoBusca); }, [termoBusca, filtros, modoLixeira]);
+  useEffect(() => { carregarProdutos(page, termoBusca); }, [page, carregarProdutos]);
   useEffect(() => { setSelectedIds([]); }, [modoLixeira]);
 
   const handleFiltroChange = (key, value) => { setFiltros(prev => ({ ...prev, [key]: value })); setPage(0); };
   const limparFiltros = () => { setFiltros({ estoque: 'todos', marca: '', categoria: '', semImagem: false, semNcm: false, precoZerado: false, revisaoPendente: false }); setPage(0); };
+
   const handleSelectAll = (e) => e.target.checked ? setSelectedIds(produtos.map(p => p.id)) : setSelectedIds([]);
   const handleSelectOne = (id) => selectedIds.includes(id) ? setSelectedIds(selectedIds.filter(itemId => itemId !== id)) : setSelectedIds([...selectedIds, id]);
 
-  // 🔥 MÁSCARAS E FUNÇÕES AUXILIARES
+  // 🔥 MÁSCARA BLINDADA PARA EDIÇÃO INLINE
   const applyCurrencyMask = (value) => {
-    let valor = value.toString().replace(/\D/g, '');
-    if (!valor) return '0,00';
-    valor = (parseInt(valor) / 100).toFixed(2);
-    valor = valor.replace('.', ',');
-    valor = valor.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-    return valor;
+    if (value === undefined || value === null) return '0,00';
+    let strVal = value.toString().replace(/\D/g, '');
+    if (!strVal || strVal === '') return '0,00';
+    strVal = (parseInt(strVal) / 100).toFixed(2);
+    strVal = strVal.replace('.', ',');
+    strVal = strVal.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return strVal;
   };
 
   const handleFocus = (e) => e.target.select();
 
-  const handlePriceMask = (e, id) => {
-      setNewPrices(prev => ({...prev, [id]: applyCurrencyMask(e.target.value)}));
-  };
-
-  // 🔥 EDIÇÃO INLINE NA TABELA
   const iniciarEdicaoInline = (e, id, field, currentValue) => {
       e.stopPropagation();
       let val = currentValue;
       if (field === 'precoVenda') {
-          val = currentValue.toFixed(2).replace('.', ',');
+          val = currentValue ? currentValue.toFixed(2).replace('.', ',') : '0,00';
       }
       setEditingCell({ id, field, value: val || '' });
   };
 
-  const salvarEdicaoInline = async () => {
+  const salvarEdicaoInline = useCallback(async () => {
         if (!editingCell.id) return;
         const { id, field, value } = editingCell;
 
         try {
             if (field === 'precoVenda') {
-                const precoNum = parseFloat(value.toString().replace(/\./g, '').replace(',', '.'));
+                const precoNum = parseFloat((value || '0').toString().replace(/\./g, '').replace(',', '.'));
                 if (isNaN(precoNum) || precoNum < 0) throw new Error("Preço inválido");
                 await api.patch(`/produtos/${id}/preco-venda?valor=${precoNum}`);
             } else if (field === 'quantidadeEmEstoque') {
-                const qtdNum = parseInt(value, 10);
+                const qtdNum = parseInt(value || 0, 10);
                 if (isNaN(qtdNum) || qtdNum < 0) throw new Error("Quantidade inválida");
                 await api.patch(`/produtos/${id}/estoque?quantidade=${qtdNum}`);
             }
@@ -293,38 +321,54 @@ const ProdutoList = () => {
             toast.success("Atualizado!", { autoClose: 800, hideProgressBar: true });
             carregarProdutos(page, termoBusca);
         } catch (error) {
-            toast.error("Erro ao salvar.");
+            toast.error("Valor inválido. Gravação cancelada.");
         } finally {
             setEditingCell({ id: null, field: null, value: '' });
         }
-    };
+  }, [editingCell, page, termoBusca, carregarProdutos]);
 
   const handleInlineKeyDown = (e) => {
       if (e.key === 'Enter') salvarEdicaoInline();
       if (e.key === 'Escape') setEditingCell({ id: null, field: null, value: '' });
   };
 
-  // 🔥 AÇÕES DE PRODUTO
+  // 🔥 SEGURANÇA: VALIDAÇÃO DE ARQUIVO NO UPLOAD
   const handleImportar = async (e) => {
-      const file = e.target.files[0]; if (!file) return; e.target.value = null;
-      const formData = new FormData(); formData.append("arquivo", file);
+      const file = e.target.files[0];
+      if (!file) return;
+      e.target.value = null;
+
+      const allowedExt = ['csv', 'xls', 'xlsx', 'xml'];
+      const fileExt = file.name.split('.').pop().toLowerCase();
+      if (!allowedExt.includes(fileExt)) return toast.error("Arquivo inválido. Envie apenas planilhas ou XML.");
+      if (file.size > 5 * 1024 * 1024) return toast.error("O arquivo excede o limite de segurança de 5MB.");
+
+      const formData = new FormData();
+      formData.append("arquivo", file);
       const toastId = toast.loading("Importando base de dados...");
+
       try {
         const response = await api.post('/produtos/importar', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 });
-        if (response.data.sucesso) { toast.update(toastId, { render: "Importação concluída!", type: "success", isLoading: false, autoClose: 4000 }); setPage(0); carregarProdutos(0, ''); }
-        else { throw new Error(response.data.mensagem); }
-      } catch (error) { toast.update(toastId, { render: "Erro na importação.", type: "error", isLoading: false, autoClose: 5000 }); }
+        if (response.data.sucesso) {
+            toast.update(toastId, { render: "Importação concluída!", type: "success", isLoading: false, autoClose: 4000 });
+            limparFiltros();
+        } else {
+            throw new Error(response.data.mensagem);
+        }
+      } catch (error) {
+          toast.update(toastId, { render: "Erro ao comunicar com o servidor.", type: "error", isLoading: false, autoClose: 5000 });
+      }
   };
 
   const handleExportar = async (tipo) => {
-    const toastId = toast.loading(`Gerando exportação...`);
+    const toastId = toast.loading(`Gerando arquivo ${tipo}...`);
     try {
       const res = await api.get(`/produtos/exportar/${tipo}`, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement('a'); link.href = url; link.setAttribute('download', `estoque.${tipo === 'excel' ? 'xlsx' : 'csv'}`);
+      const link = document.createElement('a'); link.href = url; link.setAttribute('download', `estoque_exportado.${tipo === 'excel' ? 'xlsx' : 'csv'}`);
       document.body.appendChild(link); link.click(); link.remove();
       toast.update(toastId, { render: "Download iniciado!", type: "success", isLoading: false, autoClose: 2000 });
-    } catch (err) { toast.update(toastId, { render: "Erro na exportação.", type: "error", isLoading: false, autoClose: 3000 }); }
+    } catch (err) { toast.update(toastId, { render: "Falha na geração do arquivo.", type: "error", isLoading: false, autoClose: 3000 }); }
   };
 
   const handleSingleAction = (type, prod) => {
@@ -332,93 +376,85 @@ const ProdutoList = () => {
     setConfirmModal({
       isOpen: true, type: isDelete ? 'danger' : 'success', title: isDelete ? 'Mover para Lixeira' : 'Restaurar', message: `${isDelete ? 'Inativar' : 'Restaurar'} "${prod.descricao}"?`, confirmText: 'Confirmar',
       onConfirm: async () => {
-        try { if (isDelete) await produtoService.excluir(prod.codigoBarras); else await produtoService.restaurar(prod.codigoBarras); toast.success("Sucesso!"); carregarProdutos(isDelete ? page : 0, termoBusca); }
-        catch (e) { toast.error("Falha na ação."); }
+        try {
+            if (isDelete) await produtoService.excluir(prod.codigoBarras);
+            else await produtoService.restaurar(prod.codigoBarras);
+            toast.success("Sucesso!");
+            carregarProdutos(isDelete ? page : 0, termoBusca);
+        } catch (e) { toast.error("Ação recusada pelo servidor."); }
       }
     });
   };
 
   const handlePrint = async (id) => {
     setLoadingPrint(id);
-    try { const zpl = await produtoService.imprimirEtiqueta(id); const w = window.open('', '_blank', 'width=500,height=500'); w.document.write(`<pre>${zpl}</pre>`); w.document.close(); }
-    catch (e) { toast.error("Erro na impressão."); } finally { setLoadingPrint(null); }
+    try {
+        const zpl = await produtoService.imprimirEtiqueta(id);
+        const w = window.open('', '_blank', 'width=500,height=500');
+        w.document.write(`<pre>${zpl}</pre>`);
+        w.document.close();
+    } catch (e) { toast.error("Serviço de impressão indisponível."); }
+    finally { setLoadingPrint(null); }
   };
 
   // 🔥 FERRAMENTAS DA IA
   const handleQuickFix = (tipo, mensagemConfirmacao, nomeCorrecao) => {
-      if ((tipo === 'SEM_CUSTO' || tipo === 'PRECO_VENDA_ZERADO') && raioXIa.semCusto > 0 && raioXIa.semCusto === raioXIa.precoVendaZerado) {
-           toast.warn("Impasse: Venda e Custo zerados. Edite manualmente primeiro.", { autoClose: 6000 });
-           handleFiltroChange('precoZerado', true);
-           return;
-      }
       setConfirmModal({
-        isOpen: true, type: 'robot', title: `IA: ${nomeCorrecao}`, message: mensagemConfirmacao, confirmText: 'Aplicar',
+        isOpen: true, type: 'robot', title: `IA: ${nomeCorrecao}`, message: mensagemConfirmacao, confirmText: 'Aplicar Correção',
         onConfirm: async () => {
-          const toastId = toast.loading(`🤖 Aplicando...`);
+          const toastId = toast.loading(`🤖 Solucionando com IA...`);
           try {
             await api.post(`/produtos/quick-fix-ia/${tipo}`);
-            toast.update(toastId, { render: "Sucesso!", type: "success", isLoading: false, autoClose: 2000 });
+            toast.update(toastId, { render: "Correção em massa aplicada!", type: "success", isLoading: false, autoClose: 2000 });
             carregarProdutos(page, termoBusca);
-          } catch (e) { toast.update(toastId, { render: "Erro na IA.", type: "error", isLoading: false, autoClose: 3000 }); }
+          } catch (e) { toast.update(toastId, { render: "Ocorreu um erro no processo da IA.", type: "error", isLoading: false, autoClose: 3000 }); }
         }
       });
   };
 
   const handleCorrigirNcms = () => {
-    setConfirmModal({
-      isOpen: true, type: 'robot', title: 'Auditoria Fiscal', message: 'O sistema irá varrer a base de dados para corrigir NCMs baseando-se na inteligência fiscal.', confirmText: 'Iniciar Correção',
-      onConfirm: async () => {
-        const toastId = toast.loading("🤖 Analisando NCMs...");
-        try { await api.post('/produtos/corrigir-ncms-ia'); toast.update(toastId, { render: `Auditoria Concluída!`, type: "success", isLoading: false, autoClose: 4000 }); carregarProdutos(page, termoBusca); }
-        catch (e) { toast.update(toastId, { render: "Erro na auditoria fiscal.", type: "error", isLoading: false, autoClose: 3000 }); }
-      }
-    });
+    handleQuickFix('CORRIGIR_NCM', 'O sistema irá varrer a base de dados para corrigir NCMs baseando-se na inteligência fiscal. Confirmar?', 'Auditoria Fiscal');
   };
 
   const handleCorrigirEANsInternos = () => {
-    setConfirmModal({
-      isOpen: true, type: 'robot', title: 'Normalização EAN', message: 'Deseja recalcular e padronizar o dígito verificador GS1 para todos os códigos internos?', confirmText: 'Corrigir Base',
-      onConfirm: async () => {
-        const toastId = toast.loading("🤖 Recalculando códigos...");
-        try { await api.post('/produtos/corrigir-eans-internos-ia'); toast.update(toastId, { render: `Normalização Concluída!`, type: "success", isLoading: false, autoClose: 4000 }); carregarProdutos(page, termoBusca); }
-        catch (e) { toast.update(toastId, { render: "Erro no recálculo.", type: "error", isLoading: false, autoClose: 3000 }); }
-      }
-    });
+    handleQuickFix('NORMALIZAR_EAN', 'Deseja recalcular e padronizar o dígito verificador GS1 para todos os códigos internos?', 'Normalização EAN');
   };
 
   // 🔥 MODAL DE DIVERGÊNCIA DE GÔNDOLA
   const abrirModalDivergencia = async () => {
-    toast.dismiss(); // Reseta os toasts travados
-    const toastId = toast.loading("Listando alertas...");
+    toast.dismiss();
+    const toastId = toast.loading("Extraindo alertas de gôndola...");
     try {
         const response = await api.get('/produtos/divergencias-gondola');
         setDivergentProducts(response.data);
         setShowDivergenceModal(true);
-        toast.update(toastId, { render: "Carregado!", type: "success", isLoading: false, autoClose: 800 });
+        toast.update(toastId, { render: "Lista carregada!", type: "success", isLoading: false, autoClose: 800 });
     } catch (e) {
-        toast.dismiss(toastId);
-        toast.error("Erro ao carregar divergências.");
+        toast.dismiss(toastId); toast.error("Servidor indisponível para esta operação.");
     }
   };
 
   const resolverItemDivergente = async (id) => {
         const precoStr = newPrices[id];
-        if (!precoStr) { toast.error("Insira um novo preço."); return; }
+        if (!precoStr) return toast.error("Informe o preço real da gôndola.");
         const precoFloat = parseFloat(precoStr.replace(/\./g, '').replace(',', '.'));
-        if (isNaN(precoFloat) || precoFloat <= 0) { toast.error("Preço inválido."); return; }
+        if (isNaN(precoFloat) || precoFloat <= 0) return toast.error("Valor bloqueado (Inválido).");
 
-        toast.dismiss(); // Garante a limpeza visual
-        const loadId = toast.loading("Corrigindo...");
+        toast.dismiss();
+        const loadId = toast.loading("Aproximando sistema com a gôndola...");
 
         try {
             await api.post(`/produtos/${id}/resolver-divergencia?novoPreco=${precoFloat}`);
-            toast.update(loadId, { render: "Divergência resolvida!", type: "success", isLoading: false, autoClose: 1500 });
+            toast.update(loadId, { render: "Divergência eliminada!", type: "success", isLoading: false, autoClose: 1500 });
             setDivergentProducts(prev => prev.filter(p => p.id !== id));
             carregarProdutos(page, termoBusca);
         } catch (e) {
-            toast.dismiss(loadId);
-            toast.error("Erro ao atualizar o preço.");
+            toast.dismiss(loadId); toast.error("Não foi possível persistir a correção.");
         }
+  };
+
+  const handlePriceMaskForDivergence = (e, id) => {
+      setNewPrices(prev => ({...prev, [id]: applyCurrencyMask(e.target.value)}));
   };
 
   return (
@@ -426,19 +462,19 @@ const ProdutoList = () => {
       <div className="modern-layout-container fade-in">
         <header className="page-header-modern">
           <div className="header-titles">
-            <h1 className="title-gradient">{modoLixeira ? 'Lixeira de Produtos' : 'Produtos'}</h1>
+            <h1 className="title-gradient">{modoLixeira ? 'Lixeira de Produtos' : 'Catálogo de Produtos'}</h1>
             <p className="subtitle text-muted">Gestão integrada • {totalElements} registos</p>
           </div>
           <div className="header-actions-group">
             <div className="tab-switcher-modern">
-              <button className={`tab-btn ${!modoLixeira ? 'active' : ''}`} onClick={() => setModoLixeira(false)}>Catálogo Ativo</button>
+              <button className={`tab-btn ${!modoLixeira ? 'active' : ''}`} onClick={() => setModoLixeira(false)}>Base Ativa</button>
               <button className={`tab-btn ${modoLixeira ? 'active' : ''}`} onClick={() => setModoLixeira(true)}>
                 Lixeira {qtdLixeira > 0 && <span className="ping-dot-danger"></span>}
               </button>
             </div>
             {!modoLixeira && (
               <button className="btn-blue-shadow" onClick={() => navigate('/produtos/novo')}>
-                <Plus size={18} strokeWidth={3} /> <span>Novo Produto</span>
+                <Plus size={18} strokeWidth={3} /> <span>Cadastrar Produto</span>
               </button>
             )}
           </div>
@@ -450,13 +486,13 @@ const ProdutoList = () => {
               <div className="ai-title-wrapper">
                 <div className="ai-pulse-ring"><Bot size={24} className="text-white" /></div>
                 <div>
-                  <h3 className="ai-title">Assistente de Catálogo Inteligente</h3>
-                  <p className="ai-subtitle">Deteção automática de anomalias.</p>
+                  <h3 className="ai-title">Assistente de Catálogo (IA)</h3>
+                  <p className="ai-subtitle">Deteção contínua de anomalias no estoque.</p>
                 </div>
               </div>
               <div className="ai-buttons-group">
-                 <button className="btn-glass-outline" onClick={handleCorrigirEANsInternos}><Barcode size={16}/> <span>EANs</span></button>
-                 <button className="btn-glass-outline" onClick={handleCorrigirNcms}><Zap size={16}/> <span>NCMs</span></button>
+                 <button className="btn-glass-outline" onClick={handleCorrigirEANsInternos}><Barcode size={16}/> <span>Calcular EANs</span></button>
+                 <button className="btn-glass-outline" onClick={handleCorrigirNcms}><Zap size={16}/> <span>Validar NCMs</span></button>
               </div>
             </div>
             {raioXIa.totalAnomalias > 0 ? (
@@ -464,10 +500,10 @@ const ProdutoList = () => {
                  {raioXIa.precoVendaZerado > 0 && (
                    <div className="ai-anomaly-card danger">
                      <div className="anomaly-header">
-                       <span className="anomaly-badge"><AlertTriangle size={14}/> {raioXIa.precoVendaZerado} Itens</span>
-                       <span className="anomaly-title">Venda Zerada</span>
+                       <span className="anomaly-badge"><AlertTriangle size={14}/> {raioXIa.precoVendaZerado} Falhas</span>
+                       <span className="anomaly-title">Venda Zerada Detectada</span>
                      </div>
-                     <button className="btn-fix-action" onClick={() => handleQuickFix('PRECO_VENDA_ZERADO', 'Gerar preços baseados no custo?', 'Margem IA')}>Gerar Preços</button>
+                     <button className="btn-fix-action" onClick={() => handleQuickFix('PRECO_VENDA_ZERADO', 'Deseja que a IA gere preços de venda automáticos baseados no custo?', 'Ajuste de Margem Seguro')}>Reparar Preços</button>
                    </div>
                  )}
                  {raioXIa.divergenciaGondola > 0 && (
@@ -475,16 +511,16 @@ const ProdutoList = () => {
                         <div className="siren-content">
                             <div className="siren-icon-wrapper"><AlertTriangle size={24} /></div>
                             <div className="siren-text">
-                                <h4>{raioXIa.divergenciaGondola} Alertas de Gôndola</h4>
-                                <p>Preços físicos divergentes do sistema.</p>
+                                <h4>{raioXIa.divergenciaGondola} Alertas Físicos</h4>
+                                <p>Preços da prateleira não batem com o sistema.</p>
                             </div>
                         </div>
-                        <button className="btn-siren-action" onClick={abrirModalDivergencia}>Resolver Agora</button>
+                        <button className="btn-siren-action" onClick={abrirModalDivergencia}>Auditar Gôndola</button>
                     </div>
                  )}
               </div>
             ) : (
-              <div className="ai-success-bar"><Check size={18} /> Base de dados auditada e sem inconsistências.</div>
+              <div className="ai-success-bar"><Check size={18} /> O seu banco de dados está íntegro e sem inconsistências críticas.</div>
             )}
           </div>
         )}
@@ -493,34 +529,64 @@ const ProdutoList = () => {
           <div className="toolbar-modern">
             <SearchBar onSearch={setTermoBusca} />
             <div className="toolbar-actions">
-                <button className={`btn-icon-soft ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(!showFilters)}><Filter size={18}/></button>
+                <button className={`btn-icon-soft ${showFilters || activeFiltersCount > 0 ? 'active' : ''}`} onClick={() => setShowFilters(!showFilters)}>
+                    <Filter size={18}/>
+                    {activeFiltersCount > 0 && <span className="filter-badge">{activeFiltersCount}</span>}
+                </button>
                 {!modoLixeira && (
                    <>
-                       <button className="btn-icon-soft text-green" onClick={() => handleExportar('excel')}><FileSpreadsheet size={18}/></button>
+                       <button className="btn-icon-soft text-green" onClick={() => handleExportar('excel')} title="Exportar Tabela para Excel"><FileSpreadsheet size={18}/></button>
                        <div className="divider-v"></div>
                        <input type="file" ref={fileInputRef} onChange={handleImportar} accept=".csv, .xls, .xlsx, .xml" style={{display: 'none'}} />
-                       <button className="btn-icon-text" onClick={() => fileInputRef.current.click()}><Upload size={18}/> <span className="hide-mobile">Importar</span></button>
+                       <button className="btn-icon-text" onClick={() => fileInputRef.current.click()}><Upload size={18}/> <span className="hide-mobile">Importar Excel</span></button>
                    </>
                 )}
             </div>
           </div>
 
-          <div className="table-responsive sticky-header-wrapper custom-scrollbar">
+          {/* PAINEL DE FILTROS */}
+          {showFilters && (
+              <div className="filters-panel-modern">
+                  <div className="filter-group">
+                      <label>Volume em Estoque</label>
+                      <select className="filter-select" value={filtros.estoque} onChange={(e) => handleFiltroChange('estoque', e.target.value)}>
+                          <option value="todos">Mostrar Todos</option>
+                          <option value="baixo">Estoque Baixo / Perigo</option>
+                          <option value="zerado">Totalmente Zerados</option>
+                          <option value="positivo">Em Estoque (Positivos)</option>
+                      </select>
+                  </div>
+                  <div className="filter-group">
+                      <label>Auditoria do Sistema</label>
+                      <div className="checkbox-group">
+                          <label className="checkbox-label"><input type="checkbox" checked={filtros.revisaoPendente} onChange={(e) => handleFiltroChange('revisaoPendente', e.target.checked)} /> Pendentes de Revisão (Novos)</label>
+                          <label className="checkbox-label"><input type="checkbox" checked={filtros.semNcm} onChange={(e) => handleFiltroChange('semNcm', e.target.checked)} /> Bloqueio Fiscal (Sem NCM)</label>
+                          <label className="checkbox-label"><input type="checkbox" checked={filtros.semImagem} onChange={(e) => handleFiltroChange('semImagem', e.target.checked)} /> Design (Sem Imagem)</label>
+                          <label className="checkbox-label"><input type="checkbox" checked={filtros.precoZerado} onChange={(e) => handleFiltroChange('precoZerado', e.target.checked)} /> Erro Operacional (Preço Zerado)</label>
+                      </div>
+                  </div>
+                  <div className="filter-group" style={{justifyContent: 'flex-end', alignItems: 'flex-end'}}>
+                      <button className="btn-clear-filter" onClick={limparFiltros} style={{padding: '10px 20px', background:'#f1f5f9', borderRadius:'8px', color:'#475569', fontWeight: 'bold'}}>Remover Filtros</button>
+                  </div>
+              </div>
+          )}
+
+          <div className="table-responsive sticky-header-wrapper custom-scrollbar" style={{marginTop: '20px'}}>
             <table className="ux-table">
               <thead>
                 <tr>
                   <th className="checkbox-cell" width="40px"><input type="checkbox" onChange={handleSelectAll} checked={produtos.length > 0 && selectedIds.length === produtos.length}/></th>
-                  <th width="35%">Identificação</th>
+                  <th width="35%">Identificação do Item</th>
                   <th className="hide-mobile" width="15%">Marca</th>
-                  <th width="15%">Preço</th>
-                  <th width="15%">Estoque</th>
+                  <th width="15%">Preço Venda</th>
+                  <th width="15%">Físico (Qtd)</th>
                   <th className="hide-mobile" width="10%">Status</th>
-                  <th className="align-right" width="10%">Gerir</th>
+                  <th className="align-right" width="10%">Ações</th>
                 </tr>
               </thead>
               <tbody>
                   {loading ? (<TableSkeleton />) : produtos.length === 0 ? (
-                    <tr><td colSpan="7" className="empty-state-modern"><h3>Nenhum produto encontrado</h3></td></tr>
+                    <tr><td colSpan="7" className="empty-state-modern"><h3>Nenhum item cruzou as barreiras dos filtros.</h3></td></tr>
                   ) : (
                     produtos.map((prod) => {
                       const isSelected = selectedIds.includes(prod.id);
@@ -533,7 +599,7 @@ const ProdutoList = () => {
                                 <div className="product-info-modern">
                                     <h4 className="product-title-modern">{prod.descricao}</h4>
                                     <CopyableCode code={prod.codigoBarras} />
-                                    <DiagnosticoAlertas prod={prod} filtroAtivo={filtros.revisaoPendente} />
+                                    <DiagnosticoAlertas prod={prod} />
                                 </div>
                             </div>
                           </td>
@@ -586,7 +652,7 @@ const ProdutoList = () => {
           <div className="modal-overlay">
              <div className="modal-content-resolution slide-up">
                 <div className="modal-header-resolution">
-                   <div className="header-title"><AlertTriangle size={24} style={{color: '#2563eb'}} /><h2>Resolver Divergências</h2></div>
+                   <div className="header-title"><AlertTriangle size={24} style={{color: '#2563eb'}} /><h2>Gestão de Auditoria de Gôndola</h2></div>
                    <button onClick={() => setShowDivergenceModal(false)} className="btn-close-modal"><X size={24}/></button>
                 </div>
                 <div className="modal-body-resolution custom-scrollbar">
@@ -596,14 +662,14 @@ const ProdutoList = () => {
                                 <div className="res-info">
                                     <span className="res-ean"><Barcode size={14}/> {p.codigoBarras}</span>
                                     <strong className="res-title">{p.descricao}</strong>
-                                    <div className="res-price-old">Gôndola: <span className="line-through">R$ {p.precoVenda?.toFixed(2)}</span></div>
+                                    <div className="res-price-old">Etiqueta Anterior: <span className="line-through">R$ {p.precoVenda?.toFixed(2)}</span></div>
                                 </div>
                                 <div className="res-action">
                                     <div className="res-input-group">
                                         <span className="currency">R$</span>
-                                        <input type="text" placeholder="Novo valor" value={newPrices[p.id] || ''} onChange={(e) => handlePriceMask(e, p.id)} onFocus={handleFocus} />
+                                        <input type="text" placeholder="Preço Real Físico" value={newPrices[p.id] || ''} onChange={(e) => handlePriceMaskForDivergence(e, p.id)} onFocus={handleFocus} />
                                     </div>
-                                    <button onClick={() => resolverItemDivergente(p.id)} className="btn-save-blue"><CheckCircle2 size={18} /> Salvar</button>
+                                    <button onClick={() => resolverItemDivergente(p.id)} className="btn-save-blue"><CheckCircle2 size={18} /> Aplicar</button>
                                 </div>
                             </div>
                         ))}
@@ -617,7 +683,7 @@ const ProdutoList = () => {
         <div className="lightbox-overlay fade-in" onClick={() => setZoomedImage(null)}>
             <div className="lightbox-content">
                <button onClick={() => setZoomedImage(null)} className="lightbox-close"><X size={28}/></button>
-               <img src={zoomedImage} alt="Zoom" />
+               <img src={zoomedImage} alt="Inspeção" />
             </div>
         </div>
       )}
@@ -627,6 +693,4 @@ const ProdutoList = () => {
       )}
     </>
   );
-};
-
-export default ProdutoList;
+}
