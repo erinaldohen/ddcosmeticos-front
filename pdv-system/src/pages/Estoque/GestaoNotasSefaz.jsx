@@ -7,7 +7,7 @@ import { maskCNPJ } from '../../utils/masks';
 import {
   Search, RefreshCw, CheckCircle, FileText, Calendar, Building,
   DownloadCloud, Filter, Inbox, Package, X, AlertTriangle, Link as LinkIcon,
-  Wand2, Save, Barcode, ChevronRight, Hash, Edit3, Sparkles, Eye, Clock, User, ChevronLeft
+  Wand2, Save, Barcode, ChevronRight, Hash, Edit3, Sparkles, Eye, Clock, User, ChevronLeft, UploadCloud
 } from 'lucide-react';
 
 import './GestaoNotasSefaz.css';
@@ -84,6 +84,39 @@ export default function GestaoNotasSefaz() {
   const [buscaManual, setBuscaManual] = useState('');
   const [quickEditIndex, setQuickEditIndex] = useState(null);
   const [quickEditForm, setQuickEditForm] = useState({ descricao: '', codigoBarras: '', marca: '', categoria: '', subcategoria: '', precoCusto: 0, margem: 50.00, precoVenda: 0 });
+
+  // REFERÊNCIA PARA O INPUT INVISÍVEL
+  const fileInputRef = useRef(null);
+
+  // FUNÇÃO DE ENVIO PARA O BACKEND
+  const handleUploadXml = async (e) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+
+      const toastId = toast.loading(`A processar ${files.length} ficheiro(s) XML...`);
+
+      try {
+          const formData = new FormData();
+          // Permite enviar vários XMLs de uma vez (Bulk Upload)
+          for (let i = 0; i < files.length; i++) {
+              formData.append('arquivos', files[i]);
+          }
+
+          // Envia para o novo endpoint que o Backend vai criar
+          await api.post('/estoque/notas-pendentes/upload-manual', formData);
+
+          toast.update(toastId, { render: "XMLs carregados com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
+
+          // Muda para a aba de pendentes e atualiza a lista
+          setActiveTab('PENDENTES');
+          setMesSelecionado(null);
+          buscarNotasBackend(0);
+      } catch (error) {
+          toast.update(toastId, { render: "Erro ao ler os ficheiros XML.", type: "error", isLoading: false, autoClose: 5000 });
+      } finally {
+          e.target.value = null; // Limpa o input para poder enviar o mesmo ficheiro novamente se necessário
+      }
+  };
 
   // Nomes dos Meses para a Timeline
   const mesesNomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -264,7 +297,7 @@ export default function GestaoNotasSefaz() {
   return (
     <div className="gestao-notas-container" style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto' }}>
 
-      {/* HEADER PREMIUM */}
+      {/* HEADER PREMIUM COM BOTÃO CORRIGIDO */}
       <div className="gns-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', background: '#fff', padding: '20px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
         <div className="gns-header-left" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             <div className="gns-icon-box" style={{ background: '#eff6ff', padding: '15px', borderRadius: '12px' }}>
@@ -275,7 +308,24 @@ export default function GestaoNotasSefaz() {
                 <p style={{ margin: '4px 0 0', color: '#64748b' }}>Gestão unificada de faturamentos e inventário.</p>
             </div>
         </div>
-        <div className="gns-header-actions">
+
+        {/* AQUI ESTÁ A CORREÇÃO: Ambos os botões adicionados */}
+        <div className="gns-header-actions" style={{ display: 'flex', gap: '15px' }}>
+
+            <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                accept=".xml"
+                multiple
+                onChange={handleUploadXml}
+            />
+            <button
+                onClick={() => fileInputRef.current.click()}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px', background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
+                <UploadCloud size={18} color="#3b82f6" /> Upload Manual (XMLs)
+            </button>
+
             <button onClick={sincronizarSefaz} disabled={syncing} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px', background: syncing ? '#cbd5e1' : '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: syncing ? 'not-allowed' : 'pointer', transition: 'background 0.2s' }}>
                 <RefreshCw size={18} className={syncing ? "animate-spin" : ""} /> {syncing ? "Sincronizando..." : "Sincronizar Nova Nota"}
             </button>
@@ -292,7 +342,7 @@ export default function GestaoNotasSefaz() {
           </button>
       </div>
 
-      {/* 🔥 TIMELINE DE MESES (NOVO DESIGN) */}
+      {/* TIMELINE DE MESES */}
       <div style={{ background: '#fff', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', marginBottom: '25px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
               <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -323,7 +373,6 @@ export default function GestaoNotasSefaz() {
                           }}
                       >
                           <span style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{mes}</span>
-                          {/* Exibe a contagem apenas no mês ativo para não gerar sobrecarga no servidor */}
                           <span style={{ fontSize: '0.75rem', background: isActive ? 'rgba(255,255,255,0.2)' : '#e2e8f0', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>
                               {isActive ? `${totalElementos} notas` : '---'}
                           </span>
@@ -519,7 +568,7 @@ export default function GestaoNotasSefaz() {
       )}
 
       {/* ============================================================================
-          MODAL 2: DE LEITURA DO HISTÓRICO (VIEW) - AGORA COM O ERRO CORRIGIDO
+          MODAL 2: DE LEITURA DO HISTÓRICO (VIEW)
       ============================================================================ */}
       {modalType === 'VIEW' && (
           <div className="modal-overlay fade-in">
