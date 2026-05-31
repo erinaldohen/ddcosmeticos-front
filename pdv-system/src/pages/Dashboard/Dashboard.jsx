@@ -105,22 +105,33 @@ const Dashboard = () => {
   }, [modalDrillDown]);
 
   const carregarDados = async (isSilent = false) => {
-    if (!isSilent) setLoading(true);
-    setErrorStatus(false);
-    try {
-      const [dashRes, analiseRes, pendentesRes] = await Promise.all([
-        api.get(`/dashboard?periodo=${filtroPeriodo}`),
-        api.get(`/contas-pagar/analise-mensal?periodo=${filtroPeriodo}`).catch(() => ({ data: { custoFixoPrevisto: 0 } })),
-        api.get('/dashboard/alertas/pendentes-revisao').catch(() => ({ data: 0 }))
-      ]);
-      setData(dashRes.data);
-      setAnaliseMensal(analiseRes.data);
-      setQtdPendentes(Number(pendentesRes.data) || 0);
-      setLastUpdate(new Date());
-    } catch (err) {
-      setErrorStatus(true);
-    } finally { if (!isSilent) setLoading(false); }
-  };
+      if (!isSilent) setLoading(true);
+      setErrorStatus(false);
+
+      // 🔥 NOVO: Traduz o "filtroPeriodo" de texto para Mes/Ano numéricos para o Java
+      let mesConsulta = new Date().getMonth() + 1;
+      let anoConsulta = new Date().getFullYear();
+
+      if (filtroPeriodo === 'mes_passado') {
+          mesConsulta = mesConsulta === 1 ? 12 : mesConsulta - 1;
+          anoConsulta = mesConsulta === 12 ? anoConsulta - 1 : anoConsulta;
+      }
+
+      try {
+        const [dashRes, analiseRes, pendentesRes] = await Promise.all([
+          api.get(`/dashboard?periodo=${filtroPeriodo}`),
+          // 🔥 CORREÇÃO: Passando ?mes=X&ano=Y exatamente como o Java espera
+          api.get(`/contas-pagar/analise-mensal?mes=${mesConsulta}&ano=${anoConsulta}`).catch(() => ({ data: { custoFixoPrevisto: 0 } })),
+          api.get('/dashboard/alertas/pendentes-revisao').catch(() => ({ data: 0 }))
+        ]);
+        setData(dashRes.data);
+        setAnaliseMensal(analiseRes.data);
+        setQtdPendentes(Number(pendentesRes.data) || 0);
+        setLastUpdate(new Date());
+      } catch (err) {
+        setErrorStatus(true);
+      } finally { if (!isSilent) setLoading(false); }
+    };
 
   const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
 
@@ -175,6 +186,7 @@ const Dashboard = () => {
   const estoqueCurvaC = inv.estoqueCurvaC || { itens: 0, valorImobilizado: 0 };
   const produtosVencendo = inv.produtosVencendo || { itens: 0, valorRisco: 0 };
   const taxaRecorrencia = Number(fin.taxaRecorrencia || 0);
+  const qtdEstoqueNegativo = Number(inv.estoqueNegativo || 0);
 
   const receitasFuturas = Number(fin.fluxoCaixa7Dias?.receitasPrevistas || 0);
   const despesasFuturas = Number(fin.fluxoCaixa7Dias?.despesasPrevistas || 0);
@@ -281,20 +293,23 @@ const Dashboard = () => {
           </div>
       )}
 
-      {qtdPendentes > 0 && (
-          <div className="fade-in" style={{background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)', border: '1px solid #f59e0b', borderRadius: '12px', padding: '20px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 15px -3px rgba(245, 158, 11, 0.15)', flexWrap: 'wrap', gap: '15px'}}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{background: '#f59e0b', color: 'white', padding: '12px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(245, 158, 11, 0.3)'}}>
-                      <AlertTriangle size={28} />
-                  </div>
-                  <div>
-                      <h3 style={{ margin: '0 0 4px', color: '#92400e', fontSize: '1.2rem', fontWeight: '800' }}>Ação Requerida</h3>
-                      <p style={{ margin: 0, color: '#b45309', fontSize: '1rem', fontWeight: '500' }}>Existem <strong>{qtdPendentes} novos produtos</strong> aguardando revisão.</p>
-                  </div>
-              </div>
-              <button onClick={() => navigate('/produtos', { state: { filtrarPendentes: true } })} style={{background: '#92400e', color: 'white', border: 'none', padding: '12px 24px', borderRadius: '8px', fontWeight: 'bold', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: '0.2s', whiteSpace: 'nowrap'}}>Revisar Agora <ArrowRight size={20} /></button>
-          </div>
-      )}
+      {/* ALERTA CRÍTICO: VENDA A DESCOBERTO (SUBSTITUIU O ALERTA ANTIGO DE REVISÃO) */}
+            {qtdEstoqueNegativo > 0 && (
+                <div className="fade-in scale-in" style={{background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)', border: '2px solid #ef4444', borderRadius: '12px', padding: '20px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 20px -3px rgba(239, 68, 68, 0.3)', flexWrap: 'wrap', gap: '15px'}}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                        <div className="pulse-animation" style={{background: '#ef4444', color: 'white', padding: '14px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(239, 68, 68, 0.4)'}}>
+                            <AlertTriangle size={32} />
+                        </div>
+                        <div>
+                            <h3 style={{ margin: '0 0 4px', color: '#991b1b', fontSize: '1.3rem', fontWeight: '900', textTransform: 'uppercase' }}>Furo de Estoque Detectado</h3>
+                            <p style={{ margin: 0, color: '#b91c1c', fontSize: '1.05rem', fontWeight: '600' }}>Existem <strong>{qtdEstoqueNegativo} produto(s)</strong> com saldo negativo. O caixa realizou vendas a descoberto.</p>
+                        </div>
+                    </div>
+                    <button onClick={() => navigate('/produtos')} style={{background: '#991b1b', color: 'white', border: 'none', padding: '12px 24px', borderRadius: '8px', fontWeight: 'bold', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: '0.2s', whiteSpace: 'nowrap'}}>
+                        Ajustar Inventário <ArrowRight size={20} />
+                    </button>
+                </div>
+            )}
 
       <div className="ai-insight-box" style={{background: 'linear-gradient(135deg, #fffcf0 0%, #fef9e6 100%)', border: '1px solid #f1e4b8', borderRadius: '12px', padding: '20px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '18px', boxShadow: '0 4px 15px -3px rgba(184, 134, 11, 0.1)'}}>
         <div className="ai-icon-glow" style={{background: '#4b3621', color: 'white', padding: '12px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 10px rgba(75, 54, 33, 0.3)', flexShrink: 0}}>
