@@ -1,11 +1,160 @@
-/* Copie o conteúdo de ContasReceber.css */
-/* Alterações visuais sugeridas: */
-.kpi-card-finance.danger { border-left: 4px solid #ef4444; } /* Mantém vermelho para Vencido */
-.kpi-card-finance.warning { border-left: 4px solid #f59e0b; } /* Amarelo para A Pagar */
-
-.btn-pay-out {
-    background: #ef4444; color: white; border: none; padding: 6px 12px;
-    border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem;
-    display: flex; align-items: center; gap: 6px; transition: 0.2s;
+/* Container Base */
+.cp-premium-container {
+    padding: 30px;
+    max-width: 1300px;
+    margin: 0 auto;
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: #f8fafc;
+    min-height: 100vh;
 }
-.btn-pay-out:hover { background: #dc2626; }
+
+/* Header UI */
+.cp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+.cp-header-title { display: flex; align-items: center; gap: 16px; }
+.cp-icon-box { background: #eff6ff; padding: 16px; border-radius: 14px; display: flex; box-shadow: 0 4px 10px rgba(59,130,246,0.1); }
+.cp-header h1 { margin: 0; font-size: 2rem; color: #0f172a; font-weight: 800; letter-spacing: -0.5px; }
+.cp-header p { margin: 4px 0 0; color: #64748b; font-size: 0.95rem; }
+
+.cp-header-actions { display: flex; gap: 12px; }
+
+/* Botões Modernos */
+.cp-btn-primary {
+    background: #3b82f6; color: white; border: none; padding: 12px 24px;
+    border-radius: 10px; font-weight: 700; font-size: 0.95rem;
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+}
+.cp-btn-primary:hover { background: #2563eb; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35); }
+
+.cp-btn-secondary {
+    background: #fff; color: #475569; border: 1px solid #cbd5e1; padding: 12px;
+    border-radius: 10px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center;
+}
+.cp-btn-secondary:hover { background: #f1f5f9; color: #0f172a; border-color: #94a3b8; }
+
+/* Dashboard Cards (KPIs) com Efeito Hover */
+.cp-kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 30px; }
+.cp-kpi-card {
+    background: #fff; padding: 24px; border-radius: 16px;
+    display: flex; align-items: center; gap: 20px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.03); transition: transform 0.2s, box-shadow 0.2s;
+    border: 1px solid #f1f5f9; position: relative; overflow: hidden;
+}
+.cp-kpi-card:hover { transform: translateY(-4px); box-shadow: 0 10px 25px rgba(0,0,0,0.06); }
+.cp-kpi-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; }
+
+.cp-kpi-card.warning::before { background: #f59e0b; }
+.cp-kpi-card.danger::before { background: #ef4444; }
+.cp-kpi-card.success::before { background: #10b981; }
+
+.kpi-icon-wrapper { padding: 16px; border-radius: 14px; display: flex; align-items: center; justify-content: center;}
+.warning .kpi-icon-wrapper { background: #fef3c7; color: #d97706; }
+.danger .kpi-icon-wrapper { background: #fee2e2; color: #dc2626; }
+.success .kpi-icon-wrapper { background: #d1fae5; color: #059669; }
+
+.kpi-content span { font-size: 0.85rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.kpi-content h3 { margin: 6px 0 0; font-size: 1.8rem; font-weight: 800; color: #0f172a; }
+
+/* Barra de Filtros Elegante */
+.cp-toolbar {
+    display: flex; justify-content: space-between; align-items: center;
+    background: #fff; padding: 16px 20px; border-radius: 14px; margin-bottom: 24px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.03); border: 1px solid #f1f5f9;
+}
+.cp-search-box { position: relative; width: 350px; }
+.search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+.cp-search-box input {
+    width: 100%; padding: 12px 12px 12px 42px; border: 1px solid #cbd5e1;
+    border-radius: 10px; outline: none; font-size: 0.95rem; color: #334155; transition: 0.2s; background: #f8fafc;
+}
+.cp-search-box input:focus { border-color: #3b82f6; background: #fff; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+
+.cp-tabs { display: flex; gap: 10px; background: #f1f5f9; padding: 6px; border-radius: 12px; }
+.cp-tab-btn {
+    background: transparent; border: none; padding: 8px 18px; font-weight: 600; font-size: 0.9rem;
+    color: #64748b; cursor: pointer; border-radius: 8px; transition: all 0.2s;
+}
+.cp-tab-btn.active { background: #fff; color: #0f172a; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+.cp-tab-btn:hover:not(.active) { color: #334155; }
+
+/* Tabela de Dados Refinada */
+.cp-table-card { background: #fff; border-radius: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.03); border: 1px solid #f1f5f9; overflow: hidden; }
+.cp-table { width: 100%; border-collapse: collapse; text-align: left; }
+.cp-table th { background: #f8fafc; padding: 18px 24px; font-size: 0.8rem; color: #64748b; font-weight: 700; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; }
+.cp-table td { padding: 18px 24px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; transition: background 0.2s; }
+.cp-table-row:hover td { background-color: #f8fafc; }
+
+.cp-td-title { font-weight: 700; color: #1e293b; font-size: 1rem; }
+.cp-td-subtitle { font-size: 0.8rem; color: #64748b; margin-top: 6px; display: flex; align-items: center; gap: 6px; }
+.cp-td-date { display: flex; align-items: center; gap: 8px; color: #475569; font-weight: 500; }
+.text-danger { color: #ef4444 !important; font-weight: 700 !important; }
+
+.cp-td-value-stack { display: flex; flexDirection: column; }
+.value-restante { font-weight: 800; color: #0f172a; font-size: 1.1rem; display: block; }
+.value-original { font-size: 0.75rem; color: #94a3b8; text-decoration: line-through; display: block; margin-top: 2px; }
+
+/* Badges Status */
+.cp-badge { padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; }
+.status-PENDENTE { background: #fef3c7; color: #b45309; }
+.status-VENCIDA { background: #fee2e2; color: #b91c1c; }
+.status-PAGO { background: #d1fae5; color: #047857; }
+.status-PARCIAL { background: #e0e7ff; color: #4338ca; }
+
+/* Botão Quitar Tabela */
+.cp-btn-pay {
+    background: #fff; color: #ef4444; border: 1px solid #fca5a5; padding: 8px 16px;
+    border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 0.85rem;
+    display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;
+}
+.cp-btn-pay:hover { background: #ef4444; color: #fff; border-color: #ef4444; transform: scale(1.05); }
+
+/* Modais Premium (Glassmorphism) */
+.cp-modal-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.4); display: flex; align-items: center; justify-content: center;
+    z-index: 1000; backdrop-filter: blur(8px);
+}
+.cp-modal-card {
+    background: #fff; width: 90%; max-width: 550px; border-radius: 20px;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); overflow: hidden;
+}
+
+.cp-modal-header { padding: 24px 30px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: flex-start; background: #f8fafc; }
+.cp-modal-header h2 { margin: 0; font-size: 1.4rem; color: #0f172a; font-weight: 800; }
+.cp-modal-header p { margin: 6px 0 0; color: #64748b; font-size: 0.9rem; }
+.btn-close { background: transparent; border: none; color: #94a3b8; cursor: pointer; transition: 0.2s; }
+.btn-close:hover { color: #ef4444; transform: rotate(90deg); }
+
+.cp-modal-body { padding: 30px; display: flex; flex-direction: column; gap: 20px; }
+.cp-input-row { display: flex; gap: 20px; }
+.cp-input-group { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.cp-input-group label { font-size: 0.85rem; font-weight: 700; color: #475569; }
+
+.cp-input-group input, .cp-input-group select {
+    padding: 14px; border: 2px solid #e2e8f0; border-radius: 10px;
+    font-size: 1rem; color: #0f172a; outline: none; transition: 0.2s; background: #fff;
+}
+.cp-input-group input:focus, .cp-input-group select:focus { border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59,130,246,0.1); }
+.input-gigante { font-size: 1.6rem !important; font-weight: 800 !important; padding: 16px !important; }
+.text-success { color: #10b981 !important; border-color: #a7f3d0 !important; background: #ecfdf5 !important; }
+
+.cp-modal-footer { padding: 20px 30px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end; gap: 12px; }
+.cp-btn-cancel { background: #fff; color: #475569; border: 1px solid #cbd5e1; padding: 12px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: 0.2s; }
+.cp-btn-cancel:hover { background: #f1f5f9; }
+.cp-btn-submit { background: #3b82f6; color: white; border: none; padding: 12px 24px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 10px rgba(59,130,246,0.2); }
+.cp-btn-submit:hover { background: #2563eb; transform: translateY(-2px); }
+.cp-btn-submit.success { background: #10b981; box-shadow: 0 4px 10px rgba(16,185,129,0.2); }
+.cp-btn-submit.success:hover { background: #059669; }
+
+/* Utilidades Animadas */
+.fade-in { animation: fadeIn 0.4s ease-out forwards; }
+.scale-in { animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }

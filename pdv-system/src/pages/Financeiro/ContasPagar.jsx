@@ -1,29 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import {
-  DollarSign, Calendar, Search,
-  CheckCircle2, AlertCircle, RefreshCw, TrendingDown, Plus, X
+  DollarSign, Calendar, Search, FileText,
+  CheckCircle2, AlertCircle, RefreshCw, TrendingDown, Plus, X,
+  Building, Hash, ShieldCheck, Edit3, ArrowRight, Wallet
 } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { contasPagarService } from '../../services/contasPagarService';
-// Importe um serviço de fornecedores se quiser popular o select
-// import { fornecedorService } from '../../services/fornecedorService';
-import './ContasPagar.css'; // Crie ou use o mesmo do Receber
+import api from '../../services/api';
+import './ContasPagar.css';
 
-const ContasPagar = () => {
+// =========================================================================
+// HELPERS DE FORMATAÇÃO E PARSING BLINDADOS
+// =========================================================================
+const formatMoney = (val) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+const parseMoneyBR = (val) => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    // Remove pontos de milhar e troca a vírgula decimal por ponto
+    const cleanStr = String(val).replace(/\./g, '').replace(',', '.');
+    const parsed = parseFloat(cleanStr);
+    return isNaN(parsed) ? 0 : parsed;
+};
+
+const formatDate = (dateStr) => {
+    if(!dateStr) return "-";
+    if (Array.isArray(dateStr)) return `${String(dateStr[2]).padStart(2,'0')}/${String(dateStr[1]).padStart(2,'0')}/${dateStr[0]}`;
+    const [year, month, day] = dateStr.split('T')[0].split('-');
+    return `${day}/${month}/${year}`;
+};
+
+export default function ContasPagar() {
   const [loading, setLoading] = useState(false);
   const [contas, setContas] = useState([]);
   const [resumo, setResumo] = useState({ totalPagar: 0, totalVencido: 0, pagoHoje: 0 });
-  const [filtroStatus, setFiltroStatus] = useState('PENDENTE');
+
+  const [filtroStatus, setFiltroStatus] = useState('TODAS');
   const [busca, setBusca] = useState('');
 
-  // Modal Nova Conta
+  // Modais
   const [modalNovaOpen, setModalNovaOpen] = useState(false);
-  const [formNova, setFormNova] = useState({ descricao: '', valorOriginal: '', dataVencimento: '', fornecedorId: '' });
+  const [formNova, setFormNova] = useState({ descricao: '', valorOriginal: '', dataVencimento: '' });
 
-  // Modal Pagar
   const [modalPagarOpen, setModalPagarOpen] = useState(false);
   const [contaSelecionada, setContaSelecionada] = useState(null);
-  const [formPagar, setFormPagar] = useState({ valor: '', forma: 'DINHEIRO', juros: 0, desconto: 0 });
+  const [formPagar, setFormPagar] = useState({ valorPago: '', formaPagamento: 'DINHEIRO' });
 
   useEffect(() => {
     carregarDados();
@@ -32,15 +52,15 @@ const ContasPagar = () => {
   const carregarDados = async () => {
     setLoading(true);
     try {
-      const [dadosResumo, dadosContas] = await Promise.all([
-        contasPagarService.obterResumo(),
-        contasPagarService.listar({ status: filtroStatus, termo: busca })
+      const [resResumo, resContas] = await Promise.all([
+          api.get('/contas-pagar/resumo').catch(() => ({ data: { totalPagar: 0, totalVencido: 0, pagoHoje: 0 } })),
+          api.get('/contas-pagar', { params: { status: filtroStatus, termo: busca } }).catch(() => ({ data: [] }))
       ]);
-      setResumo(dadosResumo);
-      setContas(dadosContas);
+
+      setResumo(resResumo.data || { totalPagar: 0, totalVencido: 0, pagoHoje: 0 });
+      setContas(Array.isArray(resContas.data) ? resContas.data : []);
     } catch (error) {
-      console.error(error);
-      toast.error("Erro ao carregar contas.");
+      toast.error("Falha de conexão com o banco de dados financeiro.");
     } finally {
       setLoading(false);
     }
@@ -48,212 +68,258 @@ const ContasPagar = () => {
 
   const handleNovaConta = async (e) => {
     e.preventDefault();
+    const valorCorreto = parseMoneyBR(formNova.valorOriginal);
+    if (valorCorreto <= 0) return toast.warn("Por favor, informe um valor válido.");
+
+    const toastId = toast.loading("Registando despesa...");
     try {
-      await contasPagarService.criar({
-        ...formNova,
-        valorOriginal: parseFloat(formNova.valorOriginal),
-        fornecedorId: formNova.fornecedorId ? parseInt(formNova.fornecedorId) : null
-      });
-      toast.success("Conta lançada com sucesso!");
+      const payload = {
+          descricao: formNova.descricao.trim(),
+          valorOriginal: valorCorreto,
+          dataVencimento: formNova.dataVencimento,
+          fornecedorId: null
+      };
+
+      await api.post('/contas-pagar', payload);
+      toast.update(toastId, { render: "Despesa lançada com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
+
       setModalNovaOpen(false);
-      setFormNova({ descricao: '', valorOriginal: '', dataVencimento: '', fornecedorId: '' });
+      setFormNova({ descricao: '', valorOriginal: '', dataVencimento: '' });
       carregarDados();
     } catch (e) {
-      toast.error("Erro ao lançar conta.");
+      toast.update(toastId, { render: "Erro ao lançar conta.", type: "error", isLoading: false, autoClose: 4000 });
     }
   };
 
   const abrirModalPagar = (conta) => {
     setContaSelecionada(conta);
-    setFormPagar({
-      valor: conta.valorRestante,
-      forma: 'DINHEIRO', juros: 0, desconto: 0
-    });
+    // Para facilitar a digitação, preenchemos o valor já no formato "150,00"
+    const valorFormatado = Number(conta.valorRestante || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    setFormPagar({ valorPago: valorFormatado, formaPagamento: 'DINHEIRO' });
     setModalPagarOpen(true);
   };
 
   const handlePagar = async (e) => {
     e.preventDefault();
+    const valorCorreto = parseMoneyBR(formPagar.valorPago);
+    if (valorCorreto <= 0) return toast.warn("O valor a pagar deve ser maior que zero.");
+
+    const toastId = toast.loading("Processando saída de caixa...");
     try {
       const payload = {
-        valorPago: parseFloat(formPagar.valor),
-        formaPagamento: formPagar.forma,
-        juros: parseFloat(formPagar.juros || 0),
-        desconto: parseFloat(formPagar.desconto || 0)
+        valorPago: valorCorreto,
+        formaPagamento: formPagar.formaPagamento,
+        juros: 0, desconto: 0
+        // Não enviamos a data do frontend para evitar bugs de fuso horário. O Backend assume LocalDate.now().
       };
-      await contasPagarService.pagar(contaSelecionada.id, payload);
-      toast.success("Pagamento realizado (Saída de Caixa)!");
+
+      await api.post(`/contas-pagar/${contaSelecionada.id}/pagar`, payload);
+
+      toast.update(toastId, { render: "Pagamento confirmado!", type: "success", isLoading: false, autoClose: 3000 });
       setModalPagarOpen(false);
       carregarDados();
     } catch (error) {
-      toast.error("Erro ao realizar pagamento.");
+      toast.update(toastId, { render: error.response?.data?.message || "Erro no pagamento.", type: "error", isLoading: false, autoClose: 4000 });
     }
   };
 
-  const formatMoney = (val) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const formatDate = (dateStr) => {
-    if(!dateStr) return "-";
-    if (Array.isArray(dateStr)) return `${dateStr[2]}/${dateStr[1]}/${dateStr[0]}`;
-    return new Date(dateStr).toLocaleDateString('pt-BR', {timeZone: 'UTC'});
-  };
-
   return (
-    <div className="container-fluid contas-container fade-in">
-      <header className="page-header">
-        <div>
-          <h1>Contas a Pagar</h1>
-          <p>Gestão de Despesas e Fornecedores</p>
+    <div className="cp-premium-container fade-in">
+      {/* HEADER DA PÁGINA */}
+      <header className="cp-header">
+        <div className="cp-header-title">
+          <div className="cp-icon-box"><Wallet size={28} color="#3b82f6" /></div>
+          <div>
+            <h1>Contas a Pagar</h1>
+            <p>Monitorização de Obrigações, Despesas e Caídas Financeiras</p>
+          </div>
         </div>
-        <div className="header-actions">
-            <button className="action-btn-primary" onClick={() => setModalNovaOpen(true)}>
-                <Plus size={18}/> Lançar Despesa
-            </button>
-            <button className="btn-secondary" onClick={carregarDados} disabled={loading}>
+        <div className="cp-header-actions">
+            <button className="cp-btn-secondary" onClick={carregarDados} disabled={loading} title="Sincronizar">
                 <RefreshCw size={18} className={loading ? 'spin' : ''}/>
+            </button>
+            <button className="cp-btn-primary" onClick={() => setModalNovaOpen(true)}>
+                <Plus size={20}/> <span>Nova Despesa</span>
             </button>
         </div>
       </header>
 
-      {/* KPI CARDS */}
-      <div className="kpi-row">
-        <div className="kpi-card-finance warning">
-          <div className="kpi-icon red"><TrendingDown /></div>
-          <div className="kpi-info"><h3>A Pagar (Total)</h3><p>{formatMoney(resumo.totalPagar)}</p></div>
+      {/* CARDS DE KPI (DASHBOARD) */}
+      <div className="cp-kpi-grid">
+        <div className="cp-kpi-card warning">
+          <div className="kpi-icon-wrapper"><TrendingDown size={24} /></div>
+          <div className="kpi-content">
+              <span>A Pagar (Pendente)</span>
+              <h3>{formatMoney(resumo.totalPagar)}</h3>
+          </div>
         </div>
-        <div className="kpi-card-finance danger">
-          <div className="kpi-icon red"><AlertCircle /></div>
-          <div className="kpi-info"><h3>Vencido</h3><p>{formatMoney(resumo.totalVencido)}</p></div>
+
+        <div className="cp-kpi-card danger">
+          <div className="kpi-icon-wrapper"><AlertCircle size={24} /></div>
+          <div className="kpi-content">
+              <span>Total Vencido</span>
+              <h3>{formatMoney(resumo.totalVencido)}</h3>
+          </div>
         </div>
-        <div className="kpi-card-finance success">
-          <div className="kpi-icon green"><CheckCircle2 /></div>
-          <div className="kpi-info"><h3>Pago Hoje</h3><p>{formatMoney(resumo.pagoHoje)}</p></div>
+
+        <div className="cp-kpi-card success">
+          <div className="kpi-icon-wrapper"><CheckCircle2 size={24} /></div>
+          <div className="kpi-content">
+              <span>Pago Hoje</span>
+              <h3>{formatMoney(resumo.pagoHoje)}</h3>
+          </div>
         </div>
       </div>
 
-      {/* FILTROS */}
-      <div className="filters-bar">
-        <div className="search-input-wrapper">
-          <Search size={18} className="search-icon-inside"/>
+      {/* BARRA DE FERRAMENTAS E FILTROS */}
+      <div className="cp-toolbar">
+        <div className="cp-search-box">
+          <Search size={18} className="search-icon"/>
           <input
-            placeholder="Buscar despesa ou fornecedor..."
+            type="text"
+            placeholder="Pesquisar por descrição ou fornecedor..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && carregarDados()}
           />
         </div>
-        <div className="status-tabs">
-          {['TODAS', 'PENDENTE', 'VENCIDA', 'PAGA'].map(s => (
-            <button key={s} className={`status-tab ${filtroStatus === s ? 'active' : ''}`} onClick={() => setFiltroStatus(s)}>
+        <div className="cp-tabs">
+          {['TODAS', 'PENDENTE', 'VENCIDA', 'PARCIAL', 'PAGO'].map(s => (
+            <button key={s} className={`cp-tab-btn ${filtroStatus === s ? 'active' : ''}`} onClick={() => setFiltroStatus(s)}>
               {s.charAt(0) + s.slice(1).toLowerCase()}
             </button>
           ))}
         </div>
       </div>
 
-      {/* LISTAGEM */}
-      <div className="debt-table-container">
-        <table className="debt-table">
-          <thead>
-            <tr>
-              <th>Descrição / Fornecedor</th>
-              <th>Vencimento</th>
-              <th>Valor Restante</th>
-              <th>Status</th>
-              <th style={{textAlign:'right'}}>Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {contas.length > 0 ? (
-              contas.map(conta => (
-                <tr key={conta.id}>
+      {/* TABELA DE DADOS PREMIUM */}
+      <div className="cp-table-card">
+        {loading && contas.length === 0 ? (
+           <div className="cp-empty-state"><RefreshCw size={40} className="spin text-slate-300" /><h2>Sincronizando...</h2></div>
+        ) : contas.length === 0 ? (
+           <div className="cp-empty-state"><FileText size={48} className="text-slate-200" /><h2>Nenhuma conta encontrada nesta categoria.</h2></div>
+        ) : (
+          <table className="cp-table">
+            <thead>
+              <tr>
+                <th>Descrição / Fornecedor</th>
+                <th>Vencimento</th>
+                <th>Valor a Pagar</th>
+                <th>Status</th>
+                <th className="text-right">Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contas.map(conta => (
+                <tr key={conta.id} className="cp-table-row">
                   <td>
-                    <div style={{fontWeight:600}}>{conta.descricao}</div>
-                    <div style={{fontSize:'0.75rem', color:'#94a3b8'}}>{conta.fornecedorNome}</div>
+                    <div className="cp-td-title">{conta.descricao}</div>
+                    <div className="cp-td-subtitle">
+                        <Building size={12}/> {conta.fornecedorNome}
+                    </div>
                   </td>
                   <td>
-                    <div style={{display:'flex', alignItems:'center', gap:6, color: conta.status === 'VENCIDA' ? '#ef4444' : 'inherit'}}>
+                    <div className={`cp-td-date ${conta.status === 'VENCIDA' ? 'text-danger' : ''}`}>
                       <Calendar size={14}/> {formatDate(conta.dataVencimento)}
                     </div>
                   </td>
-                  <td style={{fontWeight:700, color: '#ef4444'}}>{formatMoney(conta.valorRestante)}</td>
-                  <td><span className={`badge-debt ${conta.status}`}>{conta.status}</span></td>
-                  <td style={{display:'flex', justifyContent:'flex-end'}}>
-                    {conta.status !== 'PAGA' && (
-                      <button className="btn-pay-out" onClick={() => abrirModalPagar(conta)}>
-                        <DollarSign size={16}/> Pagar
+                  <td>
+                    <div className="cp-td-value-stack">
+                        <span className="value-restante">{formatMoney(conta.valorRestante)}</span>
+                        {conta.valorTotal > conta.valorRestante && (
+                            <span className="value-original">Original: {formatMoney(conta.valorTotal)}</span>
+                        )}
+                    </div>
+                  </td>
+                  <td>
+                    <span className={`cp-badge status-${conta.status || 'PENDENTE'}`}>{conta.status}</span>
+                  </td>
+                  <td className="text-right">
+                    {conta.status !== 'PAGO' && (
+                      <button className="cp-btn-pay" onClick={() => abrirModalPagar(conta)}>
+                        <DollarSign size={16}/> Pagar <ArrowRight size={14}/>
                       </button>
                     )}
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr><td colSpan="5" style={{textAlign:'center', padding:30, color:'#94a3b8'}}>Nenhuma despesa encontrada.</td></tr>
-            )}
-          </tbody>
-        </table>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* MODAL NOVA CONTA */}
+      {/* ========================================================= */}
+      {/* MODAL NOVA CONTA (DESIGN MODERNO FLUTUANTE) */}
+      {/* ========================================================= */}
       {modalNovaOpen && (
-        <div className="modal-overlay">
-            <form className="modal-content" onSubmit={handleNovaConta}>
-                <div className="modal-header"><h2>Lançar Despesa</h2><p>Registre contas manuais</p></div>
-
-                <div className="form-group mb-3">
-                    <label className="text-muted text-sm">Descrição</label>
-                    <input className="ff-input-floating" required value={formNova.descricao} onChange={e => setFormNova({...formNova, descricao: e.target.value})} placeholder="Ex: Conta de Luz"/>
+        <div className="cp-modal-overlay">
+            <form className="cp-modal-card scale-in" onSubmit={handleNovaConta}>
+                <div className="cp-modal-header">
+                    <div><h2>Lançar Despesa</h2><p>Registe contas avulsas (água, luz, internet)</p></div>
+                    <button type="button" className="btn-close" onClick={() => setModalNovaOpen(false)}><X size={24}/></button>
                 </div>
-                <div className="form-row mb-3">
-                    <div className="form-group flex-1">
-                        <label className="text-muted text-sm">Valor (R$)</label>
-                        <input type="number" step="0.01" required className="ff-input-floating" value={formNova.valorOriginal} onChange={e => setFormNova({...formNova, valorOriginal: e.target.value})}/>
+
+                <div className="cp-modal-body">
+                    <div className="cp-input-group">
+                        <label>Descrição da Despesa</label>
+                        <input type="text" required value={formNova.descricao} onChange={e => setFormNova({...formNova, descricao: e.target.value})} placeholder="Ex: Conta de Energia - Maio/2026"/>
                     </div>
-                    <div className="form-group flex-1">
-                        <label className="text-muted text-sm">Vencimento</label>
-                        <input type="date" required className="ff-input-floating" value={formNova.dataVencimento} onChange={e => setFormNova({...formNova, dataVencimento: e.target.value})}/>
+
+                    <div className="cp-input-row">
+                        <div className="cp-input-group">
+                            <label>Valor Total (R$)</label>
+                            <input type="text" required value={formNova.valorOriginal} onChange={e => setFormNova({...formNova, valorOriginal: e.target.value})} placeholder="Ex: 150,00"/>
+                        </div>
+                        <div className="cp-input-group">
+                            <label>Data de Vencimento</label>
+                            <input type="date" required value={formNova.dataVencimento} onChange={e => setFormNova({...formNova, dataVencimento: e.target.value})}/>
+                        </div>
                     </div>
                 </div>
-                {/* Aqui você pode adicionar um Select de Fornecedores buscando da API */}
 
-                <div className="modal-actions">
-                    <button type="button" className="btn-secondary" onClick={() => setModalNovaOpen(false)}>Cancelar</button>
-                    <button type="submit" className="action-btn-primary">Salvar</button>
+                <div className="cp-modal-footer">
+                    <button type="button" className="cp-btn-cancel" onClick={() => setModalNovaOpen(false)}>Cancelar</button>
+                    <button type="submit" className="cp-btn-submit">Salvar Despesa</button>
                 </div>
             </form>
         </div>
       )}
 
-      {/* MODAL PAGAR (BAIXA) */}
+      {/* ========================================================= */}
+      {/* MODAL CONFIRMAR PAGAMENTO */}
+      {/* ========================================================= */}
       {modalPagarOpen && contaSelecionada && (
-        <div className="modal-overlay">
-          <form className="modal-content" onSubmit={handlePagar}>
-            <div className="modal-header">
-              <h2>Pagar Conta</h2>
-              <p>Saída de Caixa: <strong>{contaSelecionada.descricao}</strong></p>
+        <div className="cp-modal-overlay">
+          <form className="cp-modal-card scale-in" onSubmit={handlePagar}>
+            <div className="cp-modal-header">
+                <div><h2>Confirmar Pagamento</h2><p className="text-truncate">Baixa para: <strong>{contaSelecionada.descricao}</strong></p></div>
+                <button type="button" className="btn-close" onClick={() => setModalPagarOpen(false)}><X size={24}/></button>
             </div>
 
-            <div className="form-group mb-3">
-              <label style={{fontSize:'0.85rem', fontWeight:600, color:'#64748b'}}>Valor a Pagar (R$)</label>
-              <input type="number" step="0.01" required className="ff-input-floating" style={{fontSize:'1.5rem', fontWeight:'bold', color:'#ef4444', padding:'10px'}} value={formPagar.valor} onChange={e => setFormPagar({...formPagar, valor: e.target.value})}/>
+            <div className="cp-modal-body">
+                <div className="cp-input-group">
+                  <label>Valor Efetivamente Pago (R$)</label>
+                  <input type="text" required className="input-gigante text-success" value={formPagar.valorPago} onChange={e => setFormPagar({...formPagar, valorPago: e.target.value})}/>
+                </div>
+
+                <div className="cp-input-group">
+                   <label>Origem do Dinheiro (Forma de Pagamento)</label>
+                   <select value={formPagar.formaPagamento} onChange={e => setFormPagar({...formPagar, formaPagamento: e.target.value})}>
+                     <option value="DINHEIRO">Dinheiro (Gaveta do Caixa)</option>
+                     <option value="PIX">Pix (Conta Bancária da Loja)</option>
+                     <option value="CARTAO_DEBITO">Cartão de Débito</option>
+                     <option value="TRANSFERENCIA">Transferência Bancária</option>
+                   </select>
+                </div>
             </div>
 
-            <div className="form-group mb-3">
-               <label style={{fontSize:'0.85rem', fontWeight:600, color:'#64748b'}}>Forma de Pagamento</label>
-               <select className="ff-input-floating" value={formPagar.forma} onChange={e => setFormPagar({...formPagar, forma: e.target.value})}>
-                 <option value="DINHEIRO">Dinheiro (Caixa)</option>
-                 <option value="PIX">Pix (Conta Bancária)</option>
-               </select>
-            </div>
-
-            <div className="modal-actions">
-              <button type="button" className="btn-secondary" onClick={() => setModalPagarOpen(false)}>Cancelar</button>
-              <button type="submit" className="action-btn-primary" style={{backgroundColor:'#ef4444'}}>Confirmar Pagamento</button>
+            <div className="cp-modal-footer">
+              <button type="button" className="cp-btn-cancel" onClick={() => setModalPagarOpen(false)}>Cancelar</button>
+              <button type="submit" className="cp-btn-submit success">Confirmar Saída de Caixa</button>
             </div>
           </form>
         </div>
       )}
     </div>
   );
-};
-
-export default ContasPagar;
+}
