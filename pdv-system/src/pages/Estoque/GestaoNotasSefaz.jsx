@@ -7,7 +7,7 @@ import { maskCNPJ } from '../../utils/masks';
 import {
   Search, RefreshCw, CheckCircle, FileText, Calendar, Building,
   DownloadCloud, Filter, Inbox, Package, X, AlertTriangle, Link as LinkIcon,
-  Wand2, Save, Barcode, ChevronRight, Hash, Edit3, Sparkles, Eye, Clock, User, ChevronLeft, UploadCloud
+  Wand2, Save, Barcode, ChevronRight, Hash, Edit3, Sparkles, Eye, Clock, User, ChevronLeft, UploadCloud, CheckSquare
 } from 'lucide-react';
 
 import './GestaoNotasSefaz.css';
@@ -23,53 +23,41 @@ const formatarDataBR = (dataIso) => { if (!dataIso) return ''; if (dataIso.inclu
 const formatarDataHoraCompleta = (dataObj) => {
     if (!dataObj) return "---";
     try {
-        let data;
-        if (Array.isArray(dataObj)) {
-            data = new Date(dataObj[0], dataObj[1] - 1, dataObj[2], dataObj[3] || 0, dataObj[4] || 0, dataObj[5] || 0);
-        } else {
-            data = new Date(dataObj);
-        }
+        let data; if (Array.isArray(dataObj)) { data = new Date(dataObj[0], dataObj[1] - 1, dataObj[2], dataObj[3] || 0, dataObj[4] || 0, dataObj[5] || 0); } else { data = new Date(dataObj); }
         if (isNaN(data.getTime())) return "---";
         return data.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
     } catch(e) { return "---"; }
 };
 
 const extrairNumeroNota = (chave) => { if (!chave || chave.length !== 44) return "S/N"; return parseInt(chave.substring(25, 34), 10).toString(); };
-
 const calcularSemelhancaTokens = (str1, str2) => {
-    if (!str1 || !str2) return 0;
-    const limpa = s => s.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/g, '');
+    if (!str1 || !str2) return 0; const limpa = s => s.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w\s]/g, '');
     const extrairTokens = texto => limpa(texto).split(/\s+/).filter(w => w.length > 2 || /\d/.test(w));
-    const tokens1 = extrairTokens(str1); const tokens2 = extrairTokens(str2);
-    if (tokens1.length === 0 || tokens2.length === 0) return 0;
-    let matches = 0;
-    tokens1.forEach(t1 => { const hit = tokens2.some(t2 => t1 === t2 || (t1.length >= 3 && t2.length >= 3 && (t1.includes(t2) || t2.includes(t1)))); if (hit) matches++; });
+    const tokens1 = extrairTokens(str1); const tokens2 = extrairTokens(str2); if (tokens1.length === 0 || tokens2.length === 0) return 0;
+    let matches = 0; tokens1.forEach(t1 => { const hit = tokens2.some(t2 => t1 === t2 || (t1.length >= 3 && t2.length >= 3 && (t1.includes(t2) || t2.includes(t1)))); if (hit) matches++; });
     return matches / Math.max(tokens1.length, tokens2.length);
 };
 
 export default function GestaoNotasSefaz() {
   const navigate = useNavigate();
 
-  // ==========================================================================
-  // ESTADOS PRINCIPAIS E PAGINAÇÃO
-  // ==========================================================================
   const [notasExibidas, setNotasExibidas] = useState([]);
   const [listaProdutosDb, setListaProdutosDb] = useState([]);
-
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [busca, setBusca] = useState('');
 
-  // Estados de Abas e Filtro de Meses
   const [activeTab, setActiveTab] = useState('PENDENTES');
-  const [anoSelecionado, setAnoSelecionado] = useState(2026); // Default para o backlog
+  const [anoSelecionado, setAnoSelecionado] = useState(2026);
   const [mesSelecionado, setMesSelecionado] = useState(null);
 
   const [paginaAtual, setPaginaAtual] = useState(0);
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [totalElementos, setTotalElementos] = useState(0);
 
-  // Estados de Modais
+  // 🔥 NOVO: Estado para a Importação em Lote
+  const [notasSelecionadas, setNotasSelecionadas] = useState([]);
+
   const [modalType, setModalType] = useState(null);
   const [notaSelecionada, setNotaSelecionada] = useState(null);
   const [itensImportacao, setItensImportacao] = useState([]);
@@ -85,95 +73,44 @@ export default function GestaoNotasSefaz() {
   const [quickEditIndex, setQuickEditIndex] = useState(null);
   const [quickEditForm, setQuickEditForm] = useState({ descricao: '', codigoBarras: '', marca: '', categoria: '', subcategoria: '', precoCusto: 0, margem: 50.00, precoVenda: 0 });
 
-  // REFERÊNCIA PARA O INPUT INVISÍVEL
   const fileInputRef = useRef(null);
 
-  // FUNÇÃO DE ENVIO PARA O BACKEND
-  const handleUploadXml = async (e) => {
-      const files = e.target.files;
-      if (!files || files.length === 0) return;
-
-      const toastId = toast.loading(`A processar ${files.length} ficheiro(s) XML...`);
-
-      try {
-          const formData = new FormData();
-          // Permite enviar vários XMLs de uma vez (Bulk Upload)
-          for (let i = 0; i < files.length; i++) {
-              formData.append('arquivos', files[i]);
-          }
-
-          // Envia para o novo endpoint que o Backend vai criar
-          await api.post('/estoque/notas-pendentes/upload-manual', formData);
-
-          toast.update(toastId, { render: "XMLs carregados com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
-
-          // Muda para a aba de pendentes e atualiza a lista
-          setActiveTab('PENDENTES');
-          setMesSelecionado(null);
-          buscarNotasBackend(0);
-      } catch (error) {
-          toast.update(toastId, { render: "Erro ao ler os ficheiros XML.", type: "error", isLoading: false, autoClose: 5000 });
-      } finally {
-          e.target.value = null; // Limpa o input para poder enviar o mesmo ficheiro novamente se necessário
-      }
-  };
-
-  // Nomes dos Meses para a Timeline
-  const mesesNomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-
   // Dicionários
+  const mesesNomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   const dicionarios = useMemo(() => { const db = listaProdutosDb || []; const extrair = (prop1, prop2) => { const valores = db.map(p => p[prop1] || p[prop2]).filter(Boolean); return [...new Set(valores)].map(v => String(v).toUpperCase()).sort(); }; return { marcas: extrair('marca', 'marcaProduto'), categorias: extrair('categoria', 'categoriaProduto'), subcategorias: extrair('subcategoria', 'subCategoriaProduto') }; }, [listaProdutosDb]);
   const produtosFiltradosManual = useMemo(() => { if (!buscaManual || buscaManual.length < 2) return []; const term = buscaManual.toUpperCase(); return listaProdutosDb.filter(p => (p.descricao && p.descricao.toUpperCase().includes(term)) || (p.codigoBarras && p.codigoBarras.includes(term))).slice(0, 10); }, [buscaManual, listaProdutosDb]);
 
-  // ==========================================================================
-  // EFEITOS E BUSCA
-  // ==========================================================================
-  useEffect(() => {
-    const init = async () => { try { const resP = await api.get('/produtos?size=5000'); setListaProdutosDb(resP.data?.content || resP.data || []); buscarNotasBackend(0); } catch(e) {} };
-    init();
-  }, []);
+  useEffect(() => { const init = async () => { try { const resP = await api.get('/produtos?size=5000'); setListaProdutosDb(resP.data?.content || resP.data || []); buscarNotasBackend(0); } catch(e) {} }; init(); }, []);
 
-  // Recarrega sempre que aba ou mês mudar
+  // Limpa seleções ao mudar de página ou aba
   useEffect(() => {
       setPaginaAtual(0);
+      setNotasSelecionadas([]);
       buscarNotasBackend(0);
   }, [activeTab, mesSelecionado, anoSelecionado]);
 
   const buscarNotasBackend = async (pagina = paginaAtual) => {
-    setLoading(true);
+    setLoading(true); setNotasSelecionadas([]);
     try {
       let url = `/estoque/notas-pendentes?statusTab=${activeTab}&page=${pagina}&size=20`;
-
-      // Constrói a data baseada no Mês Selecionado na Timeline
       if (mesSelecionado !== null) {
           const mesStr = String(mesSelecionado).padStart(2, '0');
-          const ultimoDia = new Date(anoSelecionado, mesSelecionado, 0).getDate(); // Descobre se o mês tem 28, 30 ou 31 dias
-          const start = `${anoSelecionado}-${mesStr}-01`;
-          const end = `${anoSelecionado}-${mesStr}-${ultimoDia}`;
-          url += `&dataInicio=${start}&dataFim=${end}`;
+          const ultimoDia = new Date(anoSelecionado, mesSelecionado, 0).getDate();
+          url += `&dataInicio=${anoSelecionado}-${mesStr}-01&dataFim=${anoSelecionado}-${mesStr}-${ultimoDia}`;
       }
-
       if (busca) url += `&busca=${encodeURIComponent(busca)}`;
 
       const res = await api.get(url);
-
       if (res.data && res.data.content) {
-          setNotasExibidas(res.data.content);
-          setTotalPaginas(res.data.totalPages || 1);
-          setTotalElementos(res.data.totalElements || res.data.content.length);
+          setNotasExibidas(res.data.content); setTotalPaginas(res.data.totalPages || 1); setTotalElementos(res.data.totalElements || res.data.content.length);
       } else {
-          // Fallback seguro caso o backend ainda não tenha o Pageable perfeito
-          setNotasExibidas(Array.isArray(res.data) ? res.data : []);
-          setTotalElementos(Array.isArray(res.data) ? res.data.length : 0);
+          setNotasExibidas(Array.isArray(res.data) ? res.data : []); setTotalElementos(Array.isArray(res.data) ? res.data.length : 0);
       }
       setPaginaAtual(pagina);
     } catch (e) { toast.error("Falha ao carregar notas."); } finally { setLoading(false); }
   };
 
-  const alternarMes = (numMes) => {
-      if (mesSelecionado === numMes) setMesSelecionado(null); // Desmarca se clicar de novo
-      else setMesSelecionado(numMes);
-  };
+  const alternarMes = (numMes) => { if (mesSelecionado === numMes) setMesSelecionado(null); else setMesSelecionado(numMes); };
 
   const sincronizarSefaz = async () => {
     setSyncing(true); toast.loading("Consultando a SEFAZ...", { toastId: 'sync' });
@@ -181,40 +118,68 @@ export default function GestaoNotasSefaz() {
       await api.post('/estoque/notas-pendentes/sincronizar');
       toast.update('sync', { render: "Sincronização concluída!", type: "success", isLoading: false, autoClose: 3000 });
       setActiveTab('PENDENTES'); setMesSelecionado(null); buscarNotasBackend(0);
-    } catch (e) {
-      toast.update('sync', { render: "Bloqueio temporário da SEFAZ.", type: "warning", isLoading: false, autoClose: 5000 });
-      buscarNotasBackend(0);
-    } finally { setSyncing(false); }
+    } catch (e) { toast.update('sync', { render: "Bloqueio temporário.", type: "warning", isLoading: false, autoClose: 5000 }); buscarNotasBackend(0); } finally { setSyncing(false); }
   };
 
-  // ==========================================================================
-  // MANIPULAÇÃO DOS DADOS DA NOTA E MODAIS
-  // ==========================================================================
+  const handleUploadXml = async (e) => {
+      const files = e.target.files; if (!files || files.length === 0) return;
+      const toastId = toast.loading(`A processar ${files.length} ficheiro(s) XML...`);
+      try {
+          const formData = new FormData(); for (let i = 0; i < files.length; i++) { formData.append('arquivos', files[i]); }
+          await api.post('/estoque/notas-pendentes/upload-manual', formData);
+          toast.update(toastId, { render: "XMLs carregados!", type: "success", isLoading: false, autoClose: 3000 });
+          setActiveTab('PENDENTES'); setMesSelecionado(null); buscarNotasBackend(0);
+      } catch (error) { toast.update(toastId, { render: "Erro ao ler os XMLs.", type: "error", isLoading: false, autoClose: 5000 }); } finally { e.target.value = null; }
+  };
+
+  // 🔥 NOVO: Funções de Checkbox e Importação em Lote
+  const handleSelecionarNota = (id) => {
+      if (notasSelecionadas.includes(id)) {
+          setNotasSelecionadas(notasSelecionadas.filter(notaId => notaId !== id));
+      } else {
+          setNotasSelecionadas([...notasSelecionadas, id]);
+      }
+  };
+
+  const handleSelecionarTudoPagina = () => {
+      // Seleciona apenas as que ainda não estão importadas (por segurança)
+      const idsDestaPagina = notasExibidas.filter(n => n.status !== 'IMPORTADA' && n.status !== 'CONCLUIDA').map(n => n.id);
+      if (notasSelecionadas.length === idsDestaPagina.length) {
+          setNotasSelecionadas([]); // Desmarca tudo
+      } else {
+          setNotasSelecionadas(idsDestaPagina); // Marca tudo
+      }
+  };
+
+  const handleProcessamentoEmLote = async () => {
+      setLoadingModal(true);
+      const toastId = toast.loading(`Processando a Inteligência de Estoque para ${notasSelecionadas.length} notas...`);
+      try {
+          const res = await api.post('/estoque/notas-pendentes/importar-lote', notasSelecionadas);
+          toast.update(toastId, { render: res.data || "Lote Processado!", type: "success", isLoading: false, autoClose: 5000 });
+          setNotasSelecionadas([]);
+          buscarNotasBackend(paginaAtual);
+      } catch (error) {
+          toast.update(toastId, { render: "Falha ao processar o lote.", type: "error", isLoading: false, autoClose: 5000 });
+      } finally {
+          setLoadingModal(false);
+      }
+  };
+
   const iniciarProcessamento = async (nota) => {
         setBusca(''); const toastId = toast.loading("Processando XML e Inteligência Artificial..."); setLoadingCardId(nota.id);
         try {
             if (nota.status === 'PENDENTE_MANIFESTACAO') await api.post(`/estoque/notas-pendentes/${nota.id}/manifestar`);
             const res = await api.get(`/estoque/notas-pendentes/${nota.id}/xml-parse`);
             const parsed = res.data || {};
-
             const itensProcessados = parsed.itensXml.map((xmlItem, idx) => {
                 const custoXml = parseNumber(xmlItem.vUnCom || xmlItem.valorUnitario || xmlItem.precoCusto || 0);
-                let eanValido = xmlItem.codigoBarras && xmlItem.codigoBarras.length > 7;
-                const dbMatchEan = eanValido ? listaProdutosDb.find(db => db.codigoBarras === xmlItem.codigoBarras) : null;
-
-                if (dbMatchEan) {
-                    const precoVendaAtual = parseNumber(dbMatchEan.precoVenda || (custoXml * 1.5));
-                    const margemCalc = custoXml > 0 ? (((precoVendaAtual - custoXml) / custoXml) * 100) : 50;
-                    return { ...xmlItem, idProduto: dbMatchEan.id, descricao: dbMatchEan.descricao, status: 'vinculado', match: dbMatchEan, precoCusto: custoXml, custoMedioAtual: parseNumber(dbMatchEan.precoMedioPonderado) || custoXml, precoVenda: precoVendaAtual, margem: margemCalc };
-                }
-
-                let bestMatch = null; let maxScore = 0;
-                listaProdutosDb.forEach(dbProd => { const score = calcularSemelhancaTokens(xmlItem.descricao, dbProd.descricao); if (score > maxScore) { maxScore = score; bestMatch = dbProd; } });
+                let eanValido = xmlItem.codigoBarras && xmlItem.codigoBarras.length > 7; const dbMatchEan = eanValido ? listaProdutosDb.find(db => db.codigoBarras === xmlItem.codigoBarras) : null;
+                if (dbMatchEan) { const precoVendaAtual = parseNumber(dbMatchEan.precoVenda || (custoXml * 1.5)); const margemCalc = custoXml > 0 ? (((precoVendaAtual - custoXml) / custoXml) * 100) : 50; return { ...xmlItem, idProduto: dbMatchEan.id, descricao: dbMatchEan.descricao, status: 'vinculado', match: dbMatchEan, precoCusto: custoXml, custoMedioAtual: parseNumber(dbMatchEan.precoMedioPonderado) || custoXml, precoVenda: precoVendaAtual, margem: margemCalc }; }
+                let bestMatch = null; let maxScore = 0; listaProdutosDb.forEach(dbProd => { const score = calcularSemelhancaTokens(xmlItem.descricao, dbProd.descricao); if (score > maxScore) { maxScore = score; bestMatch = dbProd; } });
                 if (bestMatch && maxScore >= 0.75) return { ...xmlItem, idProduto: null, status: 'semelhante', match: bestMatch, confianca: `${Math.round(maxScore * 100)}%`, precoCusto: custoXml };
-
                 return { ...xmlItem, codigoBarras: xmlItem.codigoBarras || `200000000000${idx}`.slice(-13), idProduto: null, status: 'novo', precoCusto: custoXml, marca: '', categoria: '', subcategoria: '' };
             });
-
             setCabecalhoModal({ numeroDocumento: extrairNumeroNota(nota.chaveAcesso), dataEmissao: (parsed.dataEmissao || nota.dataEmissao || new Date().toISOString()).split('T')[0] });
             setNotaSelecionada({ ...nota, cnpjFornecedor: parsed.cnpjFornecedor || nota.cnpjFornecedor, nomeFornecedor: parsed.razaoSocialFornecedor || nota.nomeFornecedor });
             setItensImportacao(itensProcessados); setModalType('IMPORT');
@@ -224,30 +189,21 @@ export default function GestaoNotasSefaz() {
 
   const visualizarRegistroFinalizado = async (nota) => {
         setLoadingCardId(nota.id); const toastId = toast.loading("Carregando registro da Base de Dados...");
-        try {
-            const numDoc = extrairNumeroNota(nota.chaveAcesso);
-            const res = await api.get(`/estoque/historico-entradas/${numDoc}/itens`);
-            setDetalhesRegistro(Array.isArray(res.data) ? res.data : []);
-            setNotaSelecionada(nota); setModalType('VIEW');
-            toast.dismiss(toastId);
-        } catch (e) { toast.update(toastId, { render: "Erro ao abrir histórico do registro.", type: "error", isLoading: false, autoClose: 3000 }); } finally { setLoadingCardId(null); }
+        try { const numDoc = extrairNumeroNota(nota.chaveAcesso); const res = await api.get(`/estoque/historico-entradas/${numDoc}/itens`); setDetalhesRegistro(Array.isArray(res.data) ? res.data : []); setNotaSelecionada(nota); setModalType('VIEW'); toast.dismiss(toastId);
+        } catch (e) { toast.update(toastId, { render: "Erro ao abrir histórico.", type: "error", isLoading: false, autoClose: 3000 }); } finally { setLoadingCardId(null); }
   };
 
   const confirmarEntradaModal = async () => {
-      if (loadingModal) return;
-      if (!notaSelecionada?.cnpjFornecedor) return toast.warn("A nota fiscal não possui o CNPJ do fornecedor.");
+      if (loadingModal) return; if (!notaSelecionada?.cnpjFornecedor) return toast.warn("A nota fiscal não possui o CNPJ do fornecedor.");
       setLoadingModal(true); const toastId = toast.loading("Processando Estoque...");
       try {
           const payload = {
-              fornecedorCnpj: String(notaSelecionada.cnpjFornecedor).replace(/\D/g, ''),
-              fornecedorNome: String(notaSelecionada.nomeFornecedor || 'FORNECEDOR NF'),
-              numeroDocumento: String(cabecalhoModal.numeroDocumento || "S/N"), dataEntrada: cabecalhoModal.dataEmissao, chaveAcesso: String(notaSelecionada.chaveAcesso || ""),
+              fornecedorCnpj: String(notaSelecionada.cnpjFornecedor).replace(/\D/g, ''), fornecedorNome: String(notaSelecionada.nomeFornecedor || 'FORNECEDOR NF'), numeroDocumento: String(cabecalhoModal.numeroDocumento || "S/N"), dataEntrada: cabecalhoModal.dataEmissao, chaveAcesso: String(notaSelecionada.chaveAcesso || ""),
               itens: itensImportacao.map(i => ({ produtoId: i.idProduto ? Number(i.idProduto) : null, codigoBarras: String(i.codigoBarras || "S/N"), descricao: String(i.descricao || "PRODUTO SEM NOME"), quantidade: parseNumber(i.quantidade || i.qCom || 0), valorUnitario: parseNumber(i.precoCusto || 0), ncm: String(i.ncm || "00000000"), origem: "0", cst: "102", marca: String(i.marca || "GENERICA"), categoria: String(i.categoria || "GERAL"), subcategoria: String(i.subcategoria || "GERAL"), unidade: "UN" }))
           };
           await api.post('/estoque/entrada', payload);
           if (notaSelecionada && notaSelecionada.id !== 'MANUAL') await api.post(`/estoque/notas-pendentes/${notaSelecionada.id}/importar`);
-          toast.update(toastId, { render: "Entrada Concluída com Sucesso!", type: "success", isLoading: false, autoClose: 2000 });
-          setModalType(null); buscarNotasBackend();
+          toast.update(toastId, { render: "Entrada Concluída com Sucesso!", type: "success", isLoading: false, autoClose: 2000 }); setModalType(null); buscarNotasBackend();
       } catch(e) { toast.update(toastId, { render: "Erro ao salvar estoque.", type: "error", isLoading: false, autoClose: 5000 }); } finally { setLoadingModal(false); }
   };
 
@@ -259,8 +215,7 @@ export default function GestaoNotasSefaz() {
   const confirmarVinculoManual = (dbProd) => { vincularSugestao(linkManualIndex, dbProd); setLinkManualIndex(null); setModalType('IMPORT'); };
 
   const abrirEdicaoRapida = async (idx, item) => {
-      const custo = parseNumber(item.precoCusto); const precoVenda = custo * 1.5;
-      let guessedMarca = 'GENERICA'; let guessedCat = ''; let guessedSub = ''; let bestScore = 0; let bestDbMatch = null;
+      const custo = parseNumber(item.precoCusto); const precoVenda = custo * 1.5; let guessedMarca = 'GENERICA'; let guessedCat = ''; let guessedSub = ''; let bestScore = 0; let bestDbMatch = null;
       listaProdutosDb.forEach(dbProd => { const score = calcularSemelhancaTokens(item.descricao, dbProd.descricao); if (score > bestScore) { bestScore = score; bestDbMatch = dbProd; } });
       if (bestDbMatch && bestScore >= 0.35) { guessedMarca = bestDbMatch.marca || guessedMarca; guessedCat = bestDbMatch.categoria || guessedCat; guessedSub = bestDbMatch.subcategoria || guessedSub; }
       setQuickEditIndex(idx); setQuickEditForm({ descricao: item.descricao || '', codigoBarras: item.codigoBarras || '', marca: guessedMarca, categoria: guessedCat, subcategoria: guessedSub, precoCusto: custo, margem: 50.00, precoVenda: precoVenda }); setModalType('QUICK');
@@ -269,24 +224,8 @@ export default function GestaoNotasSefaz() {
   const salvarEdicaoRapida = () => { const lista = [...itensImportacao]; lista[quickEditIndex] = { ...lista[quickEditIndex], descricao: quickEditForm.descricao.toUpperCase(), codigoBarras: quickEditForm.codigoBarras, marca: quickEditForm.marca.toUpperCase(), categoria: quickEditForm.categoria.toUpperCase(), subcategoria: quickEditForm.subcategoria.toUpperCase(), precoCusto: parseNumber(quickEditForm.precoCusto), precoVenda: parseNumber(quickEditForm.precoVenda), margem: quickEditForm.margem, preenchidoViaIA: true }; setItensImportacao(lista); setQuickEditIndex(null); setModalType('IMPORT'); };
 
   const gerarEspelhoConferencia = () => { const win = window.open('', '_blank'); const html = `<html><head><title>Espelho - NF-e ${cabecalhoModal.numeroDocumento}</title><style>body{font-family:Arial;padding:40px}.header{text-align:center;border-bottom:2px solid #e2e8f0;padding-bottom:20px;margin-bottom:30px}.info-box{display:flex;justify-content:space-between;background:#f8fafc;border:1px solid #e2e8f0;padding:20px;margin-bottom:20px}table{width:100%;border-collapse:collapse;margin-bottom:30px}th{background:#f1f5f9;padding:12px;text-align:left;border-bottom:2px solid #cbd5e1}td{padding:12px;border-bottom:1px solid #e2e8f0;font-size:14px}.checkbox{width:18px;height:18px;border:2px solid #94a3b8;display:inline-block}.total{text-align:right;font-size:18px;font-weight:bold;margin-top:20px}</style></head><body><div class="header"><h2>Espelho de Conferência Física</h2><p>Chave: ${notaSelecionada?.chaveAcesso}</p></div><div class="info-box"><div><strong>Fornecedor:</strong> ${notaSelecionada?.nomeFornecedor}</div><div><strong>CNPJ:</strong> ${maskCNPJ(notaSelecionada?.cnpjFornecedor)}</div><div><strong>NF-e:</strong> ${cabecalhoModal.numeroDocumento}</div></div><table><thead><tr><th>Conf</th><th>Código</th><th>Descrição</th><th>Qtd</th><th>Custo Unit.</th></tr></thead><tbody>${itensImportacao.map(i => `<tr><td><div class="checkbox"></div></td><td>${i.codigoBarras}</td><td>${i.descricao}</td><td>${parseNumber(i.quantidade||i.qCom)}</td><td>R$ ${formatMoney(i.precoCusto)}</td></tr>`).join('')}</tbody></table><div class="total">Total Valor: R$ ${formatMoney(notaSelecionada?.valorTotal)}</div><script>window.onload=()=>window.print();</script></body></html>`; win.document.write(html); win.document.close(); };
-
-  const getStatusBadge = (status) => {
-      switch(status) {
-          case 'IMPORTADA': case 'CONCLUIDA': return <span className="badge-status importada"><CheckCircle size={14}/> REGISTRADA</span>;
-          case 'PENDENTE_MANIFESTACAO': return <span className="badge-status resumo"><DownloadCloud size={14}/> BAIXAR XML</span>;
-          case 'PENDENTE': default: return <span className="badge-status pendente"><Package size={14}/> PRONTA</span>;
-      }
-  };
-
-  const getDataCadastroReal = () => {
-      if (detalhesRegistro && detalhesRegistro.length > 0) {
-          const item = detalhesRegistro[0];
-          const dataMovimentoReal = item.dataMovimento || item.dataHora || item.dataCriacao || item.dataMovimentacao;
-          if (dataMovimentoReal) return formatarDataHoraCompleta(dataMovimentoReal);
-      }
-      if (notaSelecionada && notaSelecionada.dataCadastro) return formatarDataHoraCompleta(notaSelecionada.dataCadastro);
-      return "---";
-  };
+  const getStatusBadge = (status) => { switch(status) { case 'IMPORTADA': case 'CONCLUIDA': return <span className="badge-status importada"><CheckCircle size={14}/> REGISTRADA</span>; case 'PENDENTE_MANIFESTACAO': return <span className="badge-status resumo"><DownloadCloud size={14}/> BAIXAR XML</span>; case 'PENDENTE': default: return <span className="badge-status pendente"><Package size={14}/> PRONTA</span>; } };
+  const getDataCadastroReal = () => { if (detalhesRegistro && detalhesRegistro.length > 0) { const item = detalhesRegistro[0]; const dataMovimentoReal = item.dataMovimento || item.dataHora || item.dataCriacao || item.dataMovimentacao; if (dataMovimentoReal) return formatarDataHoraCompleta(dataMovimentoReal); } if (notaSelecionada && notaSelecionada.dataCadastro) return formatarDataHoraCompleta(notaSelecionada.dataCadastro); return "---"; };
 
   const totalQuantidadeModal = itensImportacao.reduce((acc, curr) => acc + parseNumber(curr.quantidade || curr.qCom || 0), 0);
   const totalItensModal = itensImportacao.length;
@@ -295,9 +234,9 @@ export default function GestaoNotasSefaz() {
   const detalhesValorTotal = detalhesRegistro.reduce((acc, i) => acc + (parseNumber(i.quantidade || i.quantidadeMovimentada) * parseNumber(i.custoUnitario || i.custoMovimentado)), 0);
 
   return (
-    <div className="gestao-notas-container" style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto' }}>
+    <div className="gestao-notas-container" style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto', paddingBottom: notasSelecionadas.length > 0 ? '100px' : '20px' }}>
 
-      {/* HEADER PREMIUM COM BOTÃO CORRIGIDO */}
+      {/* HEADER PREMIUM */}
       <div className="gns-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', background: '#fff', padding: '20px', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)' }}>
         <div className="gns-header-left" style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
             <div className="gns-icon-box" style={{ background: '#eff6ff', padding: '15px', borderRadius: '12px' }}>
@@ -308,24 +247,11 @@ export default function GestaoNotasSefaz() {
                 <p style={{ margin: '4px 0 0', color: '#64748b' }}>Gestão unificada de faturamentos e inventário.</p>
             </div>
         </div>
-
-        {/* AQUI ESTÁ A CORREÇÃO: Ambos os botões adicionados */}
         <div className="gns-header-actions" style={{ display: 'flex', gap: '15px' }}>
-
-            <input
-                type="file"
-                ref={fileInputRef}
-                style={{ display: 'none' }}
-                accept=".xml"
-                multiple
-                onChange={handleUploadXml}
-            />
-            <button
-                onClick={() => fileInputRef.current.click()}
-                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px', background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
+            <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".xml" multiple onChange={handleUploadXml} />
+            <button onClick={() => fileInputRef.current.click()} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 20px', background: '#f8fafc', color: '#475569', border: '1px solid #cbd5e1', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
                 <UploadCloud size={18} color="#3b82f6" /> Upload Manual (XMLs)
             </button>
-
             <button onClick={sincronizarSefaz} disabled={syncing} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 24px', background: syncing ? '#cbd5e1' : '#10b981', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: syncing ? 'not-allowed' : 'pointer', transition: 'background 0.2s' }}>
                 <RefreshCw size={18} className={syncing ? "animate-spin" : ""} /> {syncing ? "Sincronizando..." : "Sincronizar Nova Nota"}
             </button>
@@ -345,37 +271,20 @@ export default function GestaoNotasSefaz() {
       {/* TIMELINE DE MESES */}
       <div style={{ background: '#fff', padding: '20px', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', marginBottom: '25px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '15px' }}>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#334155', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Calendar size={18} color="#64748b"/> Filtrar por Período
-              </h3>
-
-              {/* Seletor de Ano */}
+              <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#334155', display: 'flex', alignItems: 'center', gap: '8px' }}><Calendar size={18} color="#64748b"/> Filtrar por Período</h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f8fafc', padding: '4px 12px', borderRadius: '20px', border: '1px solid #e2e8f0' }}>
                   <button onClick={() => setAnoSelecionado(prev => prev - 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><ChevronLeft size={16}/></button>
                   <strong style={{ color: '#0f172a' }}>{anoSelecionado}</strong>
                   <button onClick={() => setAnoSelecionado(prev => prev + 1)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}><ChevronRight size={16}/></button>
               </div>
           </div>
-
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '10px', scrollbarWidth: 'thin' }}>
               {mesesNomes.map((mes, idx) => {
-                  const numMes = idx + 1;
-                  const isActive = mesSelecionado === numMes;
+                  const numMes = idx + 1; const isActive = mesSelecionado === numMes;
                   return (
-                      <button
-                          key={numMes} onClick={() => alternarMes(numMes)}
-                          style={{
-                              flex: '0 0 auto', minWidth: '80px', padding: '12px 16px', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s',
-                              background: isActive ? '#3b82f6' : '#f1f5f9',
-                              border: isActive ? '1px solid #2563eb' : '1px solid transparent',
-                              color: isActive ? '#fff' : '#475569',
-                              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px'
-                          }}
-                      >
+                      <button key={numMes} onClick={() => alternarMes(numMes)} style={{ flex: '0 0 auto', minWidth: '80px', padding: '12px 16px', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s', background: isActive ? '#3b82f6' : '#f1f5f9', border: isActive ? '1px solid #2563eb' : '1px solid transparent', color: isActive ? '#fff' : '#475569', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
                           <span style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{mes}</span>
-                          <span style={{ fontSize: '0.75rem', background: isActive ? 'rgba(255,255,255,0.2)' : '#e2e8f0', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>
-                              {isActive ? `${totalElementos} notas` : '---'}
-                          </span>
+                          <span style={{ fontSize: '0.75rem', background: isActive ? 'rgba(255,255,255,0.2)' : '#e2e8f0', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>{isActive ? `${totalElementos} notas` : '---'}</span>
                       </button>
                   )
               })}
@@ -385,19 +294,20 @@ export default function GestaoNotasSefaz() {
       {/* BARRA DE PESQUISA */}
       <div style={{ background: '#fff', padding: '15px 20px', borderRadius: '16px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)', marginBottom: '25px', display: 'flex', alignItems: 'center' }}>
           <Search size={20} color="#94a3b8" style={{ marginRight: '10px' }} />
-          <input
-              type="text"
-              placeholder="Pesquisar por Chave de Acesso, Nome do Fornecedor ou CNPJ..."
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              onKeyDown={(e) => { if(e.key === 'Enter') buscarNotasBackend(0); }}
-              style={{ width: '100%', border: 'none', outline: 'none', fontSize: '1rem', color: '#334155' }}
-          />
+          <input type="text" placeholder="Pesquisar por Chave de Acesso, Nome do Fornecedor ou CNPJ..." value={busca} onChange={(e) => setBusca(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter') buscarNotasBackend(0); }} style={{ width: '100%', border: 'none', outline: 'none', fontSize: '1rem', color: '#334155' }} />
           {busca && <button onClick={() => {setBusca(''); setTimeout(()=>buscarNotasBackend(0), 100)}} style={{ background:'none', border:'none', color:'#ef4444', cursor:'pointer' }}><X size={20}/></button>}
       </div>
 
-      <div style={{ marginBottom: '15px', color: '#64748b', fontSize: '0.9rem', fontWeight: 'bold' }}>
-          Exibindo {notasExibidas.length} notas nesta página (Total em {mesSelecionado ? mesesNomes[mesSelecionado-1] + '/' + anoSelecionado : anoSelecionado}: {totalElementos} notas)
+      {/* 🔥 CABEÇALHO DA LISTAGEM (COM BOTÃO SELECIONAR TUDO) */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+          <span style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: 'bold' }}>
+              Exibindo {notasExibidas.length} notas nesta página (Total em {mesSelecionado ? mesesNomes[mesSelecionado-1] + '/' + anoSelecionado : anoSelecionado}: {totalElementos} notas)
+          </span>
+          {activeTab === 'PENDENTES' && notasExibidas.length > 0 && (
+              <button onClick={handleSelecionarTudoPagina} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#e0e7ff', color: '#1d4ed8', border: 'none', padding: '6px 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' }}>
+                  <CheckSquare size={16} /> Selecionar Tudo na Página
+              </button>
+          )}
       </div>
 
       {/* LISTAGEM DE NOTAS */}
@@ -411,13 +321,22 @@ export default function GestaoNotasSefaz() {
             const isImportada = nota.status === 'IMPORTADA' || nota.status === 'CONCLUIDA';
             const isResumo = nota.status === 'PENDENTE_MANIFESTACAO';
             const isLoadingThis = loadingCardId === nota.id;
+            const isSelecionada = notasSelecionadas.includes(nota.id);
 
             return (
-              <div key={nota.id} className={`nota-card-ui ${isImportada ? 'importada' : isResumo ? 'resumo' : 'pendente'}`}>
+              <div key={nota.id} className={`nota-card-ui ${isImportada ? 'importada' : isResumo ? 'resumo' : 'pendente'}`} style={{ position: 'relative', border: isSelecionada ? '2px solid #3b82f6' : '' }}>
+
+                {/* 🔥 CHECKBOX DE SELEÇÃO */}
+                {!isImportada && (
+                    <div style={{ position: 'absolute', top: '15px', right: '15px', zIndex: 2 }}>
+                        <input type="checkbox" checked={isSelecionada} onChange={() => handleSelecionarNota(nota.id)} style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#3b82f6' }} />
+                    </div>
+                )}
+
                 <div className="ncu-fornecedor">
                     <div className="ncu-title-row">
                         <Building size={20} color={isImportada ? '#10b981' : '#64748b'}/>
-                        <h3 title={nota.nomeFornecedor}>{nota.nomeFornecedor || "FORNECEDOR NÃO IDENTIFICADO"}</h3>
+                        <h3 title={nota.nomeFornecedor} style={{ maxWidth: '80%' }}>{nota.nomeFornecedor || "FORNECEDOR NÃO IDENTIFICADO"}</h3>
                         <div className="ncu-badge-mobile">{getStatusBadge(nota.status)}</div>
                     </div>
                     <span className="ncu-cnpj">CNPJ: {maskCNPJ(nota.cnpjFornecedor)}</span>
@@ -453,20 +372,29 @@ export default function GestaoNotasSefaz() {
       {/* PAGINAÇÃO INFERIOR */}
       {!loading && totalPaginas > 1 && (
           <div className="paginacao-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '15px', marginTop: '30px', padding: '20px' }}>
-              <button onClick={() => buscarNotasBackend(paginaAtual - 1)} disabled={paginaAtual === 0} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: paginaAtual === 0 ? '#f1f5f9' : '#fff', color: paginaAtual === 0 ? '#94a3b8' : '#334155', cursor: paginaAtual === 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <ChevronLeft size={16}/> Anterior
-              </button>
+              <button onClick={() => buscarNotasBackend(paginaAtual - 1)} disabled={paginaAtual === 0} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: paginaAtual === 0 ? '#f1f5f9' : '#fff', color: paginaAtual === 0 ? '#94a3b8' : '#334155', cursor: paginaAtual === 0 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}><ChevronLeft size={16}/> Anterior</button>
               <span style={{ fontWeight: 'bold', color: '#475569' }}> Página {paginaAtual + 1} de {totalPaginas} </span>
-              <button onClick={() => buscarNotasBackend(paginaAtual + 1)} disabled={paginaAtual >= totalPaginas - 1} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: paginaAtual >= totalPaginas - 1 ? '#f1f5f9' : '#fff', color: paginaAtual >= totalPaginas - 1 ? '#94a3b8' : '#334155', cursor: paginaAtual >= totalPaginas - 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  Próxima <ChevronRight size={16}/>
+              <button onClick={() => buscarNotasBackend(paginaAtual + 1)} disabled={paginaAtual >= totalPaginas - 1} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: paginaAtual >= totalPaginas - 1 ? '#f1f5f9' : '#fff', color: paginaAtual >= totalPaginas - 1 ? '#94a3b8' : '#334155', cursor: paginaAtual >= totalPaginas - 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>Próxima <ChevronRight size={16}/></button>
+          </div>
+      )}
+
+      {/* 🔥 FLOATING ACTION BAR (BARRA FLUTUANTE DE IMPORTAÇÃO EM LOTE) */}
+      {notasSelecionadas.length > 0 && activeTab === 'PENDENTES' && (
+          <div className="scale-in" style={{ position: 'fixed', bottom: '30px', left: '50%', transform: 'translateX(-50%)', background: '#0f172a', padding: '15px 30px', borderRadius: '50px', display: 'flex', alignItems: 'center', gap: '25px', boxShadow: '0 15px 35px rgba(0,0,0,0.3)', zIndex: 9999 }}>
+              <div style={{ color: '#fff', fontWeight: 'bold', fontSize: '1.1rem' }}>
+                  <span style={{ background: '#3b82f6', padding: '4px 10px', borderRadius: '50%', marginRight: '10px' }}>{notasSelecionadas.length}</span>
+                  Notas Selecionadas
+              </div>
+              <div style={{ width: '1px', height: '30px', background: '#334155' }}></div>
+              <button onClick={() => setNotasSelecionadas([])} style={{ background: 'none', border: 'none', color: '#94a3b8', fontWeight: 'bold', cursor: 'pointer' }}>Cancelar</button>
+              <button onClick={handleProcessamentoEmLote} disabled={loadingModal} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#10b981', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '30px', fontWeight: 'bold', fontSize: '1rem', cursor: loadingModal ? 'not-allowed' : 'pointer', boxShadow: '0 4px 10px rgba(16, 185, 129, 0.4)' }}>
+                  {loadingModal ? <RefreshCw className="animate-spin" size={20} /> : <Package size={20} />} Processar Lote Agora
               </button>
           </div>
       )}
 
 
-      {/* ============================================================================
-          MODAL 1: IMPORTAÇÃO E AUDITORIA DE MERCADORIAS (PENDENTES)
-      ============================================================================ */}
+      {/* MODAL 1: IMPORTAÇÃO */}
       {modalType === 'IMPORT' && (
           <div className="modal-overlay fade-in">
               <div className="import-modal scale-in">
@@ -521,19 +449,11 @@ export default function GestaoNotasSefaz() {
                                               </td>
                                               <td className="td-valores">
                                                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                                                      {editingQtyIndex === idx ? (
-                                                          <input type="number" step="0.01" autoFocus defaultValue={qtdNum} onBlur={(e) => { handleAlterarQuantidade(idx, e.target.value); setEditingQtyIndex(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { handleAlterarQuantidade(idx, e.target.value); setEditingQtyIndex(null); } }} className="input-elegante focus-blue" style={{ width: '70px', padding: '4px' }} />
-                                                      ) : (
-                                                          <span className="qtd-badge" onDoubleClick={() => setEditingQtyIndex(idx)} title="Duplo clique para converter/desmembrar pacote (Ex: Mudar de 1 para 12)" style={{ cursor: 'pointer', border: '1px dashed #94a3b8' }}>{qtdNum} UN</span>
-                                                      )}
+                                                      {editingQtyIndex === idx ? (<input type="number" step="0.01" autoFocus defaultValue={qtdNum} onBlur={(e) => { handleAlterarQuantidade(idx, e.target.value); setEditingQtyIndex(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { handleAlterarQuantidade(idx, e.target.value); setEditingQtyIndex(null); } }} className="input-elegante focus-blue" style={{ width: '70px', padding: '4px' }} />) : (<span className="qtd-badge" onDoubleClick={() => setEditingQtyIndex(idx)} title="Duplo clique para converter/desmembrar pacote (Ex: Mudar de 1 para 12)" style={{ cursor: 'pointer', border: '1px dashed #94a3b8' }}>{qtdNum} UN</span>)}
                                                       <span style={{ fontSize: '0.65rem', color: '#64748b' }}>(Duplo clique p/ desmembrar)</span>
                                                   </div>
                                                   <div onDoubleClick={() => setEditingPriceIndex(idx)}>
-                                                      {editingPriceIndex === idx ? (
-                                                          <input type="number" step="0.01" autoFocus defaultValue={custoNum} onBlur={(e) => { atualizarCampoItem(idx, 'precoCusto', e.target.value); setEditingPriceIndex(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { atualizarCampoItem(idx, 'precoCusto', e.target.value); setEditingPriceIndex(null); } }} className="input-elegante focus-blue" />
-                                                      ) : (
-                                                          <span className="unit-cost" title="Duplo clique para editar o custo da nota" style={{ cursor: 'pointer' }}>Custo NF: R$ {formatMoney(custoNum)} / un</span>
-                                                      )}
+                                                      {editingPriceIndex === idx ? (<input type="number" step="0.01" autoFocus defaultValue={custoNum} onBlur={(e) => { atualizarCampoItem(idx, 'precoCusto', e.target.value); setEditingPriceIndex(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { atualizarCampoItem(idx, 'precoCusto', e.target.value); setEditingPriceIndex(null); } }} className="input-elegante focus-blue" />) : (<span className="unit-cost" title="Duplo clique para editar o custo da nota" style={{ cursor: 'pointer' }}>Custo NF: R$ {formatMoney(custoNum)} / un</span>)}
                                                   </div>
                                                   {item.status === 'vinculado' && (<span className="custo-medio-label" title="Custo histórico baseado no BD.">Custo Médio DB: R$ {formatMoney(item.custoMedioAtual)}</span>)}
                                                   <strong className="total-cost text-primary" style={{marginTop: '4px'}}>Subtotal: R$ {formatMoney(subtotalLinha)}</strong>
@@ -567,28 +487,18 @@ export default function GestaoNotasSefaz() {
           </div>
       )}
 
-      {/* ============================================================================
-          MODAL 2: DE LEITURA DO HISTÓRICO (VIEW)
-      ============================================================================ */}
+      {/* MODAL 2: VIEW */}
       {modalType === 'VIEW' && (
           <div className="modal-overlay fade-in">
               <div className="import-modal scale-in" style={{maxWidth: '1200px', height: '90vh'}}>
                   <div className="mi-header-top">
-                      <div className="mi-title-box">
-                          <div className="mi-icon" style={{background: '#dcfce7', color: '#10b981'}}><CheckCircle size={32}/></div>
-                          <div>
-                              <h2 style={{color: '#064e3b'}}>Registro Finalizado: NF-e {notaSelecionada?.numeroNota || extrairNumeroNota(notaSelecionada?.chaveAcesso)}</h2>
-                              <span className="mi-chave"><Hash size={14}/> Chave: {notaSelecionada?.chaveAcesso}</span>
-                          </div>
-                      </div>
+                      <div className="mi-title-box"><div className="mi-icon" style={{background: '#dcfce7', color: '#10b981'}}><CheckCircle size={32}/></div><div><h2 style={{color: '#064e3b'}}>Registro Finalizado: NF-e {notaSelecionada?.numeroNota || extrairNumeroNota(notaSelecionada?.chaveAcesso)}</h2><span className="mi-chave"><Hash size={14}/> Chave: {notaSelecionada?.chaveAcesso}</span></div></div>
                       <button onClick={() => setModalType(null)} className="btn-close-modal"><X size={24}/></button>
                   </div>
-
                   <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '15px', padding: '15px 30px', background: '#fff', borderBottom: '1px solid #e2e8f0' }}>
                       <div className="mi-info-item" style={{ borderRight: 'none', padding: 0 }}><span className="mi-label"><Building size={12}/> Razão Social</span><strong className="mi-value" style={{fontSize: '1.2rem'}}>{notaSelecionada?.nomeFornecedor || "N/A"}</strong></div>
                       <div className="mi-info-item" style={{ borderRight: 'none', padding: 0 }}><span className="mi-label">CNPJ Identificado</span><strong className="mi-value monospace">{maskCNPJ(notaSelecionada?.cnpjFornecedor)}</strong></div>
                   </div>
-
                   <div className="mi-info-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', padding: '15px 30px', gap: '15px', background: '#f8fafc' }}>
                       <div className="mi-info-item" style={{background:'#fff', borderRadius:'8px', padding:'15px', border:'1px solid #e2e8f0'}}><span className="mi-label"><Calendar size={12}/> Emissão NF</span><strong className="mi-value">{formatarDataBR(notaSelecionada?.dataEmissao)}</strong></div>
                       <div className="mi-info-item" style={{background:'#fff', borderRadius:'8px', padding:'15px', border:'1px solid #e2e8f0'}}><span className="mi-label"><Clock size={12}/> Cadastrado em</span><strong className="mi-value" style={{color: '#3b82f6'}}>{getDataCadastroReal()}</strong></div>
@@ -596,23 +506,16 @@ export default function GestaoNotasSefaz() {
                       <div className="mi-info-item" style={{background:'#fff', borderRadius:'8px', padding:'15px', border:'1px solid #e2e8f0'}}><span className="mi-label"><Package size={12}/> Volumes Lançados</span><strong className="mi-value">{detalhesRegistro.length} Ref. / {detalhesQtdItens} UN</strong></div>
                       <div className="mi-info-item highlight" style={{background:'#ecfdf5', borderRadius:'8px', padding:'15px', border:'1px solid #a7f3d0'}}><span className="mi-label" style={{color:'#065f46'}}>Custo Total Lançado</span><strong className="mi-value valor-total" style={{color:'#059669'}}>R$ {formatMoney(detalhesValorTotal || notaSelecionada?.valorTotal)}</strong></div>
                   </div>
-
                   <div className="modal-body-premium custom-scrollbar" style={{background: '#fff', borderTop:'1px solid #e2e8f0'}}>
                       <table className="modern-table" style={{border: '1px solid #e2e8f0'}}>
                           <thead style={{background: '#f1f5f9'}}><tr><th width="50%">Produto Registrado no Sistema</th><th width="15%">Qtd Entrou</th><th width="15%">Custo Lançado</th><th width="20%">Subtotal Calculado</th></tr></thead>
                           <tbody>
                               {detalhesRegistro.map((item, idx) => {
-                                  const partes = (item.infoParaFront || item.produtoDescricao || "").split('|');
-                                  const nome = partes[0] || "Produto Desconhecido";
-                                  const eanVal = partes.length >= 5 ? partes[4] : (item.codigoBarras || "S/ GTIN");
-                                  const q = parseNumber(item.quantidade || item.quantidadeMovimentada);
-                                  const c = parseNumber(item.custoUnitario || item.custoMovimentado);
+                                  const partes = (item.infoParaFront || item.produtoDescricao || "").split('|'); const nome = partes[0] || "Produto Desconhecido"; const eanVal = partes.length >= 5 ? partes[4] : (item.codigoBarras || "S/ GTIN"); const q = parseNumber(item.quantidade || item.quantidadeMovimentada); const c = parseNumber(item.custoUnitario || item.custoMovimentado);
                                   return (
                                       <tr key={idx}>
                                           <td><strong style={{color: '#0f172a', fontSize: '0.95rem'}}>{nome}</strong><span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.8rem', color: '#64748b', marginTop: '6px', fontFamily: 'monospace', background:'#f1f5f9', padding:'2px 6px', borderRadius:'4px', width:'fit-content' }}><Barcode size={12}/> {eanVal}</span></td>
-                                          <td><span className="qtd-badge">{q} UN</span></td>
-                                          <td style={{color: '#475569', fontWeight: '600'}}>R$ {formatMoney(c)}</td>
-                                          <td style={{fontWeight: '900', color: '#10b981', fontSize: '1.05rem'}}>R$ {formatMoney(q * c)}</td>
+                                          <td><span className="qtd-badge">{q} UN</span></td><td style={{color: '#475569', fontWeight: '600'}}>R$ {formatMoney(c)}</td><td style={{fontWeight: '900', color: '#10b981', fontSize: '1.05rem'}}>R$ {formatMoney(q * c)}</td>
                                       </tr>
                                   )
                               })}
@@ -623,9 +526,7 @@ export default function GestaoNotasSefaz() {
           </div>
       )}
 
-      {/* ============================================================================
-          MODAL 3: VÍNCULO MANUAL (LINK_MANUAL)
-      ============================================================================ */}
+      {/* MODAL 3: LINK_MANUAL */}
       {modalType === 'LINK_MANUAL' && linkManualIndex !== null && (
           <div className="modal-overlay" style={{zIndex: 10000}}>
               <div className="modal-card scale-in" style={{ maxWidth: '600px', width: '95%', background: '#fff', borderRadius: '12px', padding: '20px' }}>
@@ -646,9 +547,7 @@ export default function GestaoNotasSefaz() {
           </div>
       )}
 
-      {/* ============================================================================
-          MODAL 4: EDIÇÃO RÁPIDA DE NOVO PRODUTO (QUICK)
-      ============================================================================ */}
+      {/* MODAL 4: QUICK */}
       {modalType === 'QUICK' && quickEditIndex !== null && (
           <div className="qe-overlay">
               <div className="qe-card scale-in">
