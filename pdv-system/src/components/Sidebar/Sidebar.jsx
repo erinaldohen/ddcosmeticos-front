@@ -64,11 +64,15 @@ const Sidebar = ({ isMobileOpen, isCollapsed, toggleMobile, toggleCollapse }) =>
         title: 'Gestão',
         items: [
           { path: '/dashboard', icon: <LayoutDashboard size={20} />, label: 'Dashboard', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
-          { path: '/relatorios', icon: <BarChart3 size={20} />, label: 'Relatórios', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
-          { path: '/financeiro/contas-pagar', icon: <TrendingDown size={20} />, label: 'Contas a Pagar', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'] },
-          { path: '/relatorios/comissoes', icon: <TrendingUp size={20} />, label: 'Comissões', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
-          { path: '/historico-caixa', icon: <History size={20} />, label: 'Fechos de Caixa', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
-          { path: '/crm', icon: <HeartHandshake size={20} />, label: 'CRM / Clientes', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+                    { path: '/relatorios', icon: <BarChart3 size={20} />, label: 'Relatórios', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+                    { path: '/financeiro/contas-pagar', icon: <TrendingDown size={20} />, label: 'Contas a Pagar', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'] },
+
+                    // 👉 ADICIONE ESTA LINHA AQUI:
+                    { path: '/financeiro/contas-receber', icon: <TrendingUp size={20} />, label: 'Contas a Receber', roles: ['ROLE_ADMIN', 'ROLE_GERENTE', 'ROLE_FINANCEIRO'] },
+
+                    { path: '/relatorios/comissoes', icon: <TrendingUp size={20} />, label: 'Comissões', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+                    { path: '/historico-caixa', icon: <History size={20} />, label: 'Fechos de Caixa', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
+                    { path: '/crm', icon: <HeartHandshake size={20} />, label: 'CRM / Clientes', roles: ['ROLE_ADMIN', 'ROLE_GERENTE'] },
         ]
       },
       {

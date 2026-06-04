@@ -1,23 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import {
   DollarSign, Calendar, Search,
-  CheckCircle2, AlertCircle, RefreshCw, Wallet
+  CheckCircle2, AlertCircle, RefreshCw, Wallet, X
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { contasReceberService } from '../../services/contasReceberService';
 import './ContasReceber.css';
 
+// ==========================================================
+// HELPERS BLINDADOS (Idênticos ao Contas a Pagar e PDV)
+// ==========================================================
+const formatMoney = (val) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+const parseMoneyBR = (val) => {
+    if (typeof val === 'number') return val;
+    if (!val) return 0;
+    const cleanStr = String(val).replace(/\./g, '').replace(',', '.');
+    const parsed = parseFloat(cleanStr);
+    return isNaN(parsed) ? 0 : parsed;
+};
+
+// Formatação segura de inputs financeiros em tempo real
+const formatCurrencyInput = (v) => {
+    let raw = String(v).replace(/\D/g, "");
+    if(!raw) return "";
+    return (parseInt(raw, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+};
+
+const formatDate = (dateStr) => {
+    if(!dateStr) return "-";
+    // Array enviado pelo LocalDate do Java
+    if (Array.isArray(dateStr)) return `${String(dateStr[2]).padStart(2,'0')}/${String(dateStr[1]).padStart(2,'0')}/${dateStr[0]}`;
+    // String ISO segura (sem timezone shift)
+    const [year, month, day] = dateStr.split('T')[0].split('-');
+    return `${day}/${month}/${year}`;
+};
+
 const ContasReceber = () => {
   const [loading, setLoading] = useState(false);
+  const [loadingBaixa, setLoadingBaixa] = useState(false); // 🔥 Novo estado anti-duplo clique
+
   const [contas, setContas] = useState([]);
   const [resumo, setResumo] = useState({ totalReceber: 0, totalVencido: 0, recebidoHoje: 0 });
+
   const [filtroStatus, setFiltroStatus] = useState('PENDENTE');
   const [busca, setBusca] = useState('');
 
   // Estado do Modal
   const [modalOpen, setModalOpen] = useState(false);
   const [contaSelecionada, setContaSelecionada] = useState(null);
-  const [formBaixa, setFormBaixa] = useState({ valor: '', forma: 'DINHEIRO', juros: 0, desconto: 0 });
+
+  // O valor agora é guardado já no formato amigável "150,00"
+  const [formBaixa, setFormBaixa] = useState({ valorFormatado: '', forma: 'DINHEIRO', juros: 0, desconto: 0 });
 
   useEffect(() => {
     carregarDados();
@@ -31,8 +65,8 @@ const ContasReceber = () => {
         contasReceberService.listar({ status: filtroStatus, termo: busca })
       ]);
 
-      setResumo(dadosResumo);
-      setContas(dadosContas);
+      setResumo(dadosResumo || { totalReceber: 0, totalVencido: 0, recebidoHoje: 0 });
+      setContas(Array.isArray(dadosContas) ? dadosContas : []);
     } catch (error) {
       console.error(error);
       toast.error("Erro ao carregar dados financeiros.");
@@ -43,8 +77,10 @@ const ContasReceber = () => {
 
   const abrirModalBaixa = (conta) => {
     setContaSelecionada(conta);
+    const valorRestanteFormatado = Number(conta.valorRestante || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
     setFormBaixa({
-      valor: conta.valorRestante, // Sugere quitar o restante
+      valorFormatado: valorRestanteFormatado,
       forma: 'DINHEIRO',
       juros: 0,
       desconto: 0
@@ -54,31 +90,33 @@ const ContasReceber = () => {
 
   const handleBaixa = async (e) => {
     e.preventDefault();
-    if (!contaSelecionada) return;
+    if (!contaSelecionada || loadingBaixa) return;
+
+    const valorCorreto = parseMoneyBR(formBaixa.valorFormatado);
+    if (valorCorreto <= 0) return toast.warn("O valor a receber deve ser maior que zero.");
+
+    setLoadingBaixa(true);
+    const toastId = toast.loading("Processando entrada no caixa...");
 
     try {
       const payload = {
-        valorPago: parseFloat(formBaixa.valor),
+        valorPago: valorCorreto,
         formaPagamento: formBaixa.forma,
         juros: parseFloat(formBaixa.juros || 0),
         desconto: parseFloat(formBaixa.desconto || 0)
       };
 
       await contasReceberService.baixarTitulo(contaSelecionada.id, payload);
-      toast.success("Pagamento registrado com sucesso!");
-      setModalOpen(false);
-      carregarDados(); // Recarrega para atualizar a lista e os KPIs
-    } catch (error) {
-      toast.error("Erro ao registrar pagamento.", { toastId: "erro-registrar-pagamento" });
-    }
-  };
 
-  const formatMoney = (val) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const formatDate = (dateStr) => {
-    if(!dateStr) return "-";
-    // Tenta tratar array de data [ano, mes, dia] se vier do Java LocalDate
-    if (Array.isArray(dateStr)) return `${dateStr[2]}/${dateStr[1]}/${dateStr[0]}`;
-    return new Date(dateStr).toLocaleDateString('pt-BR', {timeZone: 'UTC'});
+      toast.update(toastId, { render: "Pagamento registrado com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
+      setModalOpen(false);
+      carregarDados();
+    } catch (error) {
+      const errorMsg = error.response?.data?.message || "Erro ao registrar pagamento.";
+      toast.update(toastId, { render: errorMsg, type: "error", isLoading: false, autoClose: 4000 });
+    } finally {
+      setLoadingBaixa(false);
+    }
   };
 
   return (
@@ -88,7 +126,7 @@ const ContasReceber = () => {
           <h1>Contas a Receber</h1>
           <p>Gestão de Crediário e Cobranças</p>
         </div>
-        <button className="btn-secondary" onClick={carregarDados} disabled={loading}>
+        <button className="btn-secondary" onClick={carregarDados} disabled={loading || loadingBaixa}>
           <RefreshCw size={18} className={loading ? 'spin' : ''}/> Atualizar
         </button>
       </header>
@@ -114,7 +152,7 @@ const ContasReceber = () => {
         <div className="search-input-wrapper">
           <Search size={18} className="search-icon-inside"/>
           <input
-            placeholder="Buscar cliente..."
+            placeholder="Buscar por cliente ou documento..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && carregarDados()}
@@ -131,6 +169,9 @@ const ContasReceber = () => {
 
       {/* LISTAGEM */}
       <div className="debt-table-container">
+        {loading && contas.length === 0 ? (
+            <div style={{textAlign: 'center', padding: '50px', color: '#94a3b8'}}><RefreshCw size={32} className="spin mb-2"/><h2>Carregando contas...</h2></div>
+        ) : (
         <table className="debt-table">
           <thead>
             <tr>
@@ -146,8 +187,8 @@ const ContasReceber = () => {
               contas.map(conta => (
                 <tr key={conta.id}>
                   <td>
-                    <div style={{fontWeight:600}}>{conta.clienteNome}</div>
-                    <div style={{fontSize:'0.75rem', color:'#94a3b8'}}>{conta.clienteTelefone}</div>
+                    <div style={{fontWeight:600}}>{conta.clienteNome || "Consumidor Final"}</div>
+                    <div style={{fontSize:'0.75rem', color:'#94a3b8'}}>{conta.clienteTelefone || conta.clienteDocumento || "Sem dados de contacto"}</div>
                   </td>
                   <td>
                     <div style={{display:'flex', alignItems:'center', gap:6, color: conta.status === 'VENCIDA' ? '#ef4444' : 'inherit', fontWeight: conta.status === 'VENCIDA' ? 700 : 400}}>
@@ -158,7 +199,7 @@ const ContasReceber = () => {
                   <td><span className={`badge-debt ${conta.status}`}>{conta.status}</span></td>
                   <td style={{display:'flex', justifyContent:'flex-end'}}>
                     {conta.status !== 'PAGA' && (
-                      <button className="btn-pay" onClick={() => abrirModalBaixa(conta)}>
+                      <button className="btn-pay" onClick={() => abrirModalBaixa(conta)} disabled={loadingBaixa}>
                         <DollarSign size={16}/> Receber
                       </button>
                     )}
@@ -166,44 +207,58 @@ const ContasReceber = () => {
                 </tr>
               ))
             ) : (
-              <tr><td colSpan="5" style={{textAlign:'center', padding:30, color:'#94a3b8'}}>Nenhuma conta encontrada.</td></tr>
+              <tr><td colSpan="5" style={{textAlign:'center', padding:40, color:'#94a3b8'}}>Nenhuma conta encontrada nos filtros atuais.</td></tr>
             )}
           </tbody>
         </table>
+        )}
       </div>
 
-      {/* MODAL DE BAIXA */}
+      {/* MODAL DE BAIXA COM MÁSCARAS E PREVENÇÃO DE DUPLO CLIQUE */}
       {modalOpen && contaSelecionada && (
         <div className="modal-overlay">
           <form className="modal-content" onSubmit={handleBaixa}>
-            <div className="modal-header">
-              <h2>Receber Pagamento</h2>
-              <p>Cliente: <strong>{contaSelecionada.clienteNome}</strong></p>
+            <div className="modal-header" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start'}}>
+              <div>
+                  <h2 style={{margin: '0 0 5px 0', fontSize: '1.3rem', color: '#0f172a'}}>Receber Pagamento</h2>
+                  <p style={{margin: 0, color: '#64748b'}}>Cliente: <strong>{contaSelecionada.clienteNome || "Consumidor"}</strong></p>
+              </div>
+              <button type="button" onClick={() => setModalOpen(false)} style={{background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8'}}><X size={24}/></button>
             </div>
 
-            <div className="form-group mb-3">
-              <label style={{fontSize:'0.85rem', fontWeight:600, color:'#64748b'}}>Valor a Pagar (R$)</label>
+            <div className="form-group mb-3" style={{marginTop: '20px'}}>
+              <label style={{fontSize:'0.85rem', fontWeight:600, color:'#64748b', display: 'block', marginBottom: '8px'}}>Valor a Receber (R$)</label>
+
+              {/* O INPUT MÁGICO DE DINHEIRO */}
               <input
-                type="number" step="0.01" required
-                className="ff-input-floating" style={{fontSize:'1.5rem', fontWeight:'bold', color:'#10b981', padding:'10px'}}
-                value={formBaixa.valor}
-                onChange={e => setFormBaixa({...formBaixa, valor: e.target.value})}
+                type="text"
+                inputMode="numeric"
+                required
+                className="ff-input-floating"
+                style={{fontSize:'1.5rem', fontWeight:'bold', color:'#10b981', padding:'12px', textAlign: 'right'}}
+                value={formBaixa.valorFormatado}
+                onChange={e => setFormBaixa({...formBaixa, valorFormatado: formatCurrencyInput(e.target.value)})}
+                autoFocus
               />
             </div>
 
             <div className="form-group mb-3">
-               <label style={{fontSize:'0.85rem', fontWeight:600, color:'#64748b'}}>Forma de Pagamento</label>
+               <label style={{fontSize:'0.85rem', fontWeight:600, color:'#64748b', display: 'block', marginBottom: '8px'}}>Forma de Pagamento / Entrada de Caixa</label>
                <select className="ff-input-floating" value={formBaixa.forma} onChange={e => setFormBaixa({...formBaixa, forma: e.target.value})}>
-                 <option value="DINHEIRO">Dinheiro</option>
-                 <option value="PIX">Pix</option>
-                 <option value="DEBITO">Débito</option>
-                 <option value="CREDITO">Crédito</option>
+                 <option value="DINHEIRO">Dinheiro (Gaveta do Caixa)</option>
+                 <option value="PIX">Pix (Conta Empresa)</option>
+                 <option value="DEBITO">Cartão de Débito</option>
+                 <option value="CREDITO">Cartão de Crédito</option>
                </select>
             </div>
 
-            <div className="modal-actions">
-              <button type="button" className="btn-secondary" onClick={() => setModalOpen(false)}>Cancelar</button>
-              <button type="submit" className="action-btn-primary">Confirmar Baixa</button>
+            <div className="modal-actions" style={{display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '30px'}}>
+              <button type="button" className="btn-secondary" onClick={() => setModalOpen(false)} disabled={loadingBaixa}>Cancelar</button>
+
+              <button type="submit" className="action-btn-primary" style={{background: '#10b981', display: 'flex', alignItems: 'center', gap: '8px'}} disabled={loadingBaixa}>
+                {loadingBaixa ? <RefreshCw size={18} className="spin"/> : <CheckCircle2 size={18} />}
+                {loadingBaixa ? 'Processando...' : 'Confirmar Baixa'}
+              </button>
             </div>
           </form>
         </div>

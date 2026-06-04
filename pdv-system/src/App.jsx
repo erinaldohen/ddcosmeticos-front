@@ -33,6 +33,7 @@ const HistoricoCaixa = lazy(() => import('./pages/Caixa/HistoricoCaixa'));
 const HistoricoVendas = lazy(() => import('./pages/Historico/HistoricoVendas'));
 const Auditoria = lazy(() => import('./pages/Auditoria/Auditoria'));
 const ContasPagar = lazy(() => import('./pages/Financeiro/ContasPagar'));
+const ContasReceber = lazy(() => import('./pages/Financeiro/ContasReceber'));
 const Fiado = lazy(() => import('./pages/Fiado/Fiado'));
 const CustomerDisplay = lazy(() => import('./pages/PDV/CustomerDisplay'));
 
@@ -164,6 +165,7 @@ export default function App() {
                 <Route path="/fornecedores/novo" element={<AdminRoute><FornecedorForm /></AdminRoute>} />
                 <Route path="/fornecedores/editar/:id" element={<AdminRoute><FornecedorForm /></AdminRoute>} />
                 <Route path="/financeiro/contas-pagar" element={<AdminRoute><ContasPagar /></AdminRoute>} />
+                <Route path="/financeiro/contas-receber" element={<AdminRoute><ContasReceber /></AdminRoute>} />
                 <Route path="/fiado" element={<AdminRoute><Fiado /></AdminRoute>} />
                 <Route path="/configuracoes" element={<AdminRoute><Configuracoes /></AdminRoute>} />
                 <Route path="/auditoria" element={<AdminRoute><Auditoria /></AdminRoute>} />

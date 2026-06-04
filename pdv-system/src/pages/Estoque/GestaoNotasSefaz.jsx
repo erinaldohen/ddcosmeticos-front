@@ -55,8 +55,9 @@ export default function GestaoNotasSefaz() {
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [totalElementos, setTotalElementos] = useState(0);
 
-  // 🔥 NOVO: Estado para a Importação em Lote
+  // Estados de Seleção e Toggle de Despesa
   const [notasSelecionadas, setNotasSelecionadas] = useState([]);
+  const [isDespesa, setIsDespesa] = useState(false);
 
   const [modalType, setModalType] = useState(null);
   const [notaSelecionada, setNotaSelecionada] = useState(null);
@@ -77,7 +78,32 @@ export default function GestaoNotasSefaz() {
 
   // Dicionários
   const mesesNomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-  const dicionarios = useMemo(() => { const db = listaProdutosDb || []; const extrair = (prop1, prop2) => { const valores = db.map(p => p[prop1] || p[prop2]).filter(Boolean); return [...new Set(valores)].map(v => String(v).toUpperCase()).sort(); }; return { marcas: extrair('marca', 'marcaProduto'), categorias: extrair('categoria', 'categoriaProduto'), subcategorias: extrair('subcategoria', 'subCategoriaProduto') }; }, [listaProdutosDb]);
+
+  // 🔥 BLINDAGEM DA LISTA DE CATEGORIAS (Evita [object Object] e puxa apenas os Nomes puros)
+  const dicionarios = useMemo(() => {
+      const db = listaProdutosDb || [];
+
+      const extrairTextoSeguro = (val) => {
+          if (!val) return null;
+          if (typeof val === 'string') return val;
+          if (val.descricao) return val.descricao;
+          if (val.nome) return val.nome;
+          if (val.nomeCategoria) return val.nomeCategoria;
+          return String(val);
+      };
+
+      const extrair = (prop1, prop2) => {
+          const valores = db.map(p => extrairTextoSeguro(p[prop1]) || extrairTextoSeguro(p[prop2])).filter(Boolean);
+          return [...new Set(valores)].map(v => String(v).toUpperCase()).sort();
+      };
+
+      return {
+          marcas: extrair('marca', 'marcaProduto'),
+          categorias: extrair('categoria', 'categoriaProduto'),
+          subcategorias: extrair('subcategoria', 'subCategoriaProduto')
+      };
+  }, [listaProdutosDb]);
+
   const produtosFiltradosManual = useMemo(() => { if (!buscaManual || buscaManual.length < 2) return []; const term = buscaManual.toUpperCase(); return listaProdutosDb.filter(p => (p.descricao && p.descricao.toUpperCase().includes(term)) || (p.codigoBarras && p.codigoBarras.includes(term))).slice(0, 10); }, [buscaManual, listaProdutosDb]);
 
   useEffect(() => { const init = async () => { try { const resP = await api.get('/produtos?size=5000'); setListaProdutosDb(resP.data?.content || resP.data || []); buscarNotasBackend(0); } catch(e) {} }; init(); }, []);
@@ -93,11 +119,27 @@ export default function GestaoNotasSefaz() {
     setLoading(true); setNotasSelecionadas([]);
     try {
       let url = `/estoque/notas-pendentes?statusTab=${activeTab}&page=${pagina}&size=20`;
+
       if (mesSelecionado !== null) {
           const mesStr = String(mesSelecionado).padStart(2, '0');
           const ultimoDia = new Date(anoSelecionado, mesSelecionado, 0).getDate();
           url += `&dataInicio=${anoSelecionado}-${mesStr}-01&dataFim=${anoSelecionado}-${mesStr}-${ultimoDia}`;
+      } else {
+          // Filtro Automático dos Últimos 90 dias
+          const hoje = new Date();
+          const noventaDiasAtras = new Date();
+          noventaDiasAtras.setDate(hoje.getDate() - 90);
+
+          const formatIso = (d) => {
+              const y = d.getFullYear();
+              const m = String(d.getMonth() + 1).padStart(2, '0');
+              const day = String(d.getDate()).padStart(2, '0');
+              return `${y}-${m}-${day}`;
+          };
+
+          url += `&dataInicio=${formatIso(noventaDiasAtras)}&dataFim=${formatIso(hoje)}`;
       }
+
       if (busca) url += `&busca=${encodeURIComponent(busca)}`;
 
       const res = await api.get(url);
@@ -113,12 +155,35 @@ export default function GestaoNotasSefaz() {
   const alternarMes = (numMes) => { if (mesSelecionado === numMes) setMesSelecionado(null); else setMesSelecionado(numMes); };
 
   const sincronizarSefaz = async () => {
-    setSyncing(true); toast.loading("Consultando a SEFAZ...", { toastId: 'sync' });
+    setSyncing(true);
+    toast.loading("Consultando a SEFAZ do Estado...", { toastId: 'sync' });
     try {
-      await api.post('/estoque/notas-pendentes/sincronizar');
-      toast.update('sync', { render: "Sincronização concluída!", type: "success", isLoading: false, autoClose: 3000 });
-      setActiveTab('PENDENTES'); setMesSelecionado(null); buscarNotasBackend(0);
-    } catch (e) { toast.update('sync', { render: "Bloqueio temporário.", type: "warning", isLoading: false, autoClose: 5000 }); buscarNotasBackend(0); } finally { setSyncing(false); }
+      const response = await api.post('/estoque/notas-pendentes/sincronizar');
+      toast.update('sync', {
+          render: response.data?.mensagem || "Consulta SEFAZ concluída! Notas importadas.",
+          type: "success", isLoading: false, autoClose: 3000
+      });
+      setActiveTab('PENDENTES');
+      setMesSelecionado(null);
+      buscarNotasBackend(0);
+    } catch (e) {
+      const erroServidor = e.response?.data?.message || "";
+      if (erroServidor.includes("Certificado") || erroServidor.includes("Configuração") || erroServidor.includes("CNPJ")) {
+          toast.update('sync', {
+              render: "Bloqueio Fiscal: Certificado A1 ou CNPJ não configurados.",
+              type: "error", isLoading: false, autoClose: 5000
+          });
+          setTimeout(() => navigate('/configuracoes?tab=fiscal'), 2000);
+      } else {
+          toast.update('sync', {
+              render: "A SEFAZ do seu estado está indisponível no momento. Tente novamente mais tarde.",
+              type: "warning", isLoading: false, autoClose: 5000
+          });
+      }
+      buscarNotasBackend(0);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleUploadXml = async (e) => {
@@ -132,23 +197,15 @@ export default function GestaoNotasSefaz() {
       } catch (error) { toast.update(toastId, { render: "Erro ao ler os XMLs.", type: "error", isLoading: false, autoClose: 5000 }); } finally { e.target.value = null; }
   };
 
-  // 🔥 NOVO: Funções de Checkbox e Importação em Lote
   const handleSelecionarNota = (id) => {
-      if (notasSelecionadas.includes(id)) {
-          setNotasSelecionadas(notasSelecionadas.filter(notaId => notaId !== id));
-      } else {
-          setNotasSelecionadas([...notasSelecionadas, id]);
-      }
+      if (notasSelecionadas.includes(id)) setNotasSelecionadas(notasSelecionadas.filter(notaId => notaId !== id));
+      else setNotasSelecionadas([...notasSelecionadas, id]);
   };
 
   const handleSelecionarTudoPagina = () => {
-      // Seleciona apenas as que ainda não estão importadas (por segurança)
       const idsDestaPagina = notasExibidas.filter(n => n.status !== 'IMPORTADA' && n.status !== 'CONCLUIDA').map(n => n.id);
-      if (notasSelecionadas.length === idsDestaPagina.length) {
-          setNotasSelecionadas([]); // Desmarca tudo
-      } else {
-          setNotasSelecionadas(idsDestaPagina); // Marca tudo
-      }
+      if (notasSelecionadas.length === idsDestaPagina.length) setNotasSelecionadas([]);
+      else setNotasSelecionadas(idsDestaPagina);
   };
 
   const handleProcessamentoEmLote = async () => {
@@ -167,6 +224,7 @@ export default function GestaoNotasSefaz() {
   };
 
   const iniciarProcessamento = async (nota) => {
+        setIsDespesa(false);
         setBusca(''); const toastId = toast.loading("Processando XML e Inteligência Artificial..."); setLoadingCardId(nota.id);
         try {
             if (nota.status === 'PENDENTE_MANIFESTACAO') await api.post(`/estoque/notas-pendentes/${nota.id}/manifestar`);
@@ -194,17 +252,34 @@ export default function GestaoNotasSefaz() {
   };
 
   const confirmarEntradaModal = async () => {
-      if (loadingModal) return; if (!notaSelecionada?.cnpjFornecedor) return toast.warn("A nota fiscal não possui o CNPJ do fornecedor.");
-      setLoadingModal(true); const toastId = toast.loading("Processando Estoque...");
+      if (loadingModal) return;
+      if (!notaSelecionada?.cnpjFornecedor) return toast.warn("A nota fiscal não possui o CNPJ do fornecedor.");
+
+      setLoadingModal(true);
+      const toastId = toast.loading(isDespesa ? "Lançando no Financeiro..." : "Processando Estoque...");
       try {
-          const payload = {
-              fornecedorCnpj: String(notaSelecionada.cnpjFornecedor).replace(/\D/g, ''), fornecedorNome: String(notaSelecionada.nomeFornecedor || 'FORNECEDOR NF'), numeroDocumento: String(cabecalhoModal.numeroDocumento || "S/N"), dataEntrada: cabecalhoModal.dataEmissao, chaveAcesso: String(notaSelecionada.chaveAcesso || ""),
-              itens: itensImportacao.map(i => ({ produtoId: i.idProduto ? Number(i.idProduto) : null, codigoBarras: String(i.codigoBarras || "S/N"), descricao: String(i.descricao || "PRODUTO SEM NOME"), quantidade: parseNumber(i.quantidade || i.qCom || 0), valorUnitario: parseNumber(i.precoCusto || 0), ncm: String(i.ncm || "00000000"), origem: "0", cst: "102", marca: String(i.marca || "GENERICA"), categoria: String(i.categoria || "GERAL"), subcategoria: String(i.subcategoria || "GERAL"), unidade: "UN" }))
-          };
-          await api.post('/estoque/entrada', payload);
-          if (notaSelecionada && notaSelecionada.id !== 'MANUAL') await api.post(`/estoque/notas-pendentes/${notaSelecionada.id}/importar`);
-          toast.update(toastId, { render: "Entrada Concluída com Sucesso!", type: "success", isLoading: false, autoClose: 2000 }); setModalType(null); buscarNotasBackend();
-      } catch(e) { toast.update(toastId, { render: "Erro ao salvar estoque.", type: "error", isLoading: false, autoClose: 5000 }); } finally { setLoadingModal(false); }
+          if (isDespesa) {
+              await api.post(`/estoque/notas-pendentes/${notaSelecionada.id}/importar?despesa=true`);
+          } else {
+              const payload = {
+                  fornecedorCnpj: String(notaSelecionada.cnpjFornecedor).replace(/\D/g, ''), fornecedorNome: String(notaSelecionada.nomeFornecedor || 'FORNECEDOR NF'), numeroDocumento: String(cabecalhoModal.numeroDocumento || "S/N"), dataEntrada: cabecalhoModal.dataEmissao, chaveAcesso: String(notaSelecionada.chaveAcesso || ""),
+                  itens: itensImportacao.map(i => ({ produtoId: i.idProduto ? Number(i.idProduto) : null, codigoBarras: String(i.codigoBarras || "S/N"), descricao: String(i.descricao || "PRODUTO SEM NOME"), quantidade: parseNumber(i.quantidade || i.qCom || 0), valorUnitario: parseNumber(i.precoCusto || 0), ncm: String(i.ncm || "00000000"), origem: "0", cst: "102", marca: String(i.marca || "GENERICA"), categoria: String(i.categoria || "GERAL"), subcategoria: String(i.subcategoria || "GERAL"), unidade: "UN" }))
+              };
+              await api.post('/estoque/entrada', payload);
+              if (notaSelecionada && notaSelecionada.id !== 'MANUAL') {
+                  await api.post(`/estoque/notas-pendentes/${notaSelecionada.id}/importar?despesa=false`);
+              }
+          }
+
+          toast.update(toastId, { render: "Processamento Concluído com Sucesso!", type: "success", isLoading: false, autoClose: 2000 });
+          setModalType(null);
+          buscarNotasBackend();
+      } catch(e) {
+          const mensagemErro = e.response?.data?.message || e.response?.data || "Erro ao processar a nota.";
+                  toast.update(toastId, { render: mensagemErro, type: "error", isLoading: false, autoClose: 6000 });
+      } finally {
+          setLoadingModal(false);
+      }
   };
 
   const atualizarCampoItem = (index, campo, valor) => { const lista = [...itensImportacao]; if (campo === 'precoCusto') lista[index][campo] = parseNumber(valor); else lista[index][campo] = campo === 'descricao' ? valor.toUpperCase() : valor; setItensImportacao(lista); };
@@ -215,11 +290,32 @@ export default function GestaoNotasSefaz() {
   const confirmarVinculoManual = (dbProd) => { vincularSugestao(linkManualIndex, dbProd); setLinkManualIndex(null); setModalType('IMPORT'); };
 
   const abrirEdicaoRapida = async (idx, item) => {
+      // 🔥 Blindagem adicional no extrator de texto na hora de sugerir nomes automáticos
+      const extrairTextoSeguro = (val) => { if (!val) return ''; if (typeof val === 'string') return val; return val.descricao || val.nome || val.nomeCategoria || ''; };
+
       const custo = parseNumber(item.precoCusto); const precoVenda = custo * 1.5; let guessedMarca = 'GENERICA'; let guessedCat = ''; let guessedSub = ''; let bestScore = 0; let bestDbMatch = null;
       listaProdutosDb.forEach(dbProd => { const score = calcularSemelhancaTokens(item.descricao, dbProd.descricao); if (score > bestScore) { bestScore = score; bestDbMatch = dbProd; } });
-      if (bestDbMatch && bestScore >= 0.35) { guessedMarca = bestDbMatch.marca || guessedMarca; guessedCat = bestDbMatch.categoria || guessedCat; guessedSub = bestDbMatch.subcategoria || guessedSub; }
-      setQuickEditIndex(idx); setQuickEditForm({ descricao: item.descricao || '', codigoBarras: item.codigoBarras || '', marca: guessedMarca, categoria: guessedCat, subcategoria: guessedSub, precoCusto: custo, margem: 50.00, precoVenda: precoVenda }); setModalType('QUICK');
+
+      if (bestDbMatch && bestScore >= 0.35) {
+          guessedMarca = extrairTextoSeguro(bestDbMatch.marca) || guessedMarca;
+          guessedCat = extrairTextoSeguro(bestDbMatch.categoria) || guessedCat;
+          guessedSub = extrairTextoSeguro(bestDbMatch.subcategoria) || guessedSub;
+      }
+
+      setQuickEditIndex(idx);
+      setQuickEditForm({
+          descricao: item.descricao || '',
+          codigoBarras: item.codigoBarras || '',
+          marca: guessedMarca.toUpperCase(),
+          categoria: guessedCat.toUpperCase(),
+          subcategoria: guessedSub.toUpperCase(),
+          precoCusto: custo,
+          margem: 50.00,
+          precoVenda: precoVenda
+      });
+      setModalType('QUICK');
   };
+
   const handlePrecificacaoQuickEdit = (campo, valorNumerico) => { const form = { ...quickEditForm, [campo]: valorNumerico }; const custo = parseFloat(form.precoCusto) || 0; const marg = parseFloat(form.margem) || 0; const vend = parseFloat(form.precoVenda) || 0; if (campo === 'precoCusto' || campo === 'margem') form.precoVenda = custo * (1 + (marg / 100)); else if (campo === 'precoVenda') form.margem = custo > 0 ? ((vend - custo) / custo) * 100 : 0; setQuickEditForm(form); };
   const salvarEdicaoRapida = () => { const lista = [...itensImportacao]; lista[quickEditIndex] = { ...lista[quickEditIndex], descricao: quickEditForm.descricao.toUpperCase(), codigoBarras: quickEditForm.codigoBarras, marca: quickEditForm.marca.toUpperCase(), categoria: quickEditForm.categoria.toUpperCase(), subcategoria: quickEditForm.subcategoria.toUpperCase(), precoCusto: parseNumber(quickEditForm.precoCusto), precoVenda: parseNumber(quickEditForm.precoVenda), margem: quickEditForm.margem, preenchidoViaIA: true }; setItensImportacao(lista); setQuickEditIndex(null); setModalType('IMPORT'); };
 
@@ -298,10 +394,10 @@ export default function GestaoNotasSefaz() {
           {busca && <button onClick={() => {setBusca(''); setTimeout(()=>buscarNotasBackend(0), 100)}} style={{ background:'none', border:'none', color:'#ef4444', cursor:'pointer' }}><X size={20}/></button>}
       </div>
 
-      {/* 🔥 CABEÇALHO DA LISTAGEM (COM BOTÃO SELECIONAR TUDO) */}
+      {/* CABEÇALHO DA LISTAGEM (COM BOTÃO SELECIONAR TUDO) */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
           <span style={{ color: '#64748b', fontSize: '0.9rem', fontWeight: 'bold' }}>
-              Exibindo {notasExibidas.length} notas nesta página (Total em {mesSelecionado ? mesesNomes[mesSelecionado-1] + '/' + anoSelecionado : anoSelecionado}: {totalElementos} notas)
+              Exibindo {notasExibidas.length} notas nesta página (Total {mesSelecionado ? `em ${mesesNomes[mesSelecionado-1]}/${anoSelecionado}` : 'nos últimos 90 dias'}: {totalElementos} notas)
           </span>
           {activeTab === 'PENDENTES' && notasExibidas.length > 0 && (
               <button onClick={handleSelecionarTudoPagina} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#e0e7ff', color: '#1d4ed8', border: 'none', padding: '6px 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '0.85rem' }}>
@@ -326,7 +422,7 @@ export default function GestaoNotasSefaz() {
             return (
               <div key={nota.id} className={`nota-card-ui ${isImportada ? 'importada' : isResumo ? 'resumo' : 'pendente'}`} style={{ position: 'relative', border: isSelecionada ? '2px solid #3b82f6' : '' }}>
 
-                {/* 🔥 CHECKBOX DE SELEÇÃO */}
+                {/* CHECKBOX DE SELEÇÃO */}
                 {!isImportada && (
                     <div style={{ position: 'absolute', top: '15px', right: '15px', zIndex: 2 }}>
                         <input type="checkbox" checked={isSelecionada} onChange={() => handleSelecionarNota(nota.id)} style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#3b82f6' }} />
@@ -378,7 +474,7 @@ export default function GestaoNotasSefaz() {
           </div>
       )}
 
-      {/* 🔥 FLOATING ACTION BAR (BARRA FLUTUANTE DE IMPORTAÇÃO EM LOTE) */}
+      {/* FLOATING ACTION BAR (BARRA FLUTUANTE DE IMPORTAÇÃO EM LOTE) */}
       {notasSelecionadas.length > 0 && activeTab === 'PENDENTES' && (
           <div className="scale-in" style={{ position: 'fixed', bottom: '30px', left: '50%', transform: 'translateX(-50%)', background: '#0f172a', padding: '15px 30px', borderRadius: '50px', display: 'flex', alignItems: 'center', gap: '25px', boxShadow: '0 15px 35px rgba(0,0,0,0.3)', zIndex: 9999 }}>
               <div style={{ color: '#fff', fontWeight: 'bold', fontSize: '1.1rem' }}>
@@ -418,68 +514,96 @@ export default function GestaoNotasSefaz() {
                   </div>
 
                   <div className="modal-body-premium custom-scrollbar">
-                      <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '15px 20px', borderRadius: '12px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '15px' }}>
-                          <CheckCircle size={28} color="#16a34a" />
-                          <div><strong style={{ color: '#166534', display: 'block', fontSize: '1rem', marginBottom: '4px' }}>Fornecedor será vinculado automaticamente!</strong><span style={{ color: '#15803d', fontSize: '0.9rem' }}>O sistema detectou o CNPJ <b>{maskCNPJ(notaSelecionada?.cnpjFornecedor)}</b>. Ao confirmar a entrada, o fornecedor será criado ou vinculado nos bastidores de forma invisível.</span></div>
+
+                      {/* 🔥 TOGGLE INTERATIVO DE DESPESA */}
+                      <div style={{ background: isDespesa ? '#fff1f2' : '#f0fdf4', border: isDespesa ? '1px solid #fecdd3' : '1px solid #bbf7d0', padding: '15px 20px', borderRadius: '12px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', transition: 'all 0.3s' }} onClick={() => setIsDespesa(!isDespesa)}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                              {isDespesa ? <AlertTriangle size={28} color="#e11d48" /> : <Package size={28} color="#16a34a" />}
+                              <div>
+                                  <strong style={{ color: isDespesa ? '#be123c' : '#166534', display: 'block', fontSize: '1.05rem', marginBottom: '4px' }}>
+                                      {isDespesa ? "Esta é uma Nota de Despesa / Uso Interno" : "Esta é uma Nota de Mercadoria (Revenda)"}
+                                  </strong>
+                                  <span style={{ color: isDespesa ? '#9f1239' : '#15803d', fontSize: '0.9rem' }}>
+                                      {isDespesa ? "Gera o Contas a Pagar, mas NÃO insere os itens no catálogo da loja." : "Fornecedor vinculado, Financeiro gerado e Itens entrarão no estoque."}
+                                  </span>
+                              </div>
+                          </div>
+                          <div style={{ background: isDespesa ? '#e11d48' : '#cbd5e1', width: '48px', height: '26px', borderRadius: '24px', position: 'relative', transition: 'background 0.3s' }}>
+                              <div style={{ position: 'absolute', top: '3px', left: isDespesa ? '25px' : '3px', width: '20px', height: '20px', background: '#fff', borderRadius: '50%', transition: 'left 0.3s', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}></div>
+                          </div>
                       </div>
 
-                      <div className="stepper-header">Auditoria e Vínculo de Mercadorias</div>
-                      <div className="modal-table-area">
-                          <table className="modern-table">
-                              <thead><tr><th width="15%">Auditoria IA</th><th width="40%">Mercadoria no XML</th><th width="25%">Custo Unitário / Volume</th><th width="20%">Ação Requerida</th></tr></thead>
-                              <tbody>
-                                  {itensImportacao.map((item, idx) => {
-                                      const qtdNum = parseNumber(item.quantidade || item.qCom || 0); const custoNum = parseNumber(item.precoCusto || 0); const subtotalLinha = qtdNum * custoNum;
-                                      return (
-                                          <tr key={idx} className={`tr-${item.status}`}>
-                                              <td className="td-status">
-                                                  {item.status === 'vinculado' && <span className="badge-status importada"><CheckCircle size={14}/> VINCULADO</span>}
-                                                  {item.status === 'semelhante' && <span className="badge-status resumo"><AlertTriangle size={14}/> REVISAR</span>}
-                                                  {item.status === 'novo' && <span className="badge-status pendente"><Package size={14}/> NOVO (CRIAR)</span>}
-                                              </td>
-                                              <td>
-                                                  <div className="produto-leitura">
-                                                      <strong>{item.descricao}</strong>
-                                                      <div className="prod-meta">
-                                                          <span className="pill-gray"><Barcode size={12}/> {item.codigoBarras || "S/ GTIN"}</span>
-                                                          <span className="pill-gray"><FileText size={12}/> NCM: {item.ncm}</span>
-                                                          {item.preenchidoViaIA && <span className="pill-gray pill-ia"><Sparkles size={12}/> Atributos Prontos</span>}
-                                                      </div>
-                                                  </div>
-                                              </td>
-                                              <td className="td-valores">
-                                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                                                      {editingQtyIndex === idx ? (<input type="number" step="0.01" autoFocus defaultValue={qtdNum} onBlur={(e) => { handleAlterarQuantidade(idx, e.target.value); setEditingQtyIndex(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { handleAlterarQuantidade(idx, e.target.value); setEditingQtyIndex(null); } }} className="input-elegante focus-blue" style={{ width: '70px', padding: '4px' }} />) : (<span className="qtd-badge" onDoubleClick={() => setEditingQtyIndex(idx)} title="Duplo clique para converter/desmembrar pacote (Ex: Mudar de 1 para 12)" style={{ cursor: 'pointer', border: '1px dashed #94a3b8' }}>{qtdNum} UN</span>)}
-                                                      <span style={{ fontSize: '0.65rem', color: '#64748b' }}>(Duplo clique p/ desmembrar)</span>
-                                                  </div>
-                                                  <div onDoubleClick={() => setEditingPriceIndex(idx)}>
-                                                      {editingPriceIndex === idx ? (<input type="number" step="0.01" autoFocus defaultValue={custoNum} onBlur={(e) => { atualizarCampoItem(idx, 'precoCusto', e.target.value); setEditingPriceIndex(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { atualizarCampoItem(idx, 'precoCusto', e.target.value); setEditingPriceIndex(null); } }} className="input-elegante focus-blue" />) : (<span className="unit-cost" title="Duplo clique para editar o custo da nota" style={{ cursor: 'pointer' }}>Custo NF: R$ {formatMoney(custoNum)} / un</span>)}
-                                                  </div>
-                                                  {item.status === 'vinculado' && (<span className="custo-medio-label" title="Custo histórico baseado no BD.">Custo Médio DB: R$ {formatMoney(item.custoMedioAtual)}</span>)}
-                                                  <strong className="total-cost text-primary" style={{marginTop: '4px'}}>Subtotal: R$ {formatMoney(subtotalLinha)}</strong>
-                                                  {item.status === 'vinculado' && (
-                                                      <div className="inline-edit-container">
-                                                          <div className="inline-form-group"><label className="inline-label">Margem (%)</label><input type="text" value={formatMoney(item.margem)} onChange={(e) => handleInlineEditValores(idx, 'margem', parseMoneyInput(e.target.value))} className="inline-input margem" /></div>
-                                                          <div className="inline-form-group"><label className="inline-label">Venda (R$)</label><input type="text" value={formatMoney(item.precoVenda)} onChange={(e) => handleInlineEditValores(idx, 'precoVenda', parseMoneyInput(e.target.value))} className="inline-input venda" /></div>
-                                                      </div>
-                                                  )}
-                                              </td>
-                                              <td>
-                                                  {item.status === 'semelhante' && (<div className="card-sugestao-ia"><span className="ia-label">Identificado ({item.confianca})</span><strong title={item.match?.descricao}>{item.match?.descricao?.substring(0,35)}...</strong><button onClick={() => vincularSugestao(idx, item.match)} className="btn-aceitar-sugestao pulse-btn"><LinkIcon size={14}/> Vincular Agora</button></div>)}
-                                                  {item.status === 'vinculado' && (<div className="txt-sucesso-ia"><CheckCircle size={16}/> <span>Pronto. +{qtdNum} UN no estoque.</span></div>)}
-                                                  {item.status === 'novo' && (
-                                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                          <button onClick={() => abrirEdicaoRapida(idx, item)} className="btn-completar-cadastro"><Edit3 size={14}/> {item.preenchidoViaIA ? "Revisar Atributos" : "Novo Cadastro"}</button>
-                                                          <button onClick={() => abrirVinculoManual(idx)} className="btn-vincular-manual" style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#475569', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}><Search size={14}/> Buscar e Vincular</button>
-                                                      </div>
-                                                  )}
-                                              </td>
-                                          </tr>
-                                      )
-                                  })}
-                              </tbody>
-                          </table>
-                      </div>
+                      {/* OCULTA A TABELA SE FOR DESPESA */}
+                      {!isDespesa ? (
+                          <>
+                              <div className="stepper-header">Auditoria e Vínculo de Mercadorias</div>
+                              <div className="modal-table-area">
+                                  <table className="modern-table">
+                                      <thead><tr><th width="15%">Auditoria IA</th><th width="40%">Mercadoria no XML</th><th width="25%">Custo Unitário / Volume</th><th width="20%">Ação Requerida</th></tr></thead>
+                                      <tbody>
+                                          {itensImportacao.map((item, idx) => {
+                                              const qtdNum = parseNumber(item.quantidade || item.qCom || 0); const custoNum = parseNumber(item.precoCusto || 0); const subtotalLinha = qtdNum * custoNum;
+                                              return (
+                                                  <tr key={idx} className={`tr-${item.status}`}>
+                                                      <td className="td-status">
+                                                          {item.status === 'vinculado' && <span className="badge-status importada"><CheckCircle size={14}/> VINCULADO</span>}
+                                                          {item.status === 'semelhante' && <span className="badge-status resumo"><AlertTriangle size={14}/> REVISAR</span>}
+                                                          {item.status === 'novo' && <span className="badge-status pendente"><Package size={14}/> NOVO (CRIAR)</span>}
+                                                      </td>
+                                                      <td>
+                                                          <div className="produto-leitura">
+                                                              <strong>{item.descricao}</strong>
+                                                              <div className="prod-meta">
+                                                                  <span className="pill-gray"><Barcode size={12}/> {item.codigoBarras || "S/ GTIN"}</span>
+                                                                  <span className="pill-gray"><FileText size={12}/> NCM: {item.ncm}</span>
+                                                                  {item.preenchidoViaIA && <span className="pill-gray pill-ia"><Sparkles size={12}/> Atributos Prontos</span>}
+                                                              </div>
+                                                          </div>
+                                                      </td>
+                                                      <td className="td-valores">
+                                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                                                              {editingQtyIndex === idx ? (<input type="number" step="0.01" autoFocus defaultValue={qtdNum} onBlur={(e) => { handleAlterarQuantidade(idx, e.target.value); setEditingQtyIndex(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { handleAlterarQuantidade(idx, e.target.value); setEditingQtyIndex(null); } }} className="input-elegante focus-blue" style={{ width: '70px', padding: '4px' }} />) : (<span className="qtd-badge" onDoubleClick={() => setEditingQtyIndex(idx)} title="Duplo clique para converter/desmembrar pacote (Ex: Mudar de 1 para 12)" style={{ cursor: 'pointer', border: '1px dashed #94a3b8' }}>{qtdNum} UN</span>)}
+                                                              <span style={{ fontSize: '0.65rem', color: '#64748b' }}>(Duplo clique p/ desmembrar)</span>
+                                                          </div>
+                                                          <div onDoubleClick={() => setEditingPriceIndex(idx)}>
+                                                              {editingPriceIndex === idx ? (<input type="number" step="0.01" autoFocus defaultValue={custoNum} onBlur={(e) => { atualizarCampoItem(idx, 'precoCusto', e.target.value); setEditingPriceIndex(null); }} onKeyDown={(e) => { if (e.key === 'Enter') { atualizarCampoItem(idx, 'precoCusto', e.target.value); setEditingPriceIndex(null); } }} className="input-elegante focus-blue" />) : (<span className="unit-cost" title="Duplo clique para editar o custo da nota" style={{ cursor: 'pointer' }}>Custo NF: R$ {formatMoney(custoNum)} / un</span>)}
+                                                          </div>
+                                                          {item.status === 'vinculado' && (<span className="custo-medio-label" title="Custo histórico baseado no BD.">Custo Médio DB: R$ {formatMoney(item.custoMedioAtual)}</span>)}
+                                                          <strong className="total-cost text-primary" style={{marginTop: '4px'}}>Subtotal: R$ {formatMoney(subtotalLinha)}</strong>
+                                                          {item.status === 'vinculado' && (
+                                                              <div className="inline-edit-container">
+                                                                  <div className="inline-form-group"><label className="inline-label">Margem (%)</label><input type="text" value={formatMoney(item.margem)} onChange={(e) => handleInlineEditValores(idx, 'margem', parseMoneyInput(e.target.value))} className="inline-input margem" /></div>
+                                                                  <div className="inline-form-group"><label className="inline-label">Venda (R$)</label><input type="text" value={formatMoney(item.precoVenda)} onChange={(e) => handleInlineEditValores(idx, 'precoVenda', parseMoneyInput(e.target.value))} className="inline-input venda" /></div>
+                                                              </div>
+                                                          )}
+                                                      </td>
+                                                      <td>
+                                                          {item.status === 'semelhante' && (<div className="card-sugestao-ia"><span className="ia-label">Identificado ({item.confianca})</span><strong title={item.match?.descricao}>{item.match?.descricao?.substring(0,35)}...</strong><button onClick={() => vincularSugestao(idx, item.match)} className="btn-aceitar-sugestao pulse-btn"><LinkIcon size={14}/> Vincular Agora</button></div>)}
+                                                          {item.status === 'vinculado' && (<div className="txt-sucesso-ia"><CheckCircle size={16}/> <span>Pronto. +{qtdNum} UN no estoque.</span></div>)}
+                                                          {item.status === 'novo' && (
+                                                              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                                  <button onClick={() => abrirEdicaoRapida(idx, item)} className="btn-completar-cadastro"><Edit3 size={14}/> {item.preenchidoViaIA ? "Revisar Atributos" : "Novo Cadastro"}</button>
+                                                                  <button onClick={() => abrirVinculoManual(idx)} className="btn-vincular-manual" style={{ background: '#f8fafc', border: '1px solid #cbd5e1', color: '#475569', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 'bold' }}><Search size={14}/> Buscar e Vincular</button>
+                                                              </div>
+                                                          )}
+                                                      </td>
+                                                  </tr>
+                                              )
+                                          })}
+                                      </tbody>
+                                  </table>
+                              </div>
+                          </>
+                      ) : (
+                          <div className="scale-in" style={{ textAlign: 'center', padding: '50px 20px', background: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1' }}>
+                              <CheckCircle size={56} color="#f43f5e" style={{ marginBottom: '15px', opacity: 0.9 }} />
+                              <h3 style={{ color: '#334155', marginBottom: '8px' }}>Auditoria de Produtos Desativada</h3>
+                              <p style={{ color: '#64748b', maxWidth: '600px', margin: '0 auto' }}>
+                                  Como esta nota é administrativa, a tela de vínculo de produtos foi limpa para evitar poluir o seu catálogo de revenda.<br/><br/>
+                                  Ao clicar em Confirmar, o sistema irá cadastrar a empresa emissora e lançar todos os boletos desta nota no <b>Contas a Pagar</b>.
+                              </p>
+                          </div>
+                      )}
                   </div>
 
                   {!loadingModal && (<div className="modal-footer-premium"><button className="btn-confirmar-gigante" onClick={confirmarEntradaModal} disabled={loadingModal}><Save size={22}/> Confirmar Atualização do Estoque</button></div>)}
@@ -547,7 +671,7 @@ export default function GestaoNotasSefaz() {
           </div>
       )}
 
-      {/* MODAL 4: QUICK */}
+      {/* MODAL 4: QUICK (Onde a Mágica das Categorias Acontece) */}
       {modalType === 'QUICK' && quickEditIndex !== null && (
           <div className="qe-overlay">
               <div className="qe-card scale-in">
