@@ -36,6 +36,28 @@ const formatDate = (dateStr) => {
     return `${day}/${month}/${year}`;
 };
 
+// 🔥 MOTOR DE COBRANÇA: Calcula quantos dias o cliente está a dever
+  const calcularDiasAtraso = (dataVencStr) => {
+    if (!dataVencStr) return 0;
+
+    let dateVenc;
+    if (Array.isArray(dataVencStr)) {
+        dateVenc = new Date(dataVencStr[0], dataVencStr[1] - 1, dataVencStr[2]);
+    } else {
+        const [year, month, day] = dataVencStr.split('T')[0].split('-');
+        dateVenc = new Date(year, month - 1, day);
+    }
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    dateVenc.setHours(0, 0, 0, 0);
+
+    const diferencaTempo = hoje - dateVenc;
+    const diasAtraso = Math.floor(diferencaTempo / (1000 * 60 * 60 * 24));
+
+    return diasAtraso > 0 ? diasAtraso : 0;
+  };
+
 const ContasReceber = () => {
   const [loading, setLoading] = useState(false);
   const [loadingBaixa, setLoadingBaixa] = useState(false); // 🔥 Novo estado anti-duplo clique
@@ -194,6 +216,16 @@ const ContasReceber = () => {
                     <div style={{display:'flex', alignItems:'center', gap:6, color: conta.status === 'VENCIDA' ? '#ef4444' : 'inherit', fontWeight: conta.status === 'VENCIDA' ? 700 : 400}}>
                       <Calendar size={14}/> {formatDate(conta.dataVencimento)}
                     </div>
+                    {/* 🔥 ALERTA DE DIAS EM ATRASO PARA O FIADO */}
+                                            {conta.status !== 'PAGA' && calcularDiasAtraso(conta.dataVencimento) > 0 && (
+                                                <span style={{
+                                                    fontSize: '0.70rem', backgroundColor: '#fee2e2', color: '#b91c1c',
+                                                    padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', width: 'fit-content',
+                                                    border: '1px solid #fca5a5'
+                                                }}>
+                                                    ⚠️ {calcularDiasAtraso(conta.dataVencimento)} dias em atraso
+                                                </span>
+                                            )}
                   </td>
                   <td style={{fontWeight:700, color: '#1e293b'}}>{formatMoney(conta.valorRestante)}</td>
                   <td><span className={`badge-debt ${conta.status}`}>{conta.status}</span></td>

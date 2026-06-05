@@ -202,6 +202,17 @@ export default function RelatoriosDashboard() {
       } catch (e) { return 0; }
   };
 
+const calcMargemLiquida = () => {
+      try {
+        if(!dadosBase || categoriaAtiva !== 'financeiro') return 0;
+        const ebitda = calcEBITDA();
+        const dreData = Array.isArray(dadosBase.dre) ? dadosBase.dre : [];
+        const receita = dreData.find(i => i?.name?.includes("Receita"))?.valor || 0;
+
+        return receita > 0 ? (ebitda / receita) * 100 : 0;
+      } catch (e) { return 0; }
+  };
+
   return (
     <div className="rel-container">
       <svg style={{ height: 0, width: 0, position: 'absolute' }}>
@@ -360,12 +371,15 @@ export default function RelatoriosDashboard() {
                <div className="rel-kpi-grid">
                   <KpiCard title="EBITDA Operacional" value={formatarMoeda(calcEBITDA())} subtext="Geração de Caixa Real" icon={Landmark} trend="up" highlight
                            infoText="Lucro puramente operacional (antes de juros e impostos). A verdadeira saúde da empresa." />
+                  {/* 🔥 NOVO KPI CORPORATIVO: MARGEM LÍQUIDA */}
+                                    <KpiCard title="Margem Líquida" value={`${calcMargemLiquida().toFixed(1)}%`} subtext="Rentabilidade" icon={Scale} trend={calcMargemLiquida() > 15 ? "up" : "down"}
+                                             infoText="Quantos centavos de lucro puro a loja ganha para cada R$ 1,00 vendido. Ideal > 15%." />
                   <KpiCard title="Saldo em Caixa" value={formatarMoeda(dadosBase.saldo)} subtext="Atual" icon={Wallet} trend="neutral"
                            infoText="Projeção líquida: (Receitas + Entradas) - Pagamentos agendados." />
                   <KpiCard title="A Pagar" value={formatarMoeda(dadosBase.aPagar)} subtext="Despesas" icon={ArrowDownCircle} trend="down"
                            infoText="Total de obrigações de saída no período selecionado." />
-                  <KpiCard title="A Receber" value={formatarMoeda(dadosBase.aReceber)} subtext="Previsão" icon={ArrowUpCircle} trend="up"
-                           infoText="Entradas programadas (cartões a cair, boletos a receber)." />
+                  <KpiCard title="A Receber D+1" value={formatarMoeda(dadosBase.aReceber)} subtext="Cartões/Fiado" icon={ArrowUpCircle} trend="up" highlight
+                                             infoText="O que vai cair na conta bancária (Garantido pelo motor D+1 Útil)." />
                </div>
                <SectionHeader icon={Wallet} title="Fluxo e Despesas" />
                <div className="rel-chart-grid">
