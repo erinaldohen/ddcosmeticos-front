@@ -11,7 +11,7 @@ import {
   Layers, FileText, FileSpreadsheet, ArrowUpRight, ArrowDownRight,
   Sparkles, AlertTriangle, Target, ShoppingBag, PiggyBank, Wallet,
   BarChart3, Briefcase, ArrowDownCircle, ArrowUpCircle, Scale, ShieldAlert, HelpCircle,
-  Landmark, Building2
+  Landmark, Building2, ShoppingCart, RefreshCcw, Clock, Maximize2, X
 } from "lucide-react";
 import './Relatorios.css';
 
@@ -22,9 +22,9 @@ const BRAND = { primary: '#ec4899', secondary: '#3b82f6', accent: '#8b5cf6', suc
 const BRAND_PALETTE = [BRAND.secondary, BRAND.primary, BRAND.accent, BRAND.success, BRAND.warning, BRAND.slate];
 const formatarMoeda = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
 
-// ✅ ATUALIZAÇÃO DE UX: Rótulos percentuais nos gráficos de Pizza
+// Rótulos percentuais nos gráficos de Pizza
 const renderLabelEmPorcentagem = ({ percent }) => {
-  if (percent < 0.05) return null; // Esconde se for muito pequeno para não sobrepor texto
+  if (percent < 0.05) return null;
   return `${(percent * 100).toFixed(1)}%`;
 };
 
@@ -53,14 +53,21 @@ const SectionHeader = ({ icon: Icon, title }) => (
   </div>
 );
 
-const ChartCard = ({ title, infoText, onDownload, insight, children, fullWidth = false, isLoading = false }) => (
+const ChartCard = ({ title, infoText, onDownload, onExpand, insight, children, fullWidth = false, isLoading = false }) => (
   <div className={`rel-chart-card ${fullWidth ? 'col-span-full' : ''}`}>
     <div className="rcc-header">
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <h3>{title}</h3>
         {infoText && <InfoTooltip text={infoText} />}
       </div>
-      <button onClick={onDownload} title="Exportar dados deste gráfico para Excel"><Download size={18} /></button>
+      <div style={{ display: 'flex', gap: '8px' }}>
+        {onExpand && (
+          <button onClick={onExpand} title="Ver Análise Completa" className="btn-expand">
+            <Maximize2 size={16} /> Detalhar
+          </button>
+        )}
+        <button onClick={onDownload} title="Exportar dados deste gráfico para Excel"><Download size={18} /></button>
+      </div>
     </div>
     <div className="rcc-content" style={{ width: '100%', height: 300 }}>
       {isLoading ? <div className="rel-spinner"></div> : <ResponsiveContainer width="99%" height={300}>{children}</ResponsiveContainer>}
@@ -99,6 +106,7 @@ export default function RelatoriosDashboard() {
 
   const [dadosBase, setDadosBase] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [modalDreAberto, setModalDreAberto] = useState(false);
 
   const carregarRelatorio = async () => {
     setLoading(true);
@@ -149,6 +157,22 @@ export default function RelatoriosDashboard() {
     } catch (e) { toast.update(toastId, { render: "Falha ao compilar balanço. Verifique conexão.", type: "error", isLoading: false, autoClose: 3000 }); }
   };
 
+const exportarDreAnalitico = async () => {
+    const toastId = toast.loading("A Consultora IA está a redigir a Análise do DRE...");
+    try {
+      const response = await api.get('/relatorios/dre-analitico/pdf', {
+        params: { inicio: dataInicio, fim: dataFim },
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a'); link.href = url; link.setAttribute('download', `DRE_Analitico_${dataFim}.pdf`);
+      document.body.appendChild(link); link.click(); link.parentNode.removeChild(link);
+      toast.update(toastId, { render: "Análise DRE gerada com sucesso!", type: "success", isLoading: false, autoClose: 4000 });
+    } catch (err) {
+      toast.update(toastId, { render: "Erro ao gerar a Análise DRE.", type: "error", isLoading: false, autoClose: 5000 });
+    }
+  };
+
   const exportarExcel = (nomeArquivo, dadosArray) => {
     if (!dadosArray || dadosArray.length === 0) {
       toast.warn("Não existem dados nos gráficos para gerar o Excel.");
@@ -192,8 +216,10 @@ export default function RelatoriosDashboard() {
   const calcEBITDA = () => {
       try {
         if(!dadosBase || categoriaAtiva !== 'financeiro') return 0;
-        const dreData = Array.isArray(dadosBase.dre) ? dadosBase.dre : [];
+        // Se o Backend já enviar o DRE completo, usamos ele direto
+        if(dadosBase.dreCompleto) return dadosBase.dreCompleto.ebitda;
 
+        const dreData = Array.isArray(dadosBase.dre) ? dadosBase.dre : [];
         const receita = dreData.find(i => i?.name?.includes("Receita"))?.valor || 0;
         const cmv = dreData.find(i => i?.name?.includes("CMV"))?.valor || 0;
         const despOp = dreData.find(i => i?.name?.includes("Despesas"))?.valor || 0;
@@ -202,9 +228,11 @@ export default function RelatoriosDashboard() {
       } catch (e) { return 0; }
   };
 
-const calcMargemLiquida = () => {
+  const calcMargemLiquida = () => {
       try {
         if(!dadosBase || categoriaAtiva !== 'financeiro') return 0;
+        if(dadosBase.dreCompleto) return (dadosBase.dreCompleto.lucroLiquido / dadosBase.dreCompleto.receitaBruta) * 100;
+
         const ebitda = calcEBITDA();
         const dreData = Array.isArray(dadosBase.dre) ? dadosBase.dre : [];
         const receita = dreData.find(i => i?.name?.includes("Receita"))?.valor || 0;
@@ -224,7 +252,7 @@ const calcMargemLiquida = () => {
       <div className="rel-header no-print">
         <div className="rh-title">
           <div className="rh-icon"><TrendingUp size={28} /></div>
-          <div><h1>Central de Inteligência</h1><p>Visão Estratégica DD Cosméticos</p></div>
+          <div><h1>Central de Inteligência</h1><p>Visão Estratégica</p></div>
         </div>
 
         <div className="rh-actions">
@@ -260,7 +288,6 @@ const calcMargemLiquida = () => {
         <button className={categoriaAtiva === "vendas" ? "active" : ""} onClick={() => setCategoriaAtiva("vendas")}><TrendingUp size={16}/> Comercial</button>
         <button className={categoriaAtiva === "estoque" ? "active" : ""} onClick={() => setCategoriaAtiva("estoque")}><PackageCheck size={16}/> Estoque</button>
         <button className={categoriaAtiva === "financeiro" ? "active" : ""} onClick={() => setCategoriaAtiva("financeiro")}><DollarSign size={16}/> Financeiro</button>
-        {/* A Aba Fiscal foi removida daqui, como pedido (sem CBS e IBS) */}
       </div>
 
       <div id="dashboard-print-area" className="rel-content-area">
@@ -272,6 +299,13 @@ const calcMargemLiquida = () => {
                          infoText="Soma de todas as vendas antes de deduzir custos." />
                 <KpiCard title="Cupom Médio" value={formatarMoeda(dadosBase.ticketMedio)} subtext="Média real" icon={ShoppingBag} trend="neutral"
                          infoText="Valor médio que cada cliente gasta na loja." />
+
+                {/* 🔥 NOVOS KPIs COMERCIAIS */}
+                <KpiCard title="UPA (Itens/Cupom)" value={dadosBase.upa?.toFixed(2) || "0.00"} subtext="Cross-sell" icon={ShoppingCart} trend={dadosBase.upa > 1.5 ? "up" : "down"} highlight
+                         infoText="Unidades por Atendimento. Acima de 2.0 significa que a equipe vende produtos adicionais bem." />
+                <KpiCard title="Taxa Recompra" value={`${dadosBase.taxaRecompra?.toFixed(1) || "0"}%`} subtext="Fidelização" icon={RefreshCcw} trend="up"
+                         infoText="Percentual de vendas feitas para clientes que já compraram antes." />
+
                 <KpiCard title="Total Pedidos" value={dadosBase.quantidadeVendas || 0} subtext="Volume" icon={Target} trend="up"
                          infoText="Quantidade total de vendas concretizadas." />
                 <KpiCard title="Margem Contribuição" value={formatarMoeda(dadosBase.lucroBrutoEstimado)} subtext="Lucro Bruto" icon={PiggyBank} trend="up"
@@ -287,7 +321,6 @@ const calcMargemLiquida = () => {
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={BRAND.grid} />
                       <XAxis dataKey="data" tick={{fill: BRAND.slate, fontSize: 11}} dy={10} />
                       <YAxis axisLine={false} tickLine={false} tick={{fill: BRAND.slate, fontSize: 11}} tickFormatter={(v) => `R$${v}`} />
-                      {/* ✅ O HOVER EM DINHEIRO: */}
                       <Tooltip formatter={(value) => [formatarMoeda(value), "Total"]} />
                       <Area type="monotone" dataKey="total" name="Vendas" fill="url(#gradSecondary)" stroke={BRAND.secondary} strokeWidth={4} />
                     </AreaChart>
@@ -300,7 +333,6 @@ const calcMargemLiquida = () => {
                       <Pie data={dadosBase.porPagamento || []} innerRadius={60} outerRadius={80} dataKey="valorTotal" nameKey="formaPagamento" label={renderLabelEmPorcentagem}>
                         {(dadosBase.porPagamento || []).map((e, i) => <Cell key={i} fill={BRAND_PALETTE[i % BRAND_PALETTE.length]} />)}
                       </Pie>
-                      {/* ✅ O HOVER EM DINHEIRO: */}
                       <Tooltip formatter={(value) => formatarMoeda(value)} />
                       <Legend verticalAlign="bottom" iconType="circle" />
                     </PieChart>
@@ -328,6 +360,13 @@ const calcMargemLiquida = () => {
                          infoText="Valor pago aos fornecedores pelas mercadorias que estão na prateleira." />
                 <KpiCard title="GMROI (Lucro p/ R$1)" value={`R$ ${calcGMROI().toFixed(2)}`} subtext="Retorno sobre Estoque" icon={TrendingUp} trend="up" highlight
                          infoText="Indicador Ouro: Retorno gerado para cada 1 Real imobilizado em estoque." />
+
+                {/* 🔥 NOVOS KPIs ESTOQUE */}
+                <KpiCard title="Giro de Estoque" value={`${dadosBase.giroEstoque?.toFixed(1) || "0"}x`} subtext="No ano" icon={RefreshCcw} trend="up"
+                         infoText="Quantas vezes o estoque se renova. Giro alto significa vendas rápidas." />
+                <KpiCard title="Risco Validade (90d)" value={formatarMoeda(dadosBase.riscoValidade || 0)} subtext="Perda Potencial" icon={Clock} trend="down" highlight
+                         infoText="Capital investido em produtos que vencem nos próximos 90 dias." />
+
                 <KpiCard title="Mix Produtos" value={dadosBase.mixProdutos || 0} subtext="Itens ativos" icon={Briefcase} trend="up"
                          infoText="Quantidade de SKUs distintos ativos e à venda." />
                 <KpiCard title="Ruptura" value={`${dadosBase.ruptura || 0}%`} subtext="Risco de falta" icon={AlertTriangle} trend="down"
@@ -356,7 +395,6 @@ const calcMargemLiquida = () => {
                     <Pie data={dadosBase.aging || []} innerRadius={60} outerRadius={80} dataKey="value" label={renderLabelEmPorcentagem}>
                       {(dadosBase.aging || []).map((e, i) => <Cell key={i} fill={BRAND_PALETTE[i % BRAND_PALETTE.length]} />)}
                     </Pie>
-                    {/* ✅ O HOVER EM DINHEIRO (caso os valores do backend sejam monetários, se forem qtd, ignore o formatarMoeda) */}
                     <Tooltip formatter={(value) => formatarMoeda(value)} />
                     <Legend verticalAlign="bottom" iconType="circle" />
                   </PieChart>
@@ -371,22 +409,28 @@ const calcMargemLiquida = () => {
                <div className="rel-kpi-grid">
                   <KpiCard title="EBITDA Operacional" value={formatarMoeda(calcEBITDA())} subtext="Geração de Caixa Real" icon={Landmark} trend="up" highlight
                            infoText="Lucro puramente operacional (antes de juros e impostos). A verdadeira saúde da empresa." />
-                  {/* 🔥 NOVO KPI CORPORATIVO: MARGEM LÍQUIDA */}
-                                    <KpiCard title="Margem Líquida" value={`${calcMargemLiquida().toFixed(1)}%`} subtext="Rentabilidade" icon={Scale} trend={calcMargemLiquida() > 15 ? "up" : "down"}
-                                             infoText="Quantos centavos de lucro puro a loja ganha para cada R$ 1,00 vendido. Ideal > 15%." />
-                  <KpiCard title="Saldo em Caixa" value={formatarMoeda(dadosBase.saldo)} subtext="Atual" icon={Wallet} trend="neutral"
-                           infoText="Projeção líquida: (Receitas + Entradas) - Pagamentos agendados." />
+                  <KpiCard title="Margem Líquida" value={`${calcMargemLiquida().toFixed(1)}%`} subtext="Rentabilidade" icon={Scale} trend={calcMargemLiquida() > 15 ? "up" : "down"}
+                           infoText="Quantos centavos de lucro puro a loja ganha para cada R$ 1,00 vendido. Ideal > 15%." />
+
+                  {/* 🔥 NOVOS KPIs FINANCEIROS */}
+                  <KpiCard title="Inadimplência" value={`${dadosBase.taxaInadimplencia?.toFixed(1) || "0"}%`} subtext="Risco Fiado" icon={ShieldAlert} trend="down" highlight
+                           infoText="Taxa de atraso do crediário. Mantenha abaixo de 5%." />
+                  <KpiCard title="Ponto Equilíbrio (Dia)" value={formatarMoeda(dadosBase.pontoEquilibrio || 0)} subtext="Meta Mínima" icon={Target} trend="neutral"
+                           infoText="Quanto a loja precisa vender por dia apenas para pagar os custos fixos." />
+
                   <KpiCard title="A Pagar" value={formatarMoeda(dadosBase.aPagar)} subtext="Despesas" icon={ArrowDownCircle} trend="down"
                            infoText="Total de obrigações de saída no período selecionado." />
                   <KpiCard title="A Receber D+1" value={formatarMoeda(dadosBase.aReceber)} subtext="Cartões/Fiado" icon={ArrowUpCircle} trend="up" highlight
-                                             infoText="O que vai cair na conta bancária (Garantido pelo motor D+1 Útil)." />
+                           infoText="O que vai cair na conta bancária (Garantido pelo motor D+1 Útil)." />
                </div>
+
                <SectionHeader icon={Wallet} title="Fluxo e Despesas" />
                <div className="rel-chart-grid">
                   <ChartCard title="DRE Simplificado"
                              infoText="DRE: Compara as Receitas Brutas com o CMV e os Custos Operacionais."
+                             onExpand={() => setModalDreAberto(true)} /* 🔥 BOTÃO DO DRE */
                              fullWidth isLoading={loading} onDownload={() => exportarExcel("DRE", dadosBase.dre)}
-                             insight="O 'Resultado' reflete o ganho real. Se a barra de Despesas passar do CMV, a operação está com custos fixos pesados.">
+                             insight="O 'Resultado' reflete o ganho real. Clique em Detalhar para ver o balanço oficial da contabilidade.">
                     <BarChart data={dadosBase.dre || []} margin={{top: 20, bottom: 20}}>
                       <CartesianGrid vertical={false} stroke={BRAND.grid}/>
                       <XAxis dataKey="name" axisLine={false} tick={{fill: BRAND.slate, fontWeight: 600}} />
@@ -401,6 +445,79 @@ const calcMargemLiquida = () => {
            </div>
         )}
       </div>
+
+      {/* ========================================================= */}
+      {/* 🔥 MODAL DO DRE COMPLETO E MODERNO */}
+      {/* ========================================================= */}
+      {modalDreAberto && dadosBase?.dreCompleto && (
+        <div className="modal-overlay">
+          <div className="modal-dre-content">
+             <div className="modal-dre-header">
+                <div>
+                   <h2>Demonstração do Resultado do Exercício (DRE)</h2>
+                   <p>Visão Analítica Corporativa - Período Selecionado</p>
+                </div>
+                <button onClick={() => setModalDreAberto(false)} className="btn-close-modal"><X size={24} /></button>
+             </div>
+
+             <div className="dre-table-container">
+                <table className="dre-table">
+                   <tbody>
+                      <tr className="dre-row-master">
+                         <td>Receita Bruta de Vendas</td>
+                         <td className="text-right">{formatarMoeda(dadosBase.dreCompleto.receitaBruta)}</td>
+                      </tr>
+                      <tr className="dre-row-deduction">
+                         <td>(-) Deduções e Impostos (Simples/ICMS)</td>
+                         <td className="text-right text-danger">{formatarMoeda(dadosBase.dreCompleto.deducoesImpostos)}</td>
+                      </tr>
+                      <tr className="dre-row-subtotal">
+                         <td>(=) Receita Líquida</td>
+                         <td className="text-right">{formatarMoeda(dadosBase.dreCompleto.receitaLiquida)}</td>
+                      </tr>
+
+                      <tr><td colSpan="2" style={{height:'15px'}}></td></tr>
+
+                      <tr className="dre-row-deduction">
+                         <td>(-) Custo da Mercadoria Vendida (CMV)</td>
+                         <td className="text-right text-danger">{formatarMoeda(dadosBase.dreCompleto.cmv)}</td>
+                      </tr>
+                      <tr className="dre-row-master bg-highlight">
+                         <td>(=) Lucro Bruto</td>
+                         <td className="text-right">{formatarMoeda(dadosBase.dreCompleto.lucroBruto)}</td>
+                      </tr>
+
+                      <tr><td colSpan="2" style={{height:'15px'}}></td></tr>
+
+                      <tr className="dre-row-deduction">
+                         <td>(-) Despesas Operacionais (Fixas/Variáveis)</td>
+                         <td className="text-right text-danger">{formatarMoeda(dadosBase.dreCompleto.despesasOperacionais)}</td>
+                      </tr>
+                      <tr className="dre-row-master">
+                         <td>(=) EBITDA (Resultado Operacional)</td>
+                         <td className="text-right text-success">{formatarMoeda(dadosBase.dreCompleto.ebitda)}</td>
+                      </tr>
+
+                      <tr><td colSpan="2" style={{height:'15px'}}></td></tr>
+
+                      <tr className="dre-row-master dre-final-result">
+                         <td>(=) LUCRO LÍQUIDO DO EXERCÍCIO</td>
+                         <td className="text-right">{formatarMoeda(dadosBase.dreCompleto.lucroLiquido)}</td>
+                      </tr>
+                   </tbody>
+                </table>
+             </div>
+
+             <div className="modal-dre-footer">
+                             <NanoInsightIA insight="O EBITDA indica a geração de caixa real da operação antes de impostos sobre o lucro e depreciação." tipo="success" />
+                             <button onClick={exportarDreAnalitico} className="btn-print-dre" disabled={loading}>
+                                {loading ? <RefreshCcw size={18} className="spin" /> : <FileText size={18} />}
+                                Gerar Análise IA em PDF
+                             </button>
+                          </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

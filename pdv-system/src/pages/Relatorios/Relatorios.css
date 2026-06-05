@@ -182,3 +182,68 @@
   .rel-chart-card, .rel-kpi-card { break-inside: avoid; border: 1px solid #ccc; box-shadow: none; margin-bottom: 20px; }
   .rcc-footer-insight { border: 1px solid #ddd; background: #fafafa; }
 }
+/* ==========================================
+   ESTILOS DO MODAL DRE CORPORATIVO
+   ========================================== */
+.btn-expand {
+    background: #eff6ff; color: #3b82f6; border: 1px solid #bfdbfe;
+    padding: 6px 12px; border-radius: 6px; cursor: pointer;
+    font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; gap: 6px;
+    transition: 0.2s;
+}
+.btn-expand:hover { background: #dbeafe; }
+
+.modal-dre-content {
+    background: white; padding: 30px; border-radius: 16px; width: 650px; max-width: 95%;
+    box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); animation: modalIn 0.3s ease-out;
+}
+.modal-dre-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 20px;
+}
+.modal-dre-header h2 { margin: 0 0 5px 0; font-size: 1.4rem; color: #0f172a; font-weight: 800; }
+.modal-dre-header p { margin: 0; color: #64748b; font-size: 0.95rem; }
+.btn-close-modal { background: none; border: none; color: #94a3b8; cursor: pointer; }
+.btn-close-modal:hover { color: #ef4444; }
+
+/* Tabela Analítica do DRE */
+.dre-table-container { border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.dre-table { width: 100%; border-collapse: collapse; font-family: 'Inter', sans-serif; }
+.dre-table td { padding: 12px 16px; font-size: 0.95rem; color: #334155; border-bottom: 1px dashed #e2e8f0; }
+.text-right { text-align: right; font-variant-numeric: tabular-nums; }
+.text-danger { color: #ef4444; }
+.text-success { color: #10b981; }
+
+.dre-row-master td { font-weight: 700; color: #0f172a; background: #f8fafc; border-bottom: 1px solid #cbd5e1; }
+.dre-row-deduction td { padding-left: 30px; color: #64748b; font-size: 0.9rem; }
+.dre-row-subtotal td { font-weight: 600; color: #3b82f6; }
+.bg-highlight td { background: #eff6ff; }
+
+.dre-final-result td {
+    background: #0f172a; color: white; font-size: 1.1rem; font-weight: 800; border-bottom: none;
+}
+
+.modal-dre-footer {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 25px; padding-top: 20px; border-top: 1px solid #f1f5f9;
+}
+.btn-print-dre {
+    background: #0f172a;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+.btn-print-dre:hover {
+    background: #1e293b;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+}
