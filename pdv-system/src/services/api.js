@@ -71,17 +71,23 @@ api.interceptors.response.use(
         url.includes('/fiscal/validar') ||
         url.includes('/estoque/historico-entradas');
 
-    // SE O CRACHÁ FOR INVÁLIDO OU EXPIRADO (401 ou 403)
-    if (status === 401 || status === 403) {
-      if (url.includes('login') || isSilentSearch) return Promise.reject(error);
+    // SE O CRACHÁ FOR INVÁLIDO OU EXPIRADO
+        if (status === 401 || status === 403) {
+          // Adicione a rota de vendas aqui para não expulsar o usuário no meio da venda
+          if (url.includes('login') || isSilentSearch || url.includes('/vendas')) {
+              if (url.includes('/vendas')) {
+                  toast.error("Sua sessão foi perdida. Por favor, tente novamente.");
+              }
+              return Promise.reject(error);
+          }
 
-      if (!isRedirecting) {
-        isRedirecting = true;
-        localStorage.removeItem('user'); // Apaga o crachá velho
-        toast.error("Sessão expirada ou sem permissão.");
-        setTimeout(() => { window.location.href = '/login'; isRedirecting = false; }, 1500);
-      }
-    }
+          if (!isRedirecting) {
+            isRedirecting = true;
+            // Opcional: localStorage.removeItem('user'); // Comente isto para testar se a sessão volta sozinha
+            toast.error("Sessão expirada.");
+            setTimeout(() => { window.location.href = '/login'; isRedirecting = false; }, 1500);
+          }
+        }
 
     if (status === 400 && !url.includes('login')) {
       toast.warning(error.response.data?.mensagem || "Operação inválida.");

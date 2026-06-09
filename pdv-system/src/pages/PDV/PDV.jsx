@@ -648,14 +648,27 @@ const PDV = () => {
           let response = await api.post('/vendas', payload);
           let vendaResult = response.data;
 
-          if (vendaResult.status === 'REJEITADA') throw new Error("A SEFAZ rejeitou o documento. Verifique os dados fiscais.");
+          if (vendaResult.status === 'REJEITADA') {
+                        // Força a exibição de TUDO o que o backend devolveu para descobrirmos o nome do campo
+                        console.log("DADOS DA REJEIÇÃO:", vendaResult);
+                        const motivo = vendaResult.motivoRejeicao || vendaResult.mensagemSefaz || vendaResult.motivo || vendaResult.mensagem || JSON.stringify(vendaResult);
+                        throw new Error(`Motivo SEFAZ: ${motivo}`);
+                    }
 
           toast.success(clienteAvulso.modoCadastro === 'PJ' ? "NF-e (B2B) Emitida!" : "Cupom (NFC-e) Autorizado!");
           setVendaFinalizada({...vendaResult, tipoNota: payload.tipoNota});
       } catch (err) {
-          toast.error(err.response?.data?.message || err.message || "Falha de comunicação com o servidor.");
+          // 🔥 GARANTIA: O interceptor cuida do redirect, mas o Loading deve parar aqui
+                    setLoading(false);
+
+                    // Tratamento para não mostrar erros duplicados se o interceptor já mostrou o toast de sessão expirada
+                    if (err.response?.status !== 401 && err.response?.status !== 403) {
+                       toast.error(err.response?.data?.message || err.message || "Falha de comunicação com o servidor.");
+                    }
       } finally {
-          setLoading(false);
+          // Nota: O seu código original já tinha o setLoading(false) aqui,
+        // mas garantir dentro do catch é uma boa prática defensiva.
+        setLoading(false);
       }
   };
 

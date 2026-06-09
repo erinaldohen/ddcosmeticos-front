@@ -397,28 +397,43 @@ export default function ProdutoList() {
     finally { setLoadingPrint(null); }
   };
 
-  // 🔥 FERRAMENTAS DA IA
-  const handleQuickFix = (tipo, mensagemConfirmacao, nomeCorrecao) => {
-      setConfirmModal({
-        isOpen: true, type: 'robot', title: `IA: ${nomeCorrecao}`, message: mensagemConfirmacao, confirmText: 'Aplicar Correção',
-        onConfirm: async () => {
-          const toastId = toast.loading(`🤖 Solucionando com IA...`);
-          try {
-            await api.post(`/produtos/quick-fix-ia/${tipo}`);
-            toast.update(toastId, { render: "Correção em massa aplicada!", type: "success", isLoading: false, autoClose: 2000 });
-            carregarProdutos(page, termoBusca);
-          } catch (e) { toast.update(toastId, { render: "Ocorreu um erro no processo da IA.", type: "error", isLoading: false, autoClose: 3000 }); }
-        }
-      });
-  };
+  // 🔥 FERRAMENTAS DA IA E AUDITORIA EM MASSA
+    const handleQuickFix = (acao, mensagemConfirmacao, nomeCorrecao) => {
+        setConfirmModal({
+          isOpen: true, type: 'robot', title: `Auditoria: ${nomeCorrecao}`, message: mensagemConfirmacao, confirmText: 'Executar Varredura',
+          onConfirm: async () => {
+            const toastId = toast.loading(`A varrer a base de dados...`);
+            try {
+              const response = await api.post(`/produtos/quick-fix-ia/${acao}`);
 
-  const handleCorrigirNcms = () => {
-    handleQuickFix('CORRIGIR_NCM', 'O sistema irá varrer a base de dados para corrigir NCMs baseando-se na inteligência fiscal. Confirmar?', 'Auditoria Fiscal');
-  };
+              // 🔥 A CORREÇÃO: Captura a mensagem real retornada pelo Java!
+              // O Backend devolve algo como: "Foram corrigidos 45 NCMs com sucesso."
+              let mensagemRetorno = "Correção aplicada com sucesso!";
+              if (response.data) {
+                  mensagemRetorno = typeof response.data === 'string'
+                      ? response.data
+                      : (response.data.mensagem || response.data.message || mensagemRetorno);
+              }
 
-  const handleCorrigirEANsInternos = () => {
-    handleQuickFix('NORMALIZAR_EAN', 'Deseja recalcular e padronizar o dígito verificador GS1 para todos os códigos internos?', 'Normalização EAN');
-  };
+              toast.update(toastId, { render: String(mensagemRetorno), type: "success", isLoading: false, autoClose: 6000 });
+
+              // Recarrega a tabela imediatamente para exibir as novas etiquetas verdes (corrigidas)
+              carregarProdutos(page, termoBusca);
+            } catch (e) {
+              const msgErro = e.response?.data?.message || e.response?.data || "Falha na comunicação com o servidor.";
+              toast.update(toastId, { render: String(msgErro), type: "error", isLoading: false, autoClose: 5000 });
+            }
+          }
+        });
+    };
+
+    const handleCorrigirNcms = () => {
+      handleQuickFix('CORRIGIR_NCM', 'O sistema irá varrer todos os produtos cadastrados e corrigir NCMs em branco ou inválidos com base nos padrões. Confirmar?', 'Correção Rápida de NCM');
+    };
+
+    const handleCorrigirEANsInternos = () => {
+      handleQuickFix('NORMALIZAR_EAN', 'Deseja varrer a base para recalcular e padronizar o dígito verificador GS1 para todos os códigos internos?', 'Normalização de EANs');
+    };
 
   // 🔥 MODAL DE DIVERGÊNCIA DE GÔNDOLA
   const abrirModalDivergencia = async () => {
