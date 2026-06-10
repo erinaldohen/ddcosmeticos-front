@@ -3,7 +3,7 @@ import api from '../../services/api';
 import { toast } from 'react-toastify';
 import {
   Barcode, CheckCircle2, AlertCircle, Search,
-  PackageX, Camera, ChevronRight, Loader2
+  PackageX, ChevronRight, Loader2, Info, ShoppingCart, Tag
 } from 'lucide-react';
 import './AuditoriaPreco.css';
 
@@ -14,7 +14,6 @@ const AuditoriaPreco = () => {
   const [notFound, setNotFound] = useState(false);
   const inputRef = useRef(null);
 
-  // Foco perpétuo no input para agilizar o processo de bipa-bipa
   useEffect(() => {
     const timer = setTimeout(() => {
       if (inputRef.current) inputRef.current.focus();
@@ -33,7 +32,6 @@ const AuditoriaPreco = () => {
     try {
       const response = await api.get(`/produtos/codigo/${cleanCode}`);
       setProduto(response.data);
-      // Feedback táctil/sonoro
       if (navigator.vibrate) navigator.vibrate(50);
     } catch (error) {
       setNotFound(true);
@@ -50,95 +48,123 @@ const AuditoriaPreco = () => {
 
   const reportarDivergencia = async () => {
     if (!produto) return;
+    const toastId = toast.loading("Comunicando divergência...");
     try {
       await api.post(`/produtos/${produto.id}/divergencia`);
-      toast.warning("Divergência registada para correção.");
+      toast.update(toastId, { render: "Divergência registada com sucesso!", type: "warning", isLoading: false, autoClose: 3000 });
       setProduto(null);
     } catch (error) {
-      toast.error("Falha ao comunicar divergência.");
+      toast.update(toastId, { render: "Falha ao comunicar erro.", type: "error", isLoading: false, autoClose: 3000 });
     }
   };
 
   return (
-    <div className="auditoria-page-layout fade-in">
-      <div className="auditoria-hero">
-        <h1>Auditoria de Gôndola</h1>
-        <div className="status-scanner-badge">
-          <div className="dot"></div>
-          Pronto para escanear
+    <div className="audit-container fade-in">
+      <div className="audit-header">
+        <div className="header-content">
+          <h1>Auditoria de Gôndola</h1>
+          <p>Validação instantânea de preços e estoque</p>
+        </div>
+        <div className="scanner-badge">
+          <div className="pulse-blue"></div>
+          <span>Scanner Ativo</span>
         </div>
       </div>
 
-      {/* ÁREA DO SCANNER */}
-      <div className="scanner-input-container">
-        <div className="icon-box">
-          {loading ? <Loader2 size={24} className="spin" /> : <Search size={24} />}
+      <div className="scanner-section">
+        <div className="scanner-frame">
+          <div className="corner top-left"></div>
+          <div className="corner top-right"></div>
+          <div className="corner bottom-left"></div>
+          <div className="corner bottom-right"></div>
+
+          <div className="input-wrapper">
+            <div className="input-icon">
+              {loading ? <Loader2 className="spin-blue" /> : <Barcode size={28} />}
+            </div>
+            <input
+              ref={inputRef}
+              type="number"
+              inputMode="numeric"
+              placeholder="Aguardando bip..."
+              value={ean}
+              onChange={(e) => setEan(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={loading}
+            />
+            <button
+              className="btn-trigger"
+              onClick={() => buscarProduto(ean)}
+              disabled={!ean || loading}
+            >
+              {loading ? '...' : <ChevronRight size={28} />}
+            </button>
+          </div>
         </div>
-        <input
-          ref={inputRef}
-          type="number"
-          inputMode="numeric"
-          placeholder="Bipe o código de barras..."
-          value={ean}
-          onChange={(e) => setEan(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={loading}
-        />
-        <button
-          className="btn-scan-trigger"
-          onClick={() => buscarProduto(ean)}
-          disabled={!ean || loading}
-        >
-          {loading ? '...' : <ChevronRight size={24} />}
-        </button>
       </div>
 
-      {/* ESTADO: CARREGANDO */}
-      {loading && <div className="loading-shimmer"></div>}
+      {loading && (
+        <div className="loading-container">
+          <div className="shimmer-card"></div>
+        </div>
+      )}
 
-      {/* ESTADO: NÃO ENCONTRADO */}
       {notFound && !loading && (
-        <div className="not-found-state slide-up">
-          <PackageX size={64} strokeWidth={1.5} />
-          <h2>Produto não encontrado</h2>
-          <p>O EAN <strong>{ean}</strong> não consta na base de dados.</p>
-          <button className="btn-back-soft" style={{marginTop: '20px'}} onClick={() => setNotFound(false)}>Tentar outro</button>
+        <div className="state-card not-found-anim">
+          <div className="icon-circle error">
+            <PackageX size={40} />
+          </div>
+          <h2>Código não mapeado</h2>
+          <p>O EAN <strong>{ean}</strong> não foi localizado no sistema.</p>
+          <button className="btn-retry" onClick={() => setNotFound(false)}>Limpar e tentar novo</button>
         </div>
       )}
 
-      {/* ESTADO: PRODUTO ENCONTRADO */}
       {produto && !loading && (
-        <div className="result-card-premium success-mode slide-up">
-          <div className="res-brand">{produto.marca || 'Marca Própria'}</div>
-          <h3 className="res-name">{produto.descricao}</h3>
+        <div className="result-card-modern result-anim">
+          <div className="card-top">
+            <div className="brand-tag">{produto.marca || 'DD Cosméticos'}</div>
+            <h3 className="product-title">{produto.descricao}</h3>
+          </div>
 
-          <div className="price-focus-zone">
-            <span className="label">VALOR ATUAL NO CAIXA</span>
-            <span className="value">
+          <div className="price-display-box">
+            <div className="price-label">
+               <Tag size={14} /> PREÇO DE VENDA (PDV)
+            </div>
+            <div className="price-value">
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(produto.precoVenda || 0)}
-            </span>
+            </div>
           </div>
 
-          <div className="stock-pill">
-            <Barcode size={18} />
-            <span>{produto.codigoBarras}</span>
-            <span style={{margin: '0 8px', opacity: 0.3}}>|</span>
-            <span>Estoque: <strong>{produto.quantidadeEmEstoque || 0} un.</strong></span>
+          <div className="info-row">
+            <div className="info-pill">
+              <Barcode size={16} />
+              <span>{produto.codigoBarras}</span>
+            </div>
+            <div className="info-pill">
+              <ShoppingCart size={16} />
+              <span>Estoque: <strong>{produto.quantidadeEmEstoque || 0}</strong> un.</span>
+            </div>
           </div>
 
-          <div className="audit-actions-grid">
-            <button className="btn-audit correct" onClick={() => setProduto(null)}>
-              <CheckCircle2 size={32} />
-              <span>PREÇO OK</span>
+          <div className="action-buttons">
+            <button className="btn-audit-action check" onClick={() => setProduto(null)}>
+              <CheckCircle2 size={24} />
+              <span>PREÇO CORRETO</span>
             </button>
 
-            <button className="btn-audit wrong" onClick={reportarDivergencia}>
-              <AlertCircle size={32} />
-              <span>DIVERGENTE</span>
+            <button className="btn-audit-action warn" onClick={reportarDivergencia}>
+              <AlertCircle size={24} />
+              <span>DIVERGÊNCIA</span>
             </button>
           </div>
         </div>
       )}
+
+      <div className="audit-footer">
+        <Info size={14} />
+        <span>Mantenha o cursor no campo para uso de leitores laser externos.</span>
+      </div>
     </div>
   );
 };

@@ -3,7 +3,7 @@ import {
   Search, DollarSign, User, CheckCircle2,
   FileText, Wallet, ArrowLeft, Phone, Clock, Plus, Trash2,
   Receipt, ShoppingBag, History, CalendarCheck, AlertTriangle, X,
-  Printer, MessageCircle
+  Printer, MessageCircle, AlertOctagon, ChevronRight
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
@@ -28,7 +28,6 @@ const Fiado = () => {
   const [modalHistorico, setModalHistorico] = useState(false);
   const [faturaHistorico, setFaturaHistorico] = useState(null);
 
-  // Estados para envio de WhatsApp Avulso
   const [exibirInputZap, setExibirInputZap] = useState(false);
   const [telefoneAvulso, setTelefoneAvulso] = useState('');
 
@@ -98,39 +97,33 @@ const Fiado = () => {
       if (pagamentos.length === 0) return toast.warning("Adicione pelo menos um pagamento.");
       const payload = { pagamentos: pagamentos.map(p => ({ valor: p.valor, formaPagamento: p.formaPagamento })) };
 
+      const toastId = toast.loading("A processar liquidação...");
       try {
           await api.post(`/financeiro/crediario/receber/${faturaReceber.idFatura}`, payload);
-          toast.success("Pagamento registrado com sucesso!");
+          toast.update(toastId, { render: "Pagamento registrado com sucesso!", type: "success", isLoading: false, autoClose: 3000 });
           setModalReceber(false);
           abrirDashboardCliente(clienteSelecionado);
           carregarDevedores();
       } catch (error) {
-          toast.error("Erro ao processar o recebimento.");
+          toast.update(toastId, { render: "Erro ao processar o recebimento.", type: "error", isLoading: false, autoClose: 4000 });
       }
   };
 
-  // =========================================================
-  // GERAÇÃO DE COMPROVANTE VIA WHATSAPP (COM SUPORTE A AVULSO)
-  // =========================================================
   const handleSendWhatsApp = (numeroInformado = null) => {
       const numeroFinal = numeroInformado || clienteSelecionado?.telefone;
 
       if (!numeroFinal) {
-          // Se não tem telefone cadastrado e nem foi informado, abre o input
           setExibirInputZap(true);
           return;
       }
 
       const numApenas = numeroFinal.replace(/\D/g, '');
-      if (numApenas.length < 10) {
-          return toast.warning("Digite um número de telefone válido com DDD.");
-      }
+      if (numApenas.length < 10) return toast.warning("Digite um número de telefone válido com DDD.");
 
       const primeiroNome = clienteSelecionado.nome.split(' ')[0];
 
       let texto = `*COMPROVANTE DE QUITAÇÃO* ✅\n*DD Cosméticos*\n\n`;
-      texto += `Olá, ${primeiroNome}!\n`;
-      texto += `Aqui está o comprovante da sua compra quitada.\n\n`;
+      texto += `Olá, ${primeiroNome}!\nAqui está o comprovante da sua compra quitada.\n\n`;
       texto += `🧾 *Ref:* ${faturaHistorico.descricao}\n`;
       texto += `📅 *Data da Compra:* ${new Date(faturaHistorico.dataCompra).toLocaleDateString('pt-BR')}\n`;
 
@@ -150,10 +143,7 @@ const Fiado = () => {
 
       texto += `Obrigado pela preferência e confiança! ✨`;
 
-      const url = `https://wa.me/55${numApenas}?text=${encodeURIComponent(texto)}`;
-      window.open(url, '_blank');
-
-      // Reseta os estados caso o envio tenha sucesso
+      window.open(`https://wa.me/55${numApenas}?text=${encodeURIComponent(texto)}`, '_blank');
       setExibirInputZap(false);
       setTelefoneAvulso('');
   };
@@ -173,64 +163,72 @@ const Fiado = () => {
 
   return (
     <div className="crm-fiado-container">
-
       {!clienteSelecionado && (
-        <div className="fade-in">
-            <header className="crm-header">
-                <div>
-                    <h1 className="crm-title"><Wallet size={28} className="text-primary"/> Gestão de Fiado</h1>
-                    <p className="crm-subtitle">Acompanhe as vendas a prazo e o histórico dos seus clientes.</p>
+        <div className="fade-in-up">
+            <header className="fiado-header">
+                <div className="fiado-header-text">
+                    <h1 className="fiado-title"><Wallet size={32} className="text-primary"/> Gestão de Fiado</h1>
+                    <p className="fiado-subtitle">Painel de controle de vendas a prazo e inadimplência.</p>
                 </div>
-                <div className="crm-stats-row">
-                    <div className="crm-stat blue">
-                        <span>A Receber (Total)</span>
-                        <strong>{formatarMoeda(totalGeral)}</strong>
+                <div className="fiado-stats-row">
+                    <div className="fiado-stat-card bg-glass-blue">
+                        <div className="stat-icon"><DollarSign size={24}/></div>
+                        <div className="stat-info">
+                            <span>Total a Receber</span>
+                            <strong>{formatarMoeda(totalGeral)}</strong>
+                        </div>
                     </div>
-                    <div className="crm-stat red">
-                        <span>Em Atraso Crítico</span>
-                        <strong>{formatarMoeda(totalEmAtraso)}</strong>
+                    <div className="fiado-stat-card bg-glass-red">
+                        <div className="stat-icon"><AlertOctagon size={24}/></div>
+                        <div className="stat-info">
+                            <span>Atraso Crítico</span>
+                            <strong>{formatarMoeda(totalEmAtraso)}</strong>
+                        </div>
                     </div>
                 </div>
             </header>
 
-            <div className="crm-search-box">
-                <Search size={22} className="text-muted"/>
+            <div className="fiado-search-bar">
+                <Search size={20} className="search-icon"/>
                 <input
                     type="text"
-                    placeholder="Busque pelo Nome ou CPF do cliente..."
+                    placeholder="Localize um cliente pelo Nome ou CPF/CNPJ..."
                     value={busca} onChange={e => setBusca(e.target.value)}
                 />
             </div>
 
-            <div className="crm-client-grid">
+            <div className="fiado-client-grid">
                 {loading ? (
-                    <div className="crm-empty-state col-span-full"><div className="spinner"></div></div>
+                    <div className="fiado-empty-state col-span-full"><div className="spinner-modern"></div></div>
                 ) : devedoresFiltrados.length === 0 ? (
-                    <div className="crm-empty-state col-span-full">
-                        <CheckCircle2 size={48} color="#10b981"/>
-                        <p>Nenhum cliente inadimplente encontrado.</p>
+                    <div className="fiado-empty-state col-span-full">
+                        <div className="empty-icon-wrap"><CheckCircle2 size={48}/></div>
+                        <h3>Saúde Financeira Impecável</h3>
+                        <p>Nenhum cliente com dívida ativa encontrado nesta pesquisa.</p>
                     </div>
                 ) : (
                     devedoresFiltrados.map(cliente => (
-                        <div key={cliente.idCliente} className="crm-client-card" onClick={() => abrirDashboardCliente(cliente)}>
-                            <div className="client-card-header">
-                                <div className="client-avatar">
-                                    <User size={24}/>
-                                    {cliente.totalAtrasado > 0 && <div className="alert-pulse"></div>}
+                        <div key={cliente.idCliente} className={`fiado-client-card ${cliente.totalAtrasado > 0 ? 'border-danger' : 'border-safe'}`} onClick={() => abrirDashboardCliente(cliente)}>
+                            {cliente.totalAtrasado > 0 && <div className="card-badge-danger">Em Atraso</div>}
+                            <div className="card-main-content">
+                                <div className="card-avatar">
+                                    <User size={28}/>
                                 </div>
-                                <div className="client-info">
+                                <div className="card-user-info">
                                     <h3>{cliente.nome}</h3>
                                     <span>{cliente.documento}</span>
                                 </div>
                             </div>
-                            <div className="client-card-body">
-                                <div className="debt-info">
-                                    <span className="debt-label">Dívida Ativa</span>
-                                    <span className={`debt-value ${cliente.totalAtrasado > 0 ? 'text-danger' : 'text-dark'}`}>
+                            <div className="card-footer-info">
+                                <div className="debt-block">
+                                    <span className="label">Dívida Ativa</span>
+                                    <strong className={cliente.totalAtrasado > 0 ? 'text-danger' : 'text-primary'}>
                                         {formatarMoeda(cliente.totalDevido)}
-                                    </span>
+                                    </strong>
                                 </div>
-                                <button className="btn-view-profile">Ver Histórico</button>
+                                <div className="btn-arrow-go">
+                                    <ChevronRight size={20}/>
+                                </div>
                             </div>
                         </div>
                     ))
@@ -241,99 +239,102 @@ const Fiado = () => {
 
       {clienteSelecionado && (
         <div className="client-dashboard fade-in-up">
-
-            <div className="profile-banner">
-                <button className="btn-back" onClick={voltarParaLista}>
-                    <ArrowLeft size={20}/> Voltar
+            <div className="dashboard-hero-banner">
+                <button className="btn-glass-back" onClick={voltarParaLista}>
+                    <ArrowLeft size={18}/> Voltar ao Painel
                 </button>
-                <div className="profile-content">
-                    <div className="profile-avatar-large"><User size={40}/></div>
-                    <div className="profile-details">
+                <div className="hero-content">
+                    <div className="hero-avatar"><User size={46}/></div>
+                    <div className="hero-details">
                         <h2>{clienteSelecionado.nome}</h2>
-                        <div className="profile-tags">
-                            <span className="tag-cpf"><FileText size={14}/> {clienteSelecionado.documento}</span>
+                        <div className="hero-tags">
+                            <span className="tag-blur"><FileText size={14}/> {clienteSelecionado.documento}</span>
                             {clienteSelecionado.telefone && (
-                                <a href={`https://wa.me/55${clienteSelecionado.telefone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="tag-whatsapp">
-                                    <Phone size={14}/> {clienteSelecionado.telefone}
+                                <a href={`https://wa.me/55${clienteSelecionado.telefone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="tag-whatsapp-btn">
+                                    <Phone size={14}/> WhatsApp
                                 </a>
                             )}
                         </div>
                     </div>
-                    <div className="profile-total-debt">
-                        <span>Total Pendente</span>
+                    <div className="hero-debt-total">
+                        <span>Saldo Devedor</span>
                         <strong>{formatarMoeda(clienteSelecionado.totalDevido)}</strong>
                     </div>
                 </div>
             </div>
 
             {loadingDetalhes ? (
-                 <div className="crm-empty-state"><div className="spinner"></div></div>
+                 <div className="fiado-empty-state"><div className="spinner-modern"></div></div>
             ) : (
-                <div className="dashboard-split">
-
-                    <div className="open-debts-section">
-                        <h3 className="section-title"><AlertTriangle size={20} className="text-warning"/> Aguardando Pagamento</h3>
+                <div className="dashboard-grid-split">
+                    {/* COLUNA ESQUERDA: COBRANÇAS EM ABERTO */}
+                    <div className="debts-column">
+                        <div className="column-header">
+                            <AlertTriangle size={22} className="text-warning"/>
+                            <h3>Aguardando Pagamento</h3>
+                            <span className="badge-count">{faturasEmAberto.length}</span>
+                        </div>
 
                         {faturasEmAberto.length === 0 ? (
-                             <div className="crm-empty-state bg-white">
-                                <CheckCircle2 size={40} color="#10b981"/>
-                                <h3>Cliente em dia!</h3>
-                                <p>Não há nenhuma compra pendente de pagamento.</p>
+                             <div className="fiado-empty-state no-bg">
+                                <div className="empty-icon-wrap success"><CheckCircle2 size={40}/></div>
+                                <h4>Cliente em dia!</h4>
+                                <p>Não há nenhuma pendência em aberto.</p>
                              </div>
                         ) : (
-                            <div className="debts-feed">
+                            <div className="invoice-list">
                                 {faturasEmAberto.map(fatura => (
-                                    <div key={fatura.idFatura} className={`premium-invoice-card ${fatura.status === 'ATRASADO' ? 'delayed' : ''}`}>
-
-                                        <div className="invoice-header">
-                                            <div className="invoice-title">
-                                                <Receipt size={18} className="text-primary"/>
-                                                <strong>{fatura.descricao}</strong>
-                                            </div>
-                                            <div className={`status-pill ${fatura.diasEmAberto > 30 ? 'danger' : 'warning'}`}>
-                                                <Clock size={14}/> {fatura.diasEmAberto} dias em aberto
-                                            </div>
-                                        </div>
-
-                                        <div className="invoice-meta">
-                                            Data da Venda: <strong>{new Date(fatura.dataCompra).toLocaleDateString('pt-BR')}</strong>
-                                        </div>
-
-                                        <div className="invoice-items">
-                                            <div className="items-header"><ShoppingBag size={14}/> Itens da Venda</div>
-                                            {fatura.itens && fatura.itens.length > 0 ? (
-                                                <ul>
-                                                    {fatura.itens.map((item, idx) => (
-                                                        <li key={idx}>
-                                                            <span className="qtd">{item.quantidade}x</span>
-                                                            <span className="nome">{item.descricao}</span>
-                                                            <span className="preco">{formatarMoeda(item.precoUnitario * item.quantidade)}</span>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            ) : (
-                                                <p className="no-items-msg">O detalhamento desta compra não está disponível.</p>
-                                            )}
-                                        </div>
-
-                                        <div className="invoice-footer">
-                                            <div className="invoice-progress">
-                                                <div className="progress-labels">
-                                                    <span>Pago: {formatarMoeda(fatura.valorTotal - fatura.saldoDevedor)}</span>
-                                                    <span>Total: {formatarMoeda(fatura.valorTotal)}</span>
-                                                </div>
-                                                <div className="progress-bar">
-                                                    <div className="progress-fill" style={{width: `${((fatura.valorTotal - fatura.saldoDevedor) / fatura.valorTotal) * 100}%`}}></div>
+                                    <div key={fatura.idFatura} className={`modern-invoice-card ${fatura.status === 'ATRASADO' ? 'is-delayed' : ''}`}>
+                                        <div className="invoice-top">
+                                            <div className="invoice-identity">
+                                                <Receipt size={20} className="text-primary"/>
+                                                <div>
+                                                    <strong>{fatura.descricao}</strong>
+                                                    <span>Venda de {new Date(fatura.dataCompra).toLocaleDateString('pt-BR')}</span>
                                                 </div>
                                             </div>
+                                            <div className={`status-pill ${fatura.diasEmAberto > 30 ? 'critical' : 'warning'}`}>
+                                                <Clock size={14}/> {fatura.diasEmAberto} dias
+                                            </div>
+                                        </div>
 
-                                            <div className="invoice-action">
-                                                <div className="amount-left">
+                                        <div className="invoice-mid">
+                                            <div className="items-resume">
+                                                <div className="items-title"><ShoppingBag size={14}/> Resumo da Compra</div>
+                                                {fatura.itens && fatura.itens.length > 0 ? (
+                                                    <ul>
+                                                        {fatura.itens.map((item, idx) => (
+                                                            <li key={idx}>
+                                                                <span className="q">{item.quantidade}x</span>
+                                                                <span className="n">{item.descricao}</span>
+                                                                <span className="v">{formatarMoeda(item.precoUnitario * item.quantidade)}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    <p className="no-items">Sem detalhamento de itens.</p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="invoice-bot">
+                                            <div className="progress-section">
+                                                <div className="p-labels">
+                                                    <span className="p-paid">Pago: {formatarMoeda(fatura.valorTotal - fatura.saldoDevedor)}</span>
+                                                    <span className="p-total">Total: {formatarMoeda(fatura.valorTotal)}</span>
+                                                </div>
+                                                <div className="p-bar-bg">
+                                                    <div className="p-bar-fill" style={{width: `${((fatura.valorTotal - fatura.saldoDevedor) / fatura.valorTotal) * 100}%`}}></div>
+                                                </div>
+                                            </div>
+
+                                            <div className="action-section">
+                                                <div className="due-amount">
                                                     <span>Falta Pagar</span>
                                                     <strong>{formatarMoeda(fatura.saldoDevedor)}</strong>
                                                 </div>
                                                 <button
-                                                    className="btn-pay-now"
+                                                    className="btn-liquidate"
                                                     onClick={() => {
                                                         setFaturaReceber(fatura);
                                                         setPagamentos([]);
@@ -342,7 +343,7 @@ const Fiado = () => {
                                                         setTimeout(() => inputValorRef.current?.focus(), 100);
                                                     }}
                                                 >
-                                                    <DollarSign size={18}/> Liquidar
+                                                    <DollarSign size={18} strokeWidth={2.5}/> Liquidar
                                                 </button>
                                             </div>
                                         </div>
@@ -352,34 +353,42 @@ const Fiado = () => {
                         )}
                     </div>
 
-                    <div className="history-timeline-section">
-                        <h3 className="section-title"><History size={20} className="text-muted"/> Histórico Quitado</h3>
+                    {/* COLUNA DIREITA: HISTÓRICO */}
+                    <div className="history-column">
+                        <div className="column-header">
+                            <History size={22} className="text-muted"/>
+                            <h3>Histórico Quitado</h3>
+                        </div>
 
                         {faturasPagas.length === 0 ? (
-                            <div className="crm-empty-state no-border">
-                                <p>Nenhum histórico de compras pagas.</p>
+                            <div className="fiado-empty-state no-bg">
+                                <p>Nenhum histórico de quitação.</p>
                             </div>
                         ) : (
-                            <div className="timeline">
+                            <div className="modern-timeline">
                                 {faturasPagas.map(fatura => (
                                     <div
                                         key={fatura.idFatura}
-                                        className="timeline-item fade-in clickable-timeline"
+                                        className="timeline-node"
                                         onClick={() => {
                                             setFaturaHistorico(fatura);
-                                            setExibirInputZap(false); // Reseta caso estivesse aberto de outra fatura
+                                            setExibirInputZap(false);
                                             setTelefoneAvulso('');
                                             setModalHistorico(true);
                                         }}
                                     >
-                                        <div className="timeline-icon"><CalendarCheck size={16}/></div>
-                                        <div className="timeline-content">
-                                            <strong>{fatura.descricao}</strong>
-                                            <span className="timeline-date">Comprado em: {new Date(fatura.dataCompra).toLocaleDateString('pt-BR')}</span>
-                                            {fatura.dataPagamento && (
-                                                <span className="timeline-date" style={{color: '#10b981', fontWeight: 'bold'}}>Pago em: {new Date(fatura.dataPagamento).toLocaleDateString('pt-BR')}</span>
-                                            )}
-                                            <div className="timeline-value">{formatarMoeda(fatura.valorTotal)}</div>
+                                        <div className="node-icon"><CalendarCheck size={16}/></div>
+                                        <div className="node-content">
+                                            <div className="node-head">
+                                                <strong>{fatura.descricao}</strong>
+                                                <span className="node-val">{formatarMoeda(fatura.valorTotal)}</span>
+                                            </div>
+                                            <div className="node-dates">
+                                                <span>Compra: {new Date(fatura.dataCompra).toLocaleDateString('pt-BR')}</span>
+                                                {fatura.dataPagamento && (
+                                                    <span className="text-success font-bold">• Pago: {new Date(fatura.dataPagamento).toLocaleDateString('pt-BR')}</span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -391,32 +400,33 @@ const Fiado = () => {
         </div>
       )}
 
-      {/* MODAL DE PAGAMENTO PREMIUM */}
+      {/* MODAL CHECKOUT PREMIUM */}
       {modalReceber && faturaReceber && (
-          <div className="payment-modal-overlay" onClick={() => setModalReceber(false)}>
-              <div className="payment-modal-card fade-in-up" onClick={e => e.stopPropagation()}>
-
-                  <div className="pm-header">
-                      <button className="pm-close" onClick={() => setModalReceber(false)}><X size={24}/></button>
-                      <h2 className="pm-title">Pagamento de Fatura</h2>
-                      <p className="pm-subtitle">{faturaReceber.descricao}</p>
+          <div className="modern-modal-overlay" onClick={() => setModalReceber(false)}>
+              <div className="modern-modal-card scale-in" onClick={e => e.stopPropagation()}>
+                  <div className="modal-header-clean">
+                      <div>
+                          <h2>Recebimento de Fatura</h2>
+                          <p>{faturaReceber.descricao}</p>
+                      </div>
+                      <button className="btn-close-clean" onClick={() => setModalReceber(false)}><X size={24}/></button>
                   </div>
 
-                  <div className="pm-amount-box">
-                      <span className="pm-amount-label">Valor Restante a Pagar</span>
-                      <div className="pm-amount-value">{formatarMoeda(saldoFaltaPagar)}</div>
+                  <div className="modal-amount-display">
+                      <span>Saldo Devedor Restante</span>
+                      <strong>{formatarMoeda(saldoFaltaPagar)}</strong>
                   </div>
 
-                  <div className="pm-body">
-                      <div className="pm-input-group">
-                          <select className="pm-select" value={metodoPagamento} onChange={e => setMetodoPagamento(e.target.value)}>
+                  <div className="modal-checkout-body">
+                      <label className="input-label-modern">Lançar Pagamento</label>
+                      <div className="checkout-input-row">
+                          <select className="input-select-modern" value={metodoPagamento} onChange={e => setMetodoPagamento(e.target.value)}>
                               <option value="PIX">PIX</option>
                               <option value="DINHEIRO">Dinheiro</option>
-                              <option value="CREDITO">Cartão de Crédito</option>
-                              <option value="DEBITO">Cartão de Débito</option>
+                              <option value="CREDITO">C. Crédito</option>
+                              <option value="DEBITO">C. Débito</option>
                           </select>
-
-                          <div className="pm-money-input">
+                          <div className="input-money-modern">
                               <span>R$</span>
                               <input
                                   ref={inputValorRef}
@@ -427,25 +437,19 @@ const Fiado = () => {
                                   onKeyDown={e => e.key === 'Enter' && handleAdicionarPagamento()}
                               />
                           </div>
-
-                          <button className="pm-btn-add" onClick={handleAdicionarPagamento} disabled={saldoFaltaPagar <= 0} title="Adicionar">
+                          <button className="btn-add-modern" onClick={handleAdicionarPagamento} disabled={saldoFaltaPagar <= 0} title="Lançar valor">
                               <Plus size={24}/>
                           </button>
                       </div>
 
                       {pagamentos.length > 0 && (
-                          <div className="pm-receipt fade-in">
+                          <div className="checkout-receipt-list">
                               {pagamentos.map(p => (
-                                  <div key={p.id} className="pm-receipt-item">
-                                      <div className="pm-ri-info">
-                                          <CheckCircle2 size={16} className="text-success"/>
-                                          {p.formaPagamento}
-                                      </div>
-                                      <div className="pm-ri-val">
+                                  <div key={p.id} className="receipt-row">
+                                      <div className="row-info"><CheckCircle2 size={18} className="text-success"/> {p.formaPagamento}</div>
+                                      <div className="row-val">
                                           {formatarMoeda(p.valor)}
-                                          <button className="pm-btn-del" onClick={() => handleRemoverPagamento(p.id)}>
-                                              <Trash2 size={16}/>
-                                          </button>
+                                          <button className="btn-row-del" onClick={() => handleRemoverPagamento(p.id)}><Trash2 size={16}/></button>
                                       </div>
                                   </div>
                               ))}
@@ -453,142 +457,108 @@ const Fiado = () => {
                       )}
                   </div>
 
-                  <div className="pm-footer">
-                      <button className="pm-btn-cancel" onClick={() => setModalReceber(false)}>Cancelar</button>
-                      <button
-                          className="pm-btn-confirm"
-                          onClick={processarBaixaDeTitulos}
-                          disabled={pagamentos.length === 0}
-                      >
-                          Confirmar Recebimento
+                  <div className="modal-footer-clean">
+                      <button className="btn-cancel-modern" onClick={() => setModalReceber(false)}>Cancelar</button>
+                      <button className="btn-confirm-modern" onClick={processarBaixaDeTitulos} disabled={pagamentos.length === 0}>
+                          Finalizar Recebimento
                       </button>
                   </div>
               </div>
           </div>
       )}
 
-      {/* MODAL DE HISTÓRICO (RECIBO COM DATA DE PAGAMENTO E ZAP AVULSO) */}
+      {/* MODAL DE HISTÓRICO / COMPROVANTE */}
       {modalHistorico && faturaHistorico && (
-          <div className="payment-modal-overlay print-overlay" onClick={() => setModalHistorico(false)}>
-              <div className="payment-modal-card receipt-modal fade-in-up printable-receipt" onClick={e => e.stopPropagation()}>
+          <div className="modern-modal-overlay print-overlay" onClick={() => setModalHistorico(false)}>
+              <div className="modern-modal-card receipt-card scale-in printable-receipt" onClick={e => e.stopPropagation()}>
 
-                  <div className="pm-header" style={{background: '#f8fafc', borderBottom: '1px dashed #cbd5e1'}}>
-                      <button className="pm-close no-print" onClick={() => setModalHistorico(false)}><X size={24}/></button>
+                  <div className="receipt-header">
+                      <button className="btn-close-clean no-print" onClick={() => setModalHistorico(false)} style={{position:'absolute', right: '20px', top: '20px'}}><X size={24}/></button>
 
                       <div className="print-only-logo">
                           <h2>DD Cosméticos</h2>
                           <p>Comprovante de Quitação</p>
                       </div>
 
-                      <div className="d-flex justify-center mb-2 no-print" style={{display: 'flex', justifyContent: 'center'}}>
-                          <div style={{background: '#d1fae5', color: '#059669', padding: '12px', borderRadius: '50%', display: 'flex', alignItems: 'center'}}>
-                              <CheckCircle2 size={36} strokeWidth={2.5}/>
-                          </div>
-                      </div>
-                      <h2 className="pm-title no-print">Comprovante Quitado</h2>
-                      <p className="pm-subtitle no-print">Esta fatura já foi totalmente paga.</p>
+                      <div className="success-badge-icon no-print"><CheckCircle2 size={40} strokeWidth={2.5}/></div>
+                      <h2 className="no-print">Fatura Liquidada</h2>
+                      <p className="no-print">O histórico desta compra foi concluído.</p>
                   </div>
 
-                  <div className="pm-body" style={{padding: '24px'}}>
-
-                      <div className="receipt-meta-info" style={{ marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px dashed #cbd5e1'}}>
-                          <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '16px'}}>
-                              <div>
-                                  <span style={{fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', display: 'block'}}>Data da Compra</span>
-                                  <strong style={{color: '#1e293b', fontSize: '1rem'}}>{new Date(faturaHistorico.dataCompra).toLocaleDateString('pt-BR')}</strong>
-                              </div>
-
-                              {faturaHistorico.dataPagamento && (
-                                  <div style={{textAlign: 'center'}}>
-                                      <span style={{fontSize: '0.75rem', fontWeight: '800', color: '#059669', textTransform: 'uppercase', display: 'block'}}>Data do Pagto</span>
-                                      <strong style={{color: '#10b981', fontSize: '1rem'}}>{new Date(faturaHistorico.dataPagamento).toLocaleDateString('pt-BR')}</strong>
-                                  </div>
-                              )}
-
-                              <div style={{textAlign: 'right'}}>
-                                  <span style={{fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', display: 'block'}}>Ref. Fatura</span>
-                                  <strong style={{color: '#1e293b', fontSize: '1rem'}}>{faturaHistorico.descricao}</strong>
-                              </div>
+                  <div className="receipt-body">
+                      <div className="receipt-meta-grid">
+                          <div className="meta-item">
+                              <span>Data da Compra</span>
+                              <strong>{new Date(faturaHistorico.dataCompra).toLocaleDateString('pt-BR')}</strong>
                           </div>
-
-                          <div className="print-customer-box" style={{ background: '#f1f5f9', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0'}}>
-                              <span style={{fontSize: '0.75rem', fontWeight: '800', color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '4px'}}>Dados do Cliente</span>
-                              <div style={{ color: '#1e293b', fontSize: '0.95rem', lineHeight: '1.4' }}>
-                                  <strong>{clienteSelecionado.nome}</strong><br/>
-                                  CPF/CNPJ: {clienteSelecionado.documento}
-                                  {clienteSelecionado.telefone && <><br/>Telefone: {clienteSelecionado.telefone}</>}
+                          {faturaHistorico.dataPagamento && (
+                              <div className="meta-item center">
+                                  <span className="text-success">Data de Quitação</span>
+                                  <strong className="text-success">{new Date(faturaHistorico.dataPagamento).toLocaleDateString('pt-BR')}</strong>
                               </div>
+                          )}
+                          <div className="meta-item right">
+                              <span>Referência</span>
+                              <strong>{faturaHistorico.descricao}</strong>
                           </div>
                       </div>
 
-                      <div className="invoice-items" style={{padding: 0, marginBottom: '24px'}}>
-                          <div className="items-header" style={{marginBottom: '16px'}}><ShoppingBag size={14}/> Itens Adquiridos</div>
+                      <div className="receipt-customer-box">
+                          <span>Dados do Cliente</span>
+                          <p>
+                              <strong>{clienteSelecionado.nome}</strong><br/>
+                              Doc: {clienteSelecionado.documento}
+                              {clienteSelecionado.telefone && <><br/>Tel: {clienteSelecionado.telefone}</>}
+                          </p>
+                      </div>
+
+                      <div className="receipt-items-list">
+                          <div className="items-list-title"><ShoppingBag size={14}/> Itens Adquiridos</div>
                           {faturaHistorico.itens && faturaHistorico.itens.length > 0 ? (
-                              <ul style={{listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                              <ul>
                                   {faturaHistorico.itens.map((item, idx) => (
-                                      <li key={idx} style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', borderBottom: '1px dashed #f1f5f9', paddingBottom: '8px'}}>
-                                          <span style={{fontWeight: '800', color: '#64748b', width: '35px'}}>{item.quantidade}x</span>
-                                          <span style={{color: '#334155', flex: 1, paddingRight: '12px'}}>{item.descricao}</span>
-                                          <span style={{fontWeight: '700', color: '#1e293b'}}>{formatarMoeda(item.precoUnitario * item.quantidade)}</span>
+                                      <li key={idx}>
+                                          <span className="q">{item.quantidade}x</span>
+                                          <span className="d">{item.descricao}</span>
+                                          <span className="v">{formatarMoeda(item.precoUnitario * item.quantidade)}</span>
                                       </li>
                                   ))}
                               </ul>
                           ) : (
-                              <p style={{color: '#94a3b8', fontSize: '0.9rem', fontStyle: 'italic', textAlign: 'center', padding: '16px', background: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1'}}>
-                                  Detalhamento indisponível para esta compra.
-                              </p>
+                              <div className="empty-items-msg">Detalhamento indisponível.</div>
                           )}
                       </div>
 
-                      <div className="print-total-box" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', borderRadius: '12px', background: '#ecfdf5', border: '1px solid #a7f3d0'}}>
-                          <span style={{textTransform: 'uppercase', fontWeight: '800', color: '#065f46', fontSize: '0.9rem'}}>Total Quitado</span>
-                          <strong style={{color: '#059669', fontSize: '1.8rem', fontWeight: '900', lineHeight: 1}}>{formatarMoeda(faturaHistorico.valorTotal)}</strong>
+                      <div className="receipt-total-highlight">
+                          <span>Total Quitado</span>
+                          <strong>{formatarMoeda(faturaHistorico.valorTotal)}</strong>
                       </div>
                   </div>
 
-                  {/* RODAPÉ DINÂMICO: ZAP AVULSO OU BOTÕES NORMAIS */}
-                  <div className="pm-footer no-print" style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                  {/* ZAP AVULSO / BOTÕES */}
+                  <div className="receipt-footer no-print">
                       {exibirInputZap ? (
-                          <div className="fade-in" style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
-                              <span style={{fontSize: '0.85rem', fontWeight: '700', color: '#475569'}}>Cliente sem telefone. Digite o WhatsApp (com DDD):</span>
-                              <div style={{display: 'flex', gap: '8px'}}>
+                          <div className="zap-avulso-box fade-in">
+                              <label>Cliente sem telefone. Informe o WhatsApp com DDD:</label>
+                              <div className="zap-avulso-row">
                                   <input
                                       type="text"
                                       placeholder="Ex: 81999999999"
                                       value={telefoneAvulso}
                                       onChange={e => setTelefoneAvulso(e.target.value.replace(/\D/g, ''))}
-                                      style={{flex: 1, padding: '12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '1rem', outline: 'none'}}
                                       autoFocus
                                   />
-                                  <button
-                                      onClick={() => handleSendWhatsApp(telefoneAvulso)}
-                                      style={{padding: '0 20px', borderRadius: '8px', background: '#25D366', color: 'white', border: 'none', fontWeight: 'bold', cursor: 'pointer'}}
-                                  >
-                                      Enviar
-                                  </button>
-                                  <button
-                                      onClick={() => setExibirInputZap(false)}
-                                      style={{padding: '0 16px', borderRadius: '8px', background: '#f1f5f9', color: '#64748b', border: '1px solid #cbd5e1', fontWeight: 'bold', cursor: 'pointer'}}
-                                  >
-                                      <X size={18} />
-                                  </button>
+                                  <button className="btn-send-zap" onClick={() => handleSendWhatsApp(telefoneAvulso)}>Enviar</button>
+                                  <button className="btn-cancel-zap" onClick={() => setExibirInputZap(false)}><X size={18} /></button>
                               </div>
                           </div>
                       ) : (
-                          <div style={{display: 'flex', gap: '12px', width: '100%'}}>
-                              <button
-                                  className="btn-outline-sec flex-1"
-                                  onClick={() => window.print()}
-                                  style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'}}
-                              >
+                          <div className="receipt-action-row">
+                              <button className="btn-print-receipt" onClick={() => window.print()}>
                                   <Printer size={18}/> Imprimir
                               </button>
-                              <button
-                                  className="btn-action-success flex-1"
-                                  onClick={() => handleSendWhatsApp()}
-                                  style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: '#25D366', boxShadow: 'none'}}
-                              >
-                                  <MessageCircle size={18}/> WhatsApp
+                              <button className="btn-zap-receipt" onClick={() => handleSendWhatsApp()}>
+                                  <MessageCircle size={18}/> Enviar WhatsApp
                               </button>
                           </div>
                       )}
