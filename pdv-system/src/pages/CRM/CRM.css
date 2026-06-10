@@ -21,7 +21,7 @@ html, body {
     padding: 0;
     background-color: var(--bg-app);
     overflow-x: hidden;
-    width: 100%; /* 🔥 Correção: 100% em vez de 100vw para evitar conflito com a barra vertical */
+    width: 100%;
     box-sizing: border-box;
 }
 
@@ -42,7 +42,7 @@ html, body {
     color: var(--text-main);
     width: 100%;
     max-width: 100%;
-    box-sizing: border-box; /* 🔥 Garante que o padding não estica a tela para os lados */
+    box-sizing: border-box;
 }
 
 .animate-fade { animation: fadeIn 0.4s ease-out; }
@@ -66,11 +66,10 @@ html, body {
 .kpi-data h3 { margin: 0; font-size: 1.6rem; font-weight: 900; color: var(--text-main); }
 
 /* =======================================================
-   🔥 TOOLTIPS PROTEGIDOS (Com quebra de linha)
+   🔥 TOOLTIPS PROTEGIDOS
    ======================================================= */
 [data-tooltip-down], [data-tooltip] { position: relative; cursor: help; }
 
-/* Legendas dos Cards (Abrem para baixo) */
 [data-tooltip-down]::before {
     content: attr(data-tooltip-down); position: absolute; top: 110%; left: 50%; transform: translateX(-50%) scale(0.9);
     background: #0f172a; color: #fff; padding: 8px 12px; border-radius: 8px; font-size: 0.75rem; font-weight: 600;
@@ -78,7 +77,6 @@ html, body {
     opacity: 0; visibility: hidden; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
 
-/* Legendas Normais e Botões da Tabela (Abrem todas para CIMA) */
 [data-tooltip]::before {
     content: attr(data-tooltip); position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%) scale(0.9);
     background: #0f172a; color: #ffffff; padding: 8px 12px; border-radius: 8px; font-size: 0.75rem; font-weight: 600;
@@ -90,7 +88,6 @@ html, body {
     opacity: 1; visibility: visible; transform: translateX(-50%) scale(1);
 }
 
-/* Proteção para as legendas dos botões encostados à direita na tabela */
 .quick-actions [data-tooltip]::before {
     left: auto;
     right: 0;
@@ -140,17 +137,41 @@ html, body {
 .progress-bar { height: 100%; border-radius: 3px; transition: width 0.8s ease-out; }
 
 /* =======================================================
-   3. AÇÕES RÁPIDAS DA TABELA
+   3. AÇÕES RÁPIDAS DA TABELA (CORREÇÃO DE ÍCONES)
    ======================================================= */
-.quick-actions { display: flex; gap: 8px; align-items: center; justify-content: flex-start; }
-.btn-action { width: 34px; height: 34px; border-radius: 8px; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
+.quick-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    min-width: max-content; /* Garante que a coluna não esmague os botões */
+}
+
+.btn-action {
+    width: 36px;
+    height: 36px;
+    min-width: 36px; /* Força a largura mínima */
+    border-radius: 8px;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: 0.2s;
+    flex-shrink: 0 !important; /* 🔥 O SEGREDO: Impede o botão de ficar oval/esmagado */
+}
+
+.btn-action svg {
+    flex-shrink: 0;
+}
+
 .btn-action.whatsapp { background: #d1fae5; color: #059669; }
 .btn-action.whatsapp:hover { background: #10b981; color: white; transform: translateY(-2px); }
 .btn-action.edit { background: #fef3c7; color: #d97706; }
 .btn-action.edit:hover { background: #f59e0b; color: white; transform: translateY(-2px); }
 .btn-action.history { background: #ede9fe; color: #6d28d9; }
 .btn-action.history:hover { background: #8b5cf6; color: white; transform: translateY(-2px); }
-
 /* =======================================================
    4. MODAL CRM GERAL (Correção Fiscal)
    ======================================================= */
@@ -201,7 +222,7 @@ html, body {
 .hist-btn-icon:hover { transform: scale(1.1); }
 
 /* =======================================================
-   6. 🔥 O MODAL DA VENDA REAL EXPANSDIDA (MIGRADO DO PDV)
+   6. 🔥 O MODAL DA VENDA REAL EXPANSDIDA
    ======================================================= */
 .hist-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 3000; padding: 20px; }
 .hist-modal-content { background: #ffffff; padding: 24px; border-radius: 16px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
@@ -261,12 +282,197 @@ html, body {
 .z-max { z-index: 9999; }
 
 /* =======================================================
-   7. LOADER E RESPONSIVIDADE
+   7. LOADER
    ======================================================= */
 .crm-loader { height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
 .spinner { border: 4px solid #e2e8f0; border-left-color: var(--primary); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px;}
 @keyframes spin { 100% { transform: rotate(360deg); } }
 
+/* =======================================================
+   8. REMODELAÇÃO DO MODAL CORREÇÃO FISCAL (DOSSIÊ)
+   ======================================================= */
+.crm-cards-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.crm-form-card {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
+    border: 1px solid #e2e8f0;
+    transition: all 0.3s ease;
+}
+
+.crm-form-card:hover {
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05);
+}
+
+/* Temas de Cores dos Cards */
+.theme-blue { border-left: 5px solid #3b82f6; background: linear-gradient(145deg, #f8fafc 0%, #ffffff 100%); }
+.theme-blue .card-title { color: #1e3a8a; border-bottom-color: #bfdbfe;}
+
+.theme-emerald { border-left: 5px solid #10b981; background: linear-gradient(145deg, #f0fdf4 0%, #ffffff 100%); }
+.theme-emerald .card-title { color: #064e3b; border-bottom-color: #a7f3d0;}
+
+.theme-purple { border-left: 5px solid #8b5cf6; background: linear-gradient(145deg, #f5f3ff 0%, #ffffff 100%); }
+.theme-purple .card-title { color: #4c1d95; border-bottom-color: #ddd6fe;}
+
+.card-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    margin: 0 0 20px 0;
+    padding-bottom: 10px;
+    border-bottom: 2px solid transparent;
+}
+
+/* Novo layout para labels com Ícones */
+.form-group-crm label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: #475569;
+    margin-bottom: 6px;
+    font-weight: 700;
+}
+
+/* Input com Botão de Busca Acoplado (CNPJ) */
+.input-with-button {
+    display: flex;
+    align-items: stretch;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    overflow: hidden;
+    background: white;
+    transition: all 0.2s;
+}
+
+.input-with-button:focus-within {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.input-with-button input {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    flex: 1;
+}
+
+.btn-search-cnpj {
+    background: #f1f5f9;
+    border: none;
+    border-left: 1px solid #cbd5e1;
+    color: #3b82f6;
+    padding: 0 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-search-cnpj:hover:not(:disabled) {
+    background: #e0f2fe;
+    color: #1d4ed8;
+}
+
+.btn-search-cnpj:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Destaque Inscrição Estadual */
+.ie-destaque { color: #d97706 !important; }
+.input-ie-destaque {
+    border-color: #fcd34d !important;
+    background: #fffbeb !important;
+    color: #b45309 !important;
+    font-weight: 700 !important;
+}
+.input-ie-destaque:focus {
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15) !important;
+    border-color: #f59e0b !important;
+}
+
+/* Animações */
+.spin-anim {
+    animation: spin 1s linear infinite;
+}
+
+.crm-loading-mini {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 40px;
+    color: #64748b;
+    font-weight: 600;
+}
+
+.historico-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 40px;
+    color: #94a3b8;
+    text-align: center;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px dashed #cbd5e1;
+}
+
+/* Botões Rodapé do Modal */
+.btn-modal-save {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* =======================================================
+   9. CLASSES UTILITÁRIAS E SUBSTITUIÇÃO DE ESTILOS INLINE
+   ======================================================= */
+.text-center-p3 { text-align: center; padding: 3rem; }
+.border-none { border-bottom: none !important; }
+
+/* Cores das barras de progresso geradas dinamicamente */
+.bg-premium { background-color: #f59e0b; }
+.bg-standard { background-color: #3b82f6; }
+.bg-basic, .bg-novo { background-color: #94a3b8; }
+
+.mt-15 { margin-top: 15px; }
+.uppercase-input { text-transform: uppercase; }
+
+.label-highlight { font-size: 0.75rem; font-weight: 700; color: #3b82f6; display: block; margin-bottom: 4px; }
+.input-highlight { width: 100%; padding: 8px 10px; border: 1px solid #bfdbfe; border-radius: 6px; font-size: 0.9rem; color: #1e3a8a; outline: none; background: #ffffff; }
+
+.grid-auto-fit { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.text-mini-break { font-size: 10px; word-break: break-all; }
+.empty-list-msg { color: #94a3b8; font-size: 0.9rem; padding: 10px 0; }
+.ml-auto { margin-left: auto; }
+
+/* Modal do WhatsApp */
+.zap-modal-container { max-width: 400px; padding: 30px; text-align: center; }
+.zap-modal-title { margin: 0 0 10px 0; color: #1e293b; }
+.zap-modal-desc { color: #64748b; font-size: 0.9rem; margin-bottom: 20px; }
+.zap-input-wrapper { text-align: left; margin-bottom: 20px; }
+.zap-input-label { font-size: 0.8rem; font-weight: 700; color: #64748b; display: block; margin-bottom: 5px; }
+.zap-input-field { width: 100%; padding: 12px; border: 2px solid #cbd5e1; border-radius: 8px; font-size: 1.1rem; outline: none; }
+.zap-btn-wrapper { display: flex; gap: 10px; }
+.zap-btn { flex: 1; justify-content: center; }
+
+/* =======================================================
+   10. RESPONSIVIDADE ESTRITA (TABLETS E MOBILE)
+   ======================================================= */
 @media (max-width: 1024px) {
     .crm-header-cards { grid-template-columns: repeat(2, 1fr); }
     .hide-mobile { display: none !important; }
@@ -275,11 +481,93 @@ html, body {
 }
 
 @media (max-width: 768px) {
-    .crm-container { padding: 12px; }
-    .crm-tabs { width: 100%; overflow-x: auto; padding-bottom: 4px; }
+    .crm-container { padding: 12px; overflow-x: hidden; }
+
+    /* Cabeçalho e Abas */
+    .crm-header-cards { grid-template-columns: 1fr 1fr; gap: 12px; }
+    .kpi-card { padding: 16px 12px; flex-direction: column; text-align: center; gap: 10px;}
+    .kpi-data span { justify-content: center; }
+    .kpi-data h3 { font-size: 1.3rem; }
+
+    /* Abas fluidas com scroll invisível (estilo App) */
+    .crm-tabs { width: 100%; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; -ms-overflow-style: none; }
+    .crm-tabs::-webkit-scrollbar { display: none; }
     .crm-tabs button { font-size: 0.85rem; padding: 10px 12px; white-space: nowrap; }
-    .form-grid-crm, .address-grid { grid-template-columns: 1fr; }
-    .full-width, .address-grid .full-width, .cep-group, .uf-group, .num-group, .bairro-group { grid-column: span 1; }
-    .hist-modal-footer { flex-direction: column; }
-    .hist-btn-success, .hist-btn-secondary, .hist-btn-primary { width: 100%; justify-content: center; margin-left: 0 !important; }
+
+    /* Modais */
+    .form-grid-crm, .address-grid { grid-template-columns: 1fr !important; }
+    .full-width, .address-grid .full-width, .cep-group, .uf-group, .num-group, .bairro-group { grid-column: span 1 !important; }
+    .crm-modal-overlay, .hist-modal-overlay { padding: 10px; }
+    .crm-modal-content, .hist-modal-content { padding: 20px 16px; max-height: 95vh; }
+    .crm-form-card { padding: 16px; }
+
+    /* Input CNPJ Acoplado */
+    .input-with-button input { width: 100%; }
+    .btn-search-cnpj { padding: 0 12px; }
+
+    /* Botões 100% de largura */
+    .crm-modal-footer, .hist-modal-footer { flex-direction: column-reverse; gap: 10px; width: 100%; display: flex;}
+    .btn-modal-cancel, .btn-modal-save, .hist-btn-success, .hist-btn-secondary, .hist-btn-primary, .hist-btn-nfe {
+        width: 100%;
+        justify-content: center;
+        margin-left: 0 !important;
+        padding: 12px;
+    }
+
+    /* 🔥 FIM DO SCROLL LATERAL: Remove a restrição da Tabela */
+    .crm-table-container {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        overflow-x: hidden !important;
+        padding: 0;
+    }
+
+    .crm-table {
+        min-width: 0 !important; /* Destrói a barreira dos 1000px */
+        width: 100% !important;
+    }
+
+    .crm-table thead { display: none; }
+    .crm-table, .crm-table tbody, .crm-table tr, .crm-table td { display: block; width: 100%; }
+
+    .crm-table tr {
+        margin-bottom: 16px;
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+        padding: 12px;
+    }
+
+    .crm-table td {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px dashed #e2e8f0;
+        padding: 10px 4px;
+        text-align: right;
+        font-size: 0.9rem;
+    }
+
+    .crm-table td:last-child { border-bottom: none; justify-content: center; padding-top: 16px; }
+
+    .crm-table td::before {
+        content: attr(data-label);
+        font-weight: 700;
+        color: #64748b;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        text-align: left;
+        margin-right: 16px;
+        min-width: 90px;
+    }
+
+    .hide-mobile { display: flex !important; }
+    .quick-actions { width: 100%; justify-content: center; gap: 12px; }
+    .engajamento-container { width: 100px; align-items: flex-end; }
+}
+
+@media (max-width: 480px) {
+    .crm-header-cards { grid-template-columns: 1fr; } /* Apenas 1 KPI por linha em telemóveis muito pequenos */
 }
