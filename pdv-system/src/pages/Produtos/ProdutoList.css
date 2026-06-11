@@ -360,6 +360,200 @@ body { background-color: var(--bg-main); font-family: 'Plus Jakarta Sans', sans-
 }
 .btn-save-blue:hover { background: #1d4ed8; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25); }
 
+/* =======================================================
+   🔥 SELEÇÃO GLOBAL NO MOBILE (CHECKBOX NO TOPO)
+   ======================================================= */
+.mobile-select-all { display: none; }
+
+@media (max-width: 850px) {
+    .mobile-select-all {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 20px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        margin-top: 16px;
+        box-shadow: var(--shadow-sm);
+    }
+
+    .mobile-select-all label {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 700;
+        color: var(--text-dark);
+        cursor: pointer;
+        font-size: 0.95rem;
+    }
+
+    .mobile-select-all input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+        accent-color: #2563eb;
+        border-radius: 4px;
+        cursor: pointer;
+    }
+
+    .selected-count-badge {
+        background: #eff6ff;
+        color: #2563eb;
+        padding: 6px 12px;
+        border-radius: 50px;
+        font-size: 0.8rem;
+        font-weight: 800;
+        border: 1px solid #bfdbfe;
+    }
+}
+
+/* =======================================================
+   🔥 BARRA DE AÇÕES EM MASSA (FLOATING BOTTOM BAR)
+   ======================================================= */
+.bulk-action-bar {
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #0f172a; /* Slate 900 */
+    padding: 12px 24px;
+    border-radius: 50px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+    z-index: 100;
+    border: 1px solid rgba(255,255,255,0.15);
+    color: white;
+}
+
+.bulk-count {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #cbd5e1;
+}
+
+.count-number {
+    background: #3b82f6;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 50px;
+    font-weight: 900;
+    font-size: 1rem;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+}
+
+.bulk-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-bulk {
+    background: transparent;
+    border: none;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    padding: 10px 16px;
+    border-radius: 50px;
+    transition: 0.2s;
+}
+
+.btn-bulk:hover { background: rgba(255,255,255,0.1); }
+.btn-bulk.delete:hover { background: #ef4444; }
+.btn-bulk.restore:hover { background: #10b981; }
+.btn-bulk.print:hover { background: #3b82f6; }
+.btn-bulk.cancel { color: #94a3b8; padding: 10px; }
+.btn-bulk.cancel:hover { background: rgba(255,255,255,0.1); color: white; }
+
+.bulk-divider {
+    width: 1px;
+    height: 24px;
+    background: rgba(255,255,255,0.2);
+    margin: 0 4px;
+}
+
+@media (max-width: 850px) {
+    .bulk-action-bar {
+        width: 90%;
+        bottom: 20px;
+        flex-direction: column;
+        border-radius: 20px;
+        padding: 20px;
+        gap: 16px;
+    }
+    .bulk-actions {
+        flex-direction: column;
+        width: 100%;
+        gap: 8px;
+    }
+    .btn-bulk {
+        width: 100%;
+        justify-content: center;
+        padding: 14px;
+        background: rgba(255,255,255,0.05);
+    }
+    .btn-bulk .hide-mobile { display: inline !important; }
+    .bulk-divider { display: none; }
+}
+
+/* =======================================================
+   🔥 EDIÇÃO INLINE SEGURA (SAFE MODE)
+   ======================================================= */
+.inline-edit-wrapper.safe-mode {
+    display: flex;
+    align-items: center;
+    padding-right: 4px;
+}
+
+.inline-actions {
+    display: flex;
+    gap: 2px;
+    margin-left: 6px;
+    padding-left: 6px;
+    border-left: 1px solid var(--border);
+}
+
+.btn-inline-save, .btn-inline-cancel {
+    background: transparent;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.btn-inline-save { color: var(--success); }
+.btn-inline-save:hover { background: #dcfce7; transform: scale(1.1); }
+
+.btn-inline-cancel { color: var(--text-muted); }
+.btn-inline-cancel:hover { background: #fee2e2; color: var(--danger); transform: scale(1.1); }
+
+/* Ícone de Dica de Edição (Ghost Icon) */
+.edit-hint-icon {
+    opacity: 0;
+    margin-left: 8px;
+    color: #3b82f6;
+    transition: var(--transition-smooth);
+    transform: translateX(-5px);
+}
+
+.editable-cell-modern:hover .edit-hint-icon {
+    opacity: 1;
+    transform: translateX(0);
+}
 
 /* =========================================================
    📱 MOBILE RESPONSIVO ABSOLUTO (BLINDAGEM 100%)

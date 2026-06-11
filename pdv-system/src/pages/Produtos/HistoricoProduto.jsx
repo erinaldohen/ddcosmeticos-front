@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import {
     ArrowLeft, Clock, User, FileSpreadsheet, Edit3, Trash2,
-    Box, Calendar, ArrowRight, ShieldAlert, Bot, CheckCircle2,
-    AlertTriangle
+    Box, Calendar, ArrowRight, Bot, CheckCircle2,
+    AlertTriangle, Receipt
 } from 'lucide-react';
 import './HistoricoProduto.css';
 
@@ -14,18 +14,19 @@ const HistoricoProduto = () => {
     const [historicoRaw, setHistoricoRaw] = useState([]);
     const [loading, setLoading] = useState(true);
     const [analisandoIA, setAnaliseIA] = useState(true);
-    const [produtoNome, setProdutoNome] = useState('');
+
+    // 🔥 CORREÇÃO: Agora guardamos o Produto real e completo
+    const [produtoAtual, setProdutoAtual] = useState(null);
 
     useEffect(() => {
         const fetchHistorico = async () => {
             try {
                 try {
                     const prodRes = await api.get(`/produtos/${id}`);
-                    setProdutoNome(prodRes.data.descricao);
+                    setProdutoAtual(prodRes.data); // Guarda os dados reais e atuais
                 } catch (e) {}
 
                 const response = await api.get(`/produtos/${id}/historico`);
-                // Ordena do mais recente para o mais antigo (ID da Revisão maior primeiro)
                 const sortedHistory = response.data.sort((a, b) => b.idRevisao - a.idRevisao);
                 setHistoricoRaw(sortedHistory);
             } catch (error) {
@@ -51,64 +52,77 @@ const HistoricoProduto = () => {
 
     const formatCurrency = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
-    // 🔥 CORREÇÃO 1: Lê as traduções exatas do seu HistoricoProdutoDTO.java
-    const getActionDetails = (tipoAlteracao) => {
-        if (tipoAlteracao === 'CRIADO' || tipoAlteracao === 'ADD') return { title: 'Criação do Produto', class: 'action-add', icon: <Box size={18} /> };
-        if (tipoAlteracao === 'ALTERADO' || tipoAlteracao === 'MOD') return { title: 'Atualização de Dados', class: 'action-mod', icon: <Edit3 size={18} /> };
-        if (tipoAlteracao === 'EXCLUÍDO' || tipoAlteracao === 'DEL') return { title: 'Exclusão / Inativação', class: 'action-del', icon: <Trash2 size={18} /> };
-        return { title: 'Alteração de Sistema', class: 'action-sys', icon: <Clock size={18} /> };
+    const getActionDetails = (rev) => {
+        const tipo = rev.tipoAlteracao || '';
+        const obs = rev.observacao || rev.motivo || rev.motivoUltimaAlteracao || '';
+        const nf = rev.numeroNota || rev.numeroUltimaNotaFiscal || '';
+        const obsUpper = obs.toUpperCase();
+
+        if (nf || tipo.includes('NFE') || tipo.includes('ENTRADA') || obsUpper.includes('NOTA FISCAL') || obsUpper.includes('NF-E')) {
+            const numDisplay = nf ? ` (NF: ${nf})` : '';
+            return { title: `Entrada por Nota Fiscal${numDisplay}`, class: 'action-nfe', icon: <Receipt size={18} />, obs: obs };
+        }
+
+        if (obsUpper.includes('IMPORTA') || obsUpper.includes('PLANILHA') || obsUpper.includes('EXCEL') || obsUpper.includes('CSV')) {
+             return { title: 'Importação em Massa', class: 'action-excel', icon: <FileSpreadsheet size={18} />, obs: obs };
+        }
+
+        if (tipo === 'CRIADO' || tipo === 'ADD') return { title: 'Criação do Produto', class: 'action-add', icon: <Box size={18} />, obs: obs };
+        if (tipo === 'ALTERADO' || tipo === 'MOD') return { title: 'Atualização de Dados', class: 'action-mod', icon: <Edit3 size={18} />, obs: obs };
+        if (tipo === 'EXCLUÍDO' || tipo === 'DEL') return { title: 'Exclusão / Inativação', class: 'action-del', icon: <Trash2 size={18} />, obs: obs };
+        return { title: 'Alteração de Sistema', class: 'action-sys', icon: <Clock size={18} />, obs: obs };
     };
 
-    // 🔥 CORREÇÃO 2: Mapeia exatamente os campos disponíveis no HistoricoProdutoDTO.java
-    // 🔥 MOTOR DE COMPARAÇÃO BLINDADO (Agora com NCM, Marca e Estoque Mínimo)
-        const compararEntidades = (oldEnt, newEnt, tipoAlteracao) => {
-            const diffs = [];
-            const campos = [
-                { key: 'descricao', label: 'Descrição', type: 'text' },
-                { key: 'precoVenda', label: 'Preço de Venda', type: 'currency' },
-                { key: 'precoCusto', label: 'Preço de Custo', type: 'currency' },
-                { key: 'quantidade', label: 'Estoque Atual', type: 'number' },
-                { key: 'estoqueMinimo', label: 'Estoque Mínimo', type: 'number' }, // LÊ DO JAVA!
-                { key: 'ncm', label: 'NCM Fiscal', type: 'text' },                 // LÊ DO JAVA!
-                { key: 'marca', label: 'Marca', type: 'text' },                     // LÊ DO JAVA!
-                { key: 'revisaoPendente', label: 'Status na Gôndola', type: 'alerta' },
-                { key: 'alertaGondola', label: 'Auditoria de Gôndola', type: 'alerta_gondola' }
-            ];
+    const compararEntidades = (oldEnt, newEnt, tipoAlteracao) => {
+        const diffs = [];
+        const campos = [
+            { key: 'descricao', label: 'Descrição', type: 'text' },
+            { key: 'precoVenda', label: 'Preço de Venda', type: 'currency' },
+            { key: 'precoCusto', label: 'Preço de Custo', type: 'currency' },
+            { key: 'quantidade', label: 'Estoque Atual', type: 'number' },
+            { key: 'quantidadeEmEstoque', label: 'Estoque Atual', type: 'number' },
+            { key: 'estoqueMinimo', label: 'Estoque Mínimo', type: 'number' },
+            { key: 'ncm', label: 'NCM Fiscal', type: 'text' },
+            { key: 'marca', label: 'Marca', type: 'text' },
+            { key: 'revisaoPendente', label: 'Status de Cadastro', type: 'alerta_revisao' },
+            { key: 'alertaGondola', label: 'Auditoria de Gôndola', type: 'alerta_gondola' }
+        ];
 
-            const isAdd = tipoAlteracao === 'CRIADO' || tipoAlteracao === 'ADD';
-            const isMod = tipoAlteracao === 'ALTERADO' || tipoAlteracao === 'MOD';
-            const isDel = tipoAlteracao === 'EXCLUÍDO' || tipoAlteracao === 'DEL';
+        const isAdd = tipoAlteracao === 'CRIADO' || tipoAlteracao === 'ADD';
+        const isMod = tipoAlteracao === 'ALTERADO' || tipoAlteracao === 'MOD';
+        const isDel = tipoAlteracao === 'EXCLUÍDO' || tipoAlteracao === 'DEL';
 
-            if (isDel) {
-                diffs.push({ key: 'status', label: 'Ação', old: 'Ativo', new: 'Deletado/Inativado', type: 'text' });
-                return diffs;
-            }
-
-            campos.forEach(campo => {
-                const oldV = oldEnt ? oldEnt[campo.key] : null;
-                const newV = newEnt ? newEnt[campo.key] : null;
-
-                const normOld = (oldV === null || oldV === undefined || oldV === '') ? 'VAZIO' : String(oldV).trim();
-                const normNew = (newV === null || newV === undefined || newV === '') ? 'VAZIO' : String(newV).trim();
-
-                if (isAdd && normNew !== 'VAZIO') {
-                     diffs.push({ ...campo, old: null, new: newV });
-                }
-                else if (isMod && normOld !== normNew) {
-                     diffs.push({ ...campo, old: oldV ?? 'Vazio', new: newV ?? 'Vazio' });
-                }
-            });
+        if (isDel) {
+            diffs.push({ key: 'status', label: 'Ação', old: 'Ativo', new: 'Deletado/Inativado', type: 'text' });
             return diffs;
-        };
+        }
 
-    // 🔥 CORREÇÃO 3: O 'rev' já é a entidade principal (Não existe 'rev.entidade')
+        campos.forEach(campo => {
+            const oldV = oldEnt ? oldEnt[campo.key] : null;
+            const newV = newEnt ? newEnt[campo.key] : null;
+
+            const normOld = (oldV === null || oldV === undefined || oldV === '') ? 'VAZIO' : String(oldV).trim();
+            const normNew = (newV === null || newV === undefined || newV === '') ? 'VAZIO' : String(newV).trim();
+
+            if (isAdd && normNew !== 'VAZIO') {
+                 diffs.push({ ...campo, old: null, new: newV });
+            }
+            else if (isMod && normOld !== normNew) {
+                 diffs.push({ ...campo, old: oldV ?? 'Vazio', new: newV ?? 'Vazio' });
+            }
+        });
+
+        const hasQtdEmEstoque = diffs.some(d => d.key === 'quantidadeEmEstoque');
+        return hasQtdEmEstoque ? diffs.filter(d => d.key !== 'quantidade') : diffs;
+    };
+
     const processedHistory = useMemo(() => {
         return historicoRaw.map((rev, index) => {
-            const action = getActionDetails(rev.tipoAlteracao);
+            const action = getActionDetails(rev);
             const dataFormatada = formatDateTime(rev.dataRevisao);
             const operador = rev.usuarioResponsavel;
 
-            const oldEntidade = historicoRaw[index + 1] || null; // O antigo é o próximo no array
+            const oldEntidade = historicoRaw[index + 1] || null;
             const newEntidade = rev || {};
 
             const diffs = compararEntidades(oldEntidade, newEntidade, rev.tipoAlteracao);
@@ -117,55 +131,70 @@ const HistoricoProduto = () => {
         });
     }, [historicoRaw]);
 
+    // 🔥 A IA CORRIGIDA: Usa a fonte de verdade absoluta (produtoAtual)
     const iaAlerts = useMemo(() => {
-            const alerts = [];
-            processedHistory.forEach(rev => {
-                rev.diffs.forEach(diff => {
-                    // 🔥 IA DETETA A GÔNDOLA
-                                    if (diff.key === 'alertaGondola' && (diff.new === true || diff.new === 'true')) {
-                                        alerts.push({
-                                            id: `alert-${rev.idRevisao}-gondola`,
-                                            type: 'danger',
-                                            icon: <AlertTriangle size={16}/>,
-                                            msg: `Atenção: O operador ${rev.operador} reportou uma divergência de preço físico na gôndola (Alteração #${rev.idRevisao}).`
-                                        });
-                                    }
+        const alerts = [];
 
-                    // 🔥 NOVO: Alerta visual de divergência
-                    if (diff.key === 'revisaoPendente' && (diff.new === true || diff.new === 'true')) {
-                        alerts.push({
-                            id: `alert-${rev.idRevisao}-gondola`,
-                            type: 'danger',
-                            icon: <AlertTriangle size={16}/>,
-                            msg: `Divergência Reportada: O operador ${rev.operador} sinalizou um problema de preço na gôndola durante a Alteração #${rev.idRevisao}.`
-                        });
-                    }
+        // 1. Analisa o Produto Real da API para evitar falsos positivos por falta de mapeamento do Envers
+        if (produtoAtual) {
+            const isRevisaoMarcada = produtoAtual.revisaoPendente === true || produtoAtual.revisaoPendente === 'true';
+
+            const temPrecoVenda = produtoAtual.precoVenda && produtoAtual.precoVenda > 0;
+            const temNcmValido = produtoAtual.ncm && String(produtoAtual.ncm).length >= 8 && produtoAtual.ncm !== '00000000';
+            const temEanValido = produtoAtual.codigoBarras && String(produtoAtual.codigoBarras).length >= 8 && produtoAtual.codigoBarras !== 'S/N';
+
+            const falhas = [];
+            if (!temPrecoVenda) falhas.push('Preço Zerado');
+            if (!temNcmValido) falhas.push('NCM Inválido');
+            if (!temEanValido) falhas.push('Sem EAN');
+
+            if (isRevisaoMarcada && falhas.length > 0) {
+                alerts.push({
+                    id: `alert-current-revisao`,
+                    type: 'warning',
+                    icon: <FileSpreadsheet size={16}/>,
+                    msg: `Inconsistência de Cadastro: O produto foi importado ou inserido às pressas e possui dados fiscais pendentes (${falhas.join(', ')}).`
                 });
+            }
+        }
+
+        // 2. Analisa as prateleiras (Gôndola) varrendo a trilha passada
+        processedHistory.forEach(rev => {
+            rev.diffs.forEach(diff => {
+                if (diff.key === 'alertaGondola' && (diff.new === true || diff.new === 'true')) {
+                    alerts.push({
+                        id: `alert-${rev.idRevisao}-gondola`,
+                        type: 'danger',
+                        icon: <AlertTriangle size={16}/>,
+                        msg: `Divergência Física: O operador ${rev.operador || 'Sistema'} reportou um preço de prateleira errado na Revisão #${rev.idRevisao}.`
+                    });
+                }
             });
-            return alerts;
-        }, [processedHistory]);
+        });
+        return alerts;
+    }, [processedHistory, produtoAtual]);
 
     const renderValue = (val, type) => {
-            if (val === 'Vazio' || val === null || val === '') return <span style={{opacity: 0.5}}>N/A</span>;
-            if (type === 'currency') return formatCurrency(val);
-            if (type === 'boolean') return val === true || val === 'true' ? 'Sim' : 'Não';
+        if (val === 'Vazio' || val === null || val === '') return <span style={{opacity: 0.5}}>N/A</span>;
+        if (type === 'currency') return formatCurrency(val);
+        if (type === 'boolean') return val === true || val === 'true' ? 'Sim' : 'Não';
 
-            if (type === 'alerta_gondola') {
-                const isDivergente = val === true || val === 'true';
-                return isDivergente ?
-                    <span style={{ color: '#ef4444', fontWeight: 800 }}>⚠️ Preço Divergente Reportado</span> :
-                    <span style={{ color: '#10b981', fontWeight: 800 }}>✅ Etiqueta Correta</span>;
-            }
+        if (type === 'alerta_gondola') {
+            const isDivergente = val === true || val === 'true';
+            return isDivergente ?
+                <span className="badge-alert-danger">⚠️ Divergente</span> :
+                <span className="badge-alert-success">✅ Corrigido</span>;
+        }
 
-            if (type === 'alerta_revisao') {
-                const isRevisao = val === true || val === 'true';
-                return isRevisao ?
-                    <span style={{ color: '#f59e0b', fontWeight: 800 }}>⚠️ Revisão Pendente</span> :
-                    <span style={{ color: '#64748b', fontWeight: 800 }}>Sem Alertas</span>;
-            }
+        if (type === 'alerta_revisao') {
+            const isRevisao = val === true || val === 'true';
+            return isRevisao ?
+                <span className="badge-alert-warning">⚠️ Pendente de Cadastro</span> :
+                <span className="badge-alert-success">✅ Cadastro Completo</span>;
+        }
 
-            return val;
-        };
+        return val;
+    };
 
     if (loading) return <div className="historico-layout"><div className="loading-state"><Clock className="spin" size={32}/><span>Decodificando Auditoria...</span></div></div>;
 
@@ -177,7 +206,7 @@ const HistoricoProduto = () => {
                 </button>
                 <div className="hist-title-group">
                     <h1>Rastreamento de Auditoria</h1>
-                    <p className="hist-subtitle">EAN/ID: <strong>{id}</strong> • {produtoNome}</p>
+                    <p className="hist-subtitle">EAN/ID: <strong>{id}</strong> • {produtoAtual?.descricao || 'Carregando...'}</p>
                 </div>
             </header>
 
@@ -212,7 +241,7 @@ const HistoricoProduto = () => {
                         ) : (
                             <div className="ia-alert-item success">
                                 <CheckCircle2 size={18} />
-                                <span><strong>Padrão de Ouro:</strong> O histórico deste produto está limpo. Nenhuma anomalia financeira detetada.</span>
+                                <span><strong>Padrão de Ouro:</strong> O histórico deste produto está limpo. Nenhuma anomalia financeira ou fiscal detetada.</span>
                             </div>
                         )}
                     </div>
@@ -240,7 +269,11 @@ const HistoricoProduto = () => {
                                         <h3 className={`action-title ${rev.action.class}-text`}>{rev.action.title}</h3>
                                         <div className="meta-tags">
                                             <span className="meta-tag" style={{fontWeight: 800}}><Calendar size={14}/> {rev.dataFormatada}</span>
-                                            <span className="meta-tag user-tag"><User size={14}/> {rev.operador}</span>
+                                            <span className="meta-tag user-tag"><User size={14}/> {rev.operador || 'Sistema'}</span>
+
+                                            {rev.action.obs && (
+                                                <span className="meta-tag obs-tag">Motivo: {rev.action.obs}</span>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="card-header-right">
@@ -250,7 +283,7 @@ const HistoricoProduto = () => {
 
                                 <div className="card-body">
                                     {rev.diffs.length === 0 ? (
-                                        <span className="no-diff-text">Edição de sistema (Ex: vinculo de banco). Os dados principais estão iguais.</span>
+                                        <span className="no-diff-text">Edição de sistema (Ex: vínculo interno). Os dados principais da mercadoria mantiveram-se iguais.</span>
                                     ) : (
                                         <div className="diff-grid">
                                             {rev.diffs.map((diff) => (
