@@ -11,7 +11,6 @@ import api from '../../services/api';
 import './HistoricoCaixa.css';
 
 const HistoricoCaixa = () => {
-    // --- ESTADOS ---
     const [caixas, setCaixas] = useState([]);
     const [loading, setLoading] = useState(false);
     const [resumo, setResumo] = useState({ total: 0, qtd: 0 });
@@ -20,7 +19,6 @@ const HistoricoCaixa = () => {
     const [caixaSelecionado, setCaixaSelecionado] = useState(null);
     const [loadingDetalhes, setLoadingDetalhes] = useState(false);
 
-    // Filtros
     const [dataInicio, setDataInicio] = useState(() => {
         const d = new Date();
         d.setDate(d.getDate() - 30);
@@ -36,7 +34,6 @@ const HistoricoCaixa = () => {
         // eslint-disable-next-line
     }, []);
 
-    // --- CARREGAR DADOS ---
     const carregarCaixas = async (pagina = 0, reset = false) => {
         if (loading && pagina > 0) return;
         setLoading(true);
@@ -86,12 +83,11 @@ const HistoricoCaixa = () => {
         }
     };
 
-    // --- GERADOR DE PDF SOFISTICADO ---
     const gerarPDFSofisticado = () => {
         const doc = new jsPDF();
 
         // 1. Cabeçalho Executivo
-        doc.setFillColor(242, 41, 152); // Magenta
+        doc.setFillColor(242, 41, 152);
         doc.rect(0, 0, 210, 20, 'F');
         doc.setFontSize(22);
         doc.setTextColor(255, 255, 255);
@@ -142,7 +138,6 @@ const HistoricoCaixa = () => {
             const diff = c.diferencaCaixa || 0;
             let diffLabel = "--";
             if (c.status !== 'ABERTO') {
-                // CORREÇÃO: Utilizando Math.abs para remover o sinal de menos da string impressa
                 if (diff < -0.05) diffLabel = `Falta ${formatMoeda(Math.abs(diff))}`;
                 else if (diff > 0.05) diffLabel = `Sobra +${formatMoeda(Math.abs(diff))}`;
                 else diffLabel = "R$ 0,00";
@@ -174,8 +169,8 @@ const HistoricoCaixa = () => {
             didParseCell: function(data) {
                 if (data.section === 'body' && data.column.index === 5) {
                     const texto = data.cell.raw;
-                    if (texto.includes('Falta')) data.cell.styles.textColor = [220, 38, 38]; // Vermelho
-                    else if (texto.includes('Sobra')) data.cell.styles.textColor = [22, 163, 74]; // Verde
+                    if (texto.includes('Falta')) data.cell.styles.textColor = [220, 38, 38];
+                    else if (texto.includes('Sobra')) data.cell.styles.textColor = [22, 163, 74];
                 }
             }
         });
@@ -194,7 +189,6 @@ const HistoricoCaixa = () => {
         toast.success("PDF Sofisticado gerado com sucesso! 📄");
     };
 
-    // --- HELPER FORMAT ---
     const formatMoeda = (val) => Number(val || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const formatData = (dataStr) => {
         if (!dataStr) return '--';
@@ -204,191 +198,228 @@ const HistoricoCaixa = () => {
     };
 
     return (
-        <div className="historico-container fade-in">
-            {/* HEADER */}
-            <div className="page-header">
-                <div className="header-title">
-                    <h1><Archive size={32} className="text-primary" /> Histórico de Caixa</h1>
-                    <p><b>{resumo.qtd}</b> registros | Total Físico: <b className="text-success">{formatMoeda(resumo.total)}</b></p>
+        <div className="hc-premium-container fade-in">
+            <header className="hc-header">
+                <div className="hc-header-title">
+                    <div className="hc-icon-box">
+                        <Archive size={28} color="#3b82f6" />
+                    </div>
+                    <div>
+                        <h1>Histórico de Caixa</h1>
+                        <p>Auditoria de gaveta e controle de fechamentos</p>
+                    </div>
                 </div>
-                <button className="btn-primary" onClick={() => { setPage(0); carregarCaixas(0, true); }} data-tooltip="Atualizar lista agora">
-                    <RefreshCw size={18} className={loading ? 'spin' : ''} /> Atualizar
-                </button>
-            </div>
-
-            {/* FILTROS */}
-            <div className="toolbar">
-                <div className="date-filter-group">
-                    <Calendar size={18} className="text-gray" />
-                    <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
-                    <span>até</span>
-                    <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} />
-                    <button className="btn-search-icon" onClick={() => carregarCaixas(0, true)} data-tooltip="Aplicar Filtro">
-                        <Search size={18} />
+                <div className="hc-header-actions">
+                    <button className="hc-btn-secondary" onClick={() => { setPage(0); carregarCaixas(0, true); }}>
+                        <RefreshCw size={18} className={loading ? 'spin' : ''} />
+                        <span className="hide-mobile">Sincronizar</span>
+                    </button>
+                    <button className="hc-btn-primary" onClick={gerarPDFSofisticado}>
+                        <Download size={18} />
+                        <span>Exportar PDF</span>
                     </button>
                 </div>
-                <button className="btn-export" onClick={gerarPDFSofisticado} data-tooltip="Baixar Relatório Executivo">
-                    <Download size={18} /> PDF
-                </button>
+            </header>
+
+            <div className="hc-kpi-grid">
+                <div className="hc-kpi-card info">
+                    <div className="kpi-icon-wrapper"><Archive size={24} /></div>
+                    <div className="kpi-content">
+                        <span>Registos de Caixa</span>
+                        <h3>{resumo.qtd} <span style={{fontSize: '1rem', color: '#64748b'}}>fechados</span></h3>
+                    </div>
+                </div>
+
+                <div className="hc-kpi-card success">
+                    <div className="kpi-icon-wrapper"><Calendar size={24} /></div>
+                    <div className="kpi-content">
+                        <span>Total Físico Informado</span>
+                        <h3>{formatMoeda(resumo.total)}</h3>
+                    </div>
+                </div>
             </div>
 
-            {/* TABELA */}
-            <div className="table-wrapper">
-                <table className="data-table">
-                    <thead>
-                        <tr>
-                            <th>Caixa / Operador</th>
-                            <th>Abertura</th>
-                            <th>Fechamento</th>
-                            <th className="text-right">Físico (Gaveta)</th>
-                            <th className="text-right">Diferença (Quebra)</th>
-                            <th>Status</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {caixas.length === 0 && !loading ? (
-                            <tr><td colSpan="7" className="empty-state">Nenhum registro encontrado.</td></tr>
-                        ) : (
-                            caixas.map((caixa) => {
+            <div className="hc-toolbar">
+                <div className="hc-filters-wrapper">
+                    <div className="hc-input-group">
+                        <label>Data Inicial</label>
+                        <div className="input-with-icon">
+                            <Calendar size={16} className="input-icon" />
+                            <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} />
+                        </div>
+                    </div>
+                    <div className="hc-input-group">
+                        <label>Data Final</label>
+                        <div className="input-with-icon">
+                            <Calendar size={16} className="input-icon" />
+                            <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} />
+                        </div>
+                    </div>
+                </div>
+                <div className="hc-actions-wrapper">
+                    <button className="hc-btn-search" onClick={() => { setPage(0); carregarCaixas(0, true); }}>
+                        <Search size={18} /> <span>Filtrar</span>
+                    </button>
+                </div>
+            </div>
+
+            <div className="hc-table-card">
+                {caixas.length === 0 && !loading ? (
+                    <div className="hc-empty-state">
+                        <Archive size={48} className="text-slate-300" />
+                        <h2>Nenhum registo encontrado neste período.</h2>
+                    </div>
+                ) : (
+                    <table className="hc-table">
+                        <thead>
+                            <tr>
+                                <th>Caixa / Operador</th>
+                                <th>Abertura</th>
+                                <th>Fechamento</th>
+                                <th className="text-right">Físico (Gaveta)</th>
+                                <th className="text-right">Diferença</th>
+                                <th>Status</th>
+                                <th className="text-right">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {caixas.map((caixa) => {
                                 const informado = caixa.valorFisicoInformado || 0;
                                 const diff = caixa.diferencaCaixa || 0;
                                 const isAberto = caixa.status === 'ABERTO';
 
                                 return (
-                                    <tr key={caixa.id}>
-                                        <td>
-                                            <div className="user-cell">
-                                                <div className="avatar-mini"><User size={14}/></div>
-                                                <div>
-                                                    <strong>#{caixa.id} - {caixa.operadorNome || 'Admin'}</strong>
-                                                    <span>PDV 01</span>
-                                                </div>
+                                    <tr key={caixa.id} className="hc-table-row">
+                                        <td className="td-mobile-flex">
+                                            <span className="mobile-label hide-desktop"><User size={14}/> Operador</span>
+                                            <div>
+                                                <div className="hc-td-title">#{caixa.id} - {caixa.operadorNome || 'Admin'}</div>
+                                                <div className="hc-td-subtitle mt-1"><span>PDV 01</span></div>
                                             </div>
                                         </td>
-                                        <td>{formatData(caixa.dataAbertura)}</td>
-                                        <td>{isAberto ? '--' : formatData(caixa.dataFechamento)}</td>
-
-                                        <td className="text-right font-bold">
-                                            {isAberto ? '--' : formatMoeda(informado)}
+                                        <td className="td-mobile-flex">
+                                            <span className="mobile-label hide-desktop"><Calendar size={14}/> Abertura</span>
+                                            <div className="hc-td-date">{formatData(caixa.dataAbertura)}</div>
+                                        </td>
+                                        <td className="td-mobile-flex">
+                                            <span className="mobile-label hide-desktop"><Calendar size={14}/> Fechamento</span>
+                                            <div className="hc-td-date">{isAberto ? '--' : formatData(caixa.dataFechamento)}</div>
                                         </td>
 
-                                        {/* COLUNA DE DIFERENÇA COLORIDA E DESTACADA */}
-                                        <td className="text-right">
+                                        <td className="text-right td-mobile-flex">
+                                            <span className="mobile-label hide-desktop">Físico (Gaveta)</span>
+                                            <div className="value-restante">{isAberto ? '--' : formatMoeda(informado)}</div>
+                                        </td>
+
+                                        <td className="text-right td-mobile-flex">
+                                            <span className="mobile-label hide-desktop">Diferença</span>
+                                            <div style={{display: 'inline-block', textAlign: 'right'}}>
                                             {!isAberto ? (
                                                 diff < -0.05 ? (
-                                                    <span style={{ color: '#b91c1c', background: '#fee2e2', padding: '6px 10px', borderRadius: '8px', fontWeight: '800', display: 'inline-block' }}>
-                                                        {/* CORREÇÃO AQUI: Math.abs(diff) no render visual */}
-                                                        Falta {formatMoeda(Math.abs(diff))}
-                                                    </span>
+                                                    <span className="diff-badge badge-danger">Falta {formatMoeda(Math.abs(diff))}</span>
                                                 ) : diff > 0.05 ? (
-                                                    <span style={{ color: '#15803d', background: '#dcfce7', padding: '6px 10px', borderRadius: '8px', fontWeight: '800', display: 'inline-block' }}>
-                                                        Sobra +{formatMoeda(Math.abs(diff))}
-                                                    </span>
+                                                    <span className="diff-badge badge-success">Sobra +{formatMoeda(Math.abs(diff))}</span>
                                                 ) : (
-                                                    <span style={{ color: '#64748b', fontWeight: '600' }}>Exato (R$ 0,00)</span>
+                                                    <span className="diff-badge badge-neutral">Exato (R$ 0,00)</span>
                                                 )
                                             ) : '--'}
+                                            </div>
                                         </td>
 
-                                        <td>
-                                            <span className={`status-pill ${isAberto ? 'open' : 'closed'}`}>
-                                                {caixa.status}
-                                            </span>
+                                        <td className="td-mobile-flex">
+                                            <span className="mobile-label hide-desktop">Status</span>
+                                            <span className={`hc-badge status-${caixa.status}`}>{caixa.status}</span>
                                         </td>
 
-                                        <td>
-                                            <button className="btn-icon-view" onClick={() => handleVerDetalhes(caixa.id)} data-tooltip="Ver Conferência">
-                                                <Eye size={18}/>
+                                        <td className="text-right td-mobile-action">
+                                            <button className="hc-btn-view" onClick={() => handleVerDetalhes(caixa.id)}>
+                                                <Eye size={16}/> <span>Conferência</span>
                                             </button>
                                         </td>
                                     </tr>
                                 );
-                            })
-                        )}
-                    </tbody>
-                </table>
+                            })}
+                        </tbody>
+                    </table>
+                )}
 
                 {!loading && hasMore && (
-                    <button className="btn-load-more" onClick={() => { const p = page + 1; setPage(p); carregarCaixas(p, false); }}>
-                        <ArrowDownCircle size={18}/> Carregar Mais
+                    <button className="hc-btn-load-more" onClick={() => { const p = page + 1; setPage(p); carregarCaixas(p, false); }}>
+                        <ArrowDownCircle size={18}/> Carregar Mais Registos
                     </button>
                 )}
             </div>
 
-            {/* MODAL DETALHES COM AUDITORIA IA */}
+            {/* MODAL DETALHES COM GLASSMORPHISM */}
             {modalOpen && caixaSelecionado && (
-                <div className="modal-overlay fade-in" onClick={() => setModalOpen(false)}>
-                    <div className="modal-content-lg" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px' }}>
-                        <div className="modal-header">
-                            <h3><FileText size={20}/> Detalhes do Caixa #{caixaSelecionado.id}</h3>
-                            <button onClick={() => setModalOpen(false)} className="btn-close-modal"><X size={20}/></button>
+                <div className="hc-modal-overlay fade-in" onClick={() => setModalOpen(false)}>
+                    <div className="hc-modal-card" onClick={e => e.stopPropagation()}>
+                        <div className="hc-modal-header">
+                            <div>
+                                <h2>Auditoria de Caixa #{caixaSelecionado.id}</h2>
+                                <p>Revisão de valores físicos vs sistema</p>
+                            </div>
+                            <button onClick={() => setModalOpen(false)} className="btn-close-modal"><X size={24}/></button>
                         </div>
-                        <div className="modal-body-grid">
-                            <div className="info-section">
-                                <label>Operador</label>
-                                <p>{caixaSelecionado.usuarioAbertura?.nome || caixaSelecionado.operadorNome || 'Admin'}</p>
-                            </div>
-                            <div className="info-section">
-                                <label>Abertura</label>
-                                <p>{formatData(caixaSelecionado.dataAbertura)}</p>
-                            </div>
-                            <div className="info-section">
-                                <label>Fechamento</label>
-                                <p>{caixaSelecionado.dataFechamento ? formatData(caixaSelecionado.dataFechamento) : 'Em aberto'}</p>
+
+                        <div className="hc-modal-body">
+                            <div className="hc-info-grid">
+                                <div className="info-box">
+                                    <label>Operador</label>
+                                    <p>{caixaSelecionado.usuarioAbertura?.nome || caixaSelecionado.operadorNome || 'Admin'}</p>
+                                </div>
+                                <div className="info-box">
+                                    <label>Abertura</label>
+                                    <p>{formatData(caixaSelecionado.dataAbertura)}</p>
+                                </div>
+                                <div className="info-box">
+                                    <label>Fechamento</label>
+                                    <p>{caixaSelecionado.dataFechamento ? formatData(caixaSelecionado.dataFechamento) : 'Em aberto'}</p>
+                                </div>
                             </div>
 
-                            <div className="divider-full"></div>
-
-                            <div className="finance-card">
-                                <span>Saldo Inicial</span>
-                                <strong>{formatMoeda(caixaSelecionado.saldoInicial)}</strong>
-                            </div>
-                            <div className="finance-card success">
-                                <span>(+) Entradas</span>
-                                <strong>{formatMoeda(caixaSelecionado.totalEntradas)}</strong>
-                            </div>
-                            <div className="finance-card danger">
-                                <span>(-) Saídas (Sangrias)</span>
-                                <strong>{formatMoeda(caixaSelecionado.totalSaidas)}</strong>
-                            </div>
-
-                            <div className="finance-card highlight">
-                                <span>(=) Esperado no Sistema</span>
-                                <strong>{formatMoeda(caixaSelecionado.saldoEsperadoSistema)}</strong>
-                            </div>
-
-                            <div className="finance-card dark">
-                                <span>Contado na Gaveta</span>
-                                <strong>{formatMoeda(caixaSelecionado.valorFisicoInformado)}</strong>
+                            <div className="hc-finance-cards-grid mt-4">
+                                <div className="finance-box neutral">
+                                    <span>Saldo Inicial</span>
+                                    <strong>{formatMoeda(caixaSelecionado.saldoInicial)}</strong>
+                                </div>
+                                <div className="finance-box success">
+                                    <span>(+) Entradas de Caixa</span>
+                                    <strong>{formatMoeda(caixaSelecionado.totalEntradas)}</strong>
+                                </div>
+                                <div className="finance-box danger">
+                                    <span>(-) Saídas / Sangrias</span>
+                                    <strong>{formatMoeda(caixaSelecionado.totalSaidas)}</strong>
+                                </div>
+                                <div className="finance-box highlight">
+                                    <span>(=) Esperado no Sistema</span>
+                                    <strong>{formatMoeda(caixaSelecionado.saldoEsperadoSistema)}</strong>
+                                </div>
+                                <div className="finance-box dark total-box">
+                                    <span>Contado Fisicamente na Gaveta</span>
+                                    <strong>{formatMoeda(caixaSelecionado.valorFisicoInformado)}</strong>
+                                </div>
                             </div>
 
-                            {/* NOVO BLOCO: AUDITORIA IA E JUSTIFICATIVA */}
+                            {/* AUDITORIA IA */}
                             {caixaSelecionado.status === 'FECHADO' && Math.abs(caixaSelecionado.diferencaCaixa || 0) > 0.05 && (
-                                <div style={{ gridColumn: 'span 3', background: '#fff0f6', border: '1px solid #fbcfe8', borderRadius: '12px', padding: '20px', marginTop: '10px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' }}>
-                                        <BrainCircuit size={24} color="#ec4899" />
-                                        <h4 style={{ margin: 0, color: '#be185d', fontSize: '1.1rem', fontWeight: '800' }}>Auditoria de Quebra - Assistente IA</h4>
+                                <div className="ia-audit-box mt-4">
+                                    <div className="ia-audit-header">
+                                        <BrainCircuit size={24} />
+                                        <h4>Auditoria de Quebra - Assistente IA</h4>
                                     </div>
-
-                                    <div style={{ marginBottom: '15px' }}>
-                                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#9d174d', textTransform: 'uppercase' }}>Justificativa do Operador:</span>
-                                        <p style={{ margin: '5px 0 0 0', color: '#831843', fontStyle: 'italic', background: 'white', padding: '10px', borderRadius: '8px', borderLeft: '4px solid #f9a8d4' }}>
-                                            "{caixaSelecionado.justificativaDiferenca || 'Nenhuma justificativa fornecida.'}"
-                                        </p>
-                                    </div>
-
-                                    <div>
-                                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#9d174d', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                            <AlertTriangle size={14}/> Veredito da IA:
-                                        </span>
-                                        <p style={{ margin: '5px 0 0 0', color: '#1e293b', fontWeight: '600', lineHeight: '1.5' }}>
-                                            {caixaSelecionado.analiseAuditoriaIa || 'Análise da IA pendente ou não executada para este registro.'}
-                                        </p>
+                                    <div className="ia-audit-content">
+                                        <div className="justification-box">
+                                            <span className="ia-label">Justificativa do Operador:</span>
+                                            <p>"{caixaSelecionado.justificativaDiferenca || 'Nenhuma justificativa fornecida.'}"</p>
+                                        </div>
+                                        <div className="verdict-box mt-3">
+                                            <span className="ia-label"><AlertTriangle size={14}/> Veredito da Inteligência Artificial:</span>
+                                            <p>{caixaSelecionado.analiseAuditoriaIa || 'Análise da IA pendente ou não executada para este registro.'}</p>
+                                        </div>
                                     </div>
                                 </div>
                             )}
-
                         </div>
                     </div>
                 </div>
