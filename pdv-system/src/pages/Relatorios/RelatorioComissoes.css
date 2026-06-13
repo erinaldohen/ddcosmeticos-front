@@ -1,164 +1,188 @@
-.comissoes-container {
-    animation: fadeIn 0.3s ease-in-out;
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+  --com-primary: #3b82f6; --com-primary-hover: #2563eb;
+  --com-bg: #f8fafc; --com-surface: #ffffff;
+  --com-text: #0f172a; --com-muted: #64748b;
+  --com-border: #e2e8f0; --com-border-hover: #cbd5e1;
+  --com-success: #10b981; --com-purple: #8b5cf6; --com-warning: #f59e0b;
 }
 
-.filtros-bar {
-    background: var(--bg-card, #ffffff);
-    padding: 1.5rem;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    margin-bottom: 2rem;
-    display: flex;
-    gap: 1rem;
-    align-items: flex-end;
-    flex-wrap: wrap;
-}
-
-.filtro-grupo {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    flex: 1;
-    min-width: 200px;
-}
-
-.filtro-grupo label {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: #64748b;
-}
-
-.filtro-grupo input, .filtro-grupo select {
-    padding: 10px 12px;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    font-size: 1rem;
-    outline: none;
-    transition: border-color 0.2s;
-}
-
-.filtro-grupo input:focus, .filtro-grupo select:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.btn-gerar {
-    background: #10b981;
-    color: white;
-    padding: 10px 20px;
-    border: none;
-    border-radius: 8px;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: 42px;
-    transition: 0.2s;
-}
-
-.btn-gerar:hover {
-    background: #059669;
-}
-
-.cards-resumo {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-}
-
-.card-resumo {
-    padding: 1.5rem;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    gap: 1.5rem;
-    color: white;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-}
-
-.card-resumo.blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
-.card-resumo.purple { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
-.card-resumo.green { background: linear-gradient(135deg, #10b981, #059669); }
-
-.card-icone {
-    background: rgba(255, 255, 255, 0.2);
-    padding: 1rem;
-    border-radius: 50%;
-    display: flex;
-}
-
-.card-info h3 {
-    font-size: 0.9rem;
-    font-weight: 500;
-    margin: 0 0 0.2rem 0;
-    opacity: 0.9;
-}
-
-.card-info h2 {
-    font-size: 1.8rem;
-    margin: 0;
-}
-
-.ranking-table {
-    background: var(--bg-card, #ffffff);
-    border-radius: 12px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    overflow: hidden;
-}
-
-.ranking-table table {
+/* ==========================================================================
+   LAYOUT PRINCIPAL
+   ========================================================================== */
+.com-premium-container {
+    padding: 32px 40px;
+    max-width: 1440px;
     width: 100%;
-    border-collapse: collapse;
-    text-align: left;
+    margin: 0 auto;
+    font-family: 'Inter', sans-serif;
+    background-color: var(--com-bg);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+.fade-in { animation: fadeIn 0.4s ease-out; } .spin { animation: spin 1s linear infinite; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+
+/* ==========================================================================
+   HEADER
+   ========================================================================== */
+.com-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; }
+.com-header-title { display: flex; align-items: center; gap: 16px; }
+.com-icon-box { background: #eff6ff; padding: 16px; border-radius: 14px; box-shadow: 0 4px 10px rgba(59,130,246,0.15); display: flex; }
+.com-header h1 { margin: 0; font-size: 2rem; color: var(--com-text); font-weight: 800; letter-spacing: -0.5px; }
+.com-header p { margin: 4px 0 0; color: var(--com-muted); font-size: 0.95rem; font-weight: 500;}
+
+/* ==========================================================================
+   FILTROS E TOOLBAR
+   ========================================================================== */
+.com-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    background: var(--com-surface);
+    padding: 24px;
+    border-radius: 16px;
+    margin-bottom: 32px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+    border: 1px solid var(--com-border);
+    flex-wrap: wrap;
+    gap: 20px;
 }
 
-.ranking-table th {
-    background: #f8fafc;
-    padding: 1rem;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    color: #64748b;
-    border-bottom: 2px solid #e2e8f0;
-}
+.com-filters-wrapper { display: flex; gap: 16px; flex-wrap: wrap; flex: 1;}
+.com-input-group { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 200px;}
+.com-input-group label { font-size: 0.85rem; font-weight: 700; color: var(--com-muted); text-transform: uppercase; letter-spacing: 0.5px;}
 
-.ranking-table td {
-    padding: 1rem;
-    border-bottom: 1px solid #e2e8f0;
-    color: #1e293b;
-    vertical-align: middle;
-}
+.input-with-icon { position: relative; width: 100%; }
+.input-icon { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--com-muted); pointer-events: none;}
 
-.ranking-table tr:hover td {
-    background: #f8fafc;
+.input-with-icon input, .input-with-icon select {
+    width: 100%; padding: 14px 14px 14px 44px;
+    border: 1px solid var(--com-border); border-radius: 10px;
+    outline: none; font-size: 0.95rem; color: var(--com-text); font-weight: 600;
+    background: var(--com-bg); transition: 0.2s; font-family: inherit; appearance: none;
 }
+.input-with-icon input:focus, .input-with-icon select:focus { border-color: var(--com-primary); background: var(--com-surface); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
 
-.badge-rank {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 0.9rem;
-    color: #64748b;
-    background: #f1f5f9;
-}
+.com-actions-wrapper { display: flex; gap: 12px; }
+.com-btn-secondary { background: #f8fafc; color: #475569; border: 1px solid #cbd5e1; padding: 14px 20px; border-radius: 10px; font-weight: 700; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 8px; font-family: inherit;}
+.com-btn-secondary:hover:not(:disabled) { background: #f1f5f9; color: #0f172a; border-color: #94a3b8; }
+.com-btn-primary { background: var(--com-primary); color: white; border: none; padding: 14px 28px; border-radius: 10px; font-weight: 800; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25); font-family: inherit;}
+.com-btn-primary:hover:not(:disabled) { background: var(--com-primary-hover); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35); }
+.com-btn-primary:disabled, .com-btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }
 
-.badge-rank.rank-1 { background: #fef08a; color: #854d0e; box-shadow: 0 0 10px rgba(234, 179, 8, 0.3); }
-.badge-rank.rank-2 { background: #e2e8f0; color: #475569; }
+/* ==========================================================================
+   KPI CARDS (Ocean Blue Premium Style)
+   ========================================================================== */
+.com-kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-bottom: 32px; }
+.com-kpi-card { background: var(--com-surface); padding: 24px; border-radius: 16px; display: flex; align-items: center; gap: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); border: 1px solid var(--com-border); transition: 0.2s; position: relative; overflow: hidden; }
+.com-kpi-card:hover { transform: translateY(-4px); box-shadow: 0 12px 24px rgba(0,0,0,0.06); }
+.com-kpi-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; }
+
+.com-kpi-card.info::before { background: var(--com-primary); }
+.com-kpi-card.success::before { background: var(--com-success); }
+.com-kpi-card.purple::before { background: var(--com-purple); }
+
+.kpi-icon-wrapper { padding: 16px; border-radius: 14px; display: flex; align-items: center; justify-content: center;}
+.info .kpi-icon-wrapper { background: #eff6ff; color: var(--com-primary); }
+.success .kpi-icon-wrapper { background: #ecfdf5; color: var(--com-success); }
+.purple .kpi-icon-wrapper { background: #f5f3ff; color: var(--com-purple); }
+
+.kpi-content span { font-size: 0.85rem; color: var(--com-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+.kpi-content h3 { margin: 6px 0 0; font-size: 1.8rem; font-weight: 900; color: var(--com-text); }
+
+/* ==========================================================================
+   TABELA E RANKING
+   ========================================================================== */
+.com-table-card { background: var(--com-surface); border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.02); border: 1px solid var(--com-border); overflow: hidden; }
+.com-table { width: 100%; border-collapse: collapse; text-align: left; }
+.com-table th { background: var(--com-bg); padding: 18px 24px; font-size: 0.8rem; color: var(--com-muted); font-weight: 800; text-transform: uppercase; border-bottom: 2px solid var(--com-border); letter-spacing: 0.5px;}
+.com-table td { padding: 20px 24px; border-bottom: 1px solid var(--com-bg); vertical-align: middle; transition: 0.2s; }
+.com-table-row:hover td { background-color: #fcfdfd; }
+
+.com-td-title { font-weight: 700; color: var(--com-text); font-size: 1.1rem; }
+.mt-1 { margin-top: 4px; }
+.qtd-vendas-badge { background: #f1f5f9; color: #475569; padding: 4px 10px; border-radius: 6px; font-size: 0.85rem; font-weight: 700;}
+
+.com-td-value-stack { display: flex; flex-direction: column; }
+.value-restante { font-weight: 700; font-size: 1rem; display: block; color: var(--com-text);}
+.value-original { font-size: 0.8rem; color: var(--com-muted); display: block; margin-top: 2px; }
+.text-right { text-align: right; }
+.text-center { text-align: center; }
+.text-success { color: var(--com-success) !important; font-weight: 900 !important; font-size: 1.25rem !important;}
+
+/* Odistintivo de Ranking */
+.badge-rank { width: 36px; height: 36px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1rem; color: var(--com-muted); background: #f1f5f9; margin: 0 auto; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);}
+.badge-rank.rank-1 { background: #fef08a; color: #854d0e; box-shadow: 0 4px 10px rgba(234, 179, 8, 0.3); font-size: 1.2rem;}
+.badge-rank.rank-2 { background: #e2e8f0; color: #334155; }
 .badge-rank.rank-3 { background: #ffedd5; color: #9a3412; }
 
-.valor-destaque {
-    font-weight: bold;
-    color: #059669;
-    font-size: 1.1rem;
-}
+.com-empty-state { text-align: center; padding: 60px 20px; color: var(--com-muted); display: flex; flex-direction: column; align-items: center; justify-content: center;}
+.com-empty-state h2 { font-size: 1.2rem; font-weight: 700; margin-top: 16px; color: var(--com-text);}
+.text-slate-300 { color: #cbd5e1; }
 
-@media (max-width: 768px) {
-    .filtros-bar { flex-direction: column; align-items: stretch; }
-    .btn-gerar { justify-content: center; }
-    .ranking-table { overflow-x: auto; }
+/* ==========================================================================
+   📱 APP NATIVE MOBILE UX (Comissões)
+   ========================================================================== */
+.hide-desktop { display: none !important; }
+.mobile-label { display: none; }
+
+@media (max-width: 900px) {
+    .com-premium-container { padding: 16px; overflow-x: hidden; }
+    .hide-mobile { display: none !important; }
+    .hide-mobile-col { display: none !important; }
+
+    .mobile-label { display: flex !important; align-items: center; gap: 6px; font-weight: 800; font-size: 0.8rem; color: var(--com-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;}
+
+    /* Cabeçalho empilhado */
+    .com-header { flex-direction: column; align-items: flex-start; gap: 16px; margin-bottom: 24px;}
+    .com-icon-box { padding: 12px; }
+    .com-header h1 { font-size: 1.6rem; }
+
+    /* Filtros (Flex Wrap Inteligente) */
+    .com-toolbar { flex-direction: column; align-items: stretch; padding: 20px; gap: 16px;}
+    .com-filters-wrapper { flex-direction: column; width: 100%; }
+    .com-input-group { min-width: 100%; }
+    .com-actions-wrapper { flex-direction: column; width: 100%; margin-top: 8px;}
+    .com-btn-secondary, .com-btn-primary { width: 100%; justify-content: center; padding: 16px; font-size: 1.05rem;}
+
+    /* KPIs em linha reta (Mosaico Moderno) */
+    .com-kpi-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-bottom: 24px;}
+    .com-kpi-card { padding: 16px; border-radius: 12px; gap: 16px;}
+    .kpi-icon-wrapper { padding: 12px; }
+    .kpi-content span { font-size: 0.75rem; }
+    .kpi-content h3 { font-size: 1.4rem; }
+
+    /* 📦 Table to App Cards (Para o Ranking) */
+    .com-table-card { background: transparent !important; border: none !important; box-shadow: none !important; overflow: visible;}
+    .com-table, .com-table tbody { display: block !important; width: 100% !important; }
+    .com-table thead { display: none !important; }
+
+    .com-table-row {
+        display: flex !important; flex-direction: column !important;
+        background: var(--com-surface) !important; border-radius: 16px !important;
+        margin-bottom: 16px !important; padding: 20px !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.03) !important; border: 1px solid var(--com-border) !important;
+        position: relative;
+    }
+
+    .com-table td { padding: 0 !important; border: none !important; display: flex !important; justify-content: space-between !important; align-items: center !important; margin-bottom: 16px !important; background: transparent !important;}
+    .com-table td:last-child { margin-bottom: 0 !important;}
+
+    /* A Badge de Rank fica no topo direito solta */
+    .rank-cell { position: absolute; top: 20px; right: 20px; margin: 0 !important; background: transparent !important; border: none !important; padding: 0 !important;}
+    .rank-cell .mobile-label { display: none !important; }
+
+    /* Linhas Internas do Cartão */
+    .td-mobile-flex { flex-direction: column !important; align-items: flex-start !important; gap: 4px !important; background: var(--com-bg) !important; padding: 16px !important; border-radius: 10px !important; border: 1px solid var(--com-border-hover) !important; width: 100%;}
+    .td-mobile-flex > div { width: 100% !important; text-align: right !important;}
+
+    .com-td-title { font-size: 1.15rem !important; text-align: left !important; padding-right: 40px;}
+
+    /* Destaque para o valor a pagar */
+    .valor-destaque { font-size: 1.6rem !important; }
 }

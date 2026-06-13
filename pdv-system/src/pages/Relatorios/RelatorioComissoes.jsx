@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Calendar, User, DollarSign, TrendingUp, Search,
-  Award, RefreshCw, AlertCircle, Printer
+  Award, RefreshCw, AlertCircle, Printer, PieChart
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../services/api';
@@ -84,110 +84,158 @@ const RelatorioComissoes = () => {
     };
 
     return (
-        <div className="comissoes-container modern-container">
-            <header className="list-header mb-4">
-                <div className="header-title-row">
+        <div className="com-premium-container fade-in">
+            <header className="com-header">
+                <div className="com-header-title">
+                    <div className="com-icon-box">
+                        <Award size={28} color="#3b82f6" />
+                    </div>
                     <div>
-                        <h1 className="title-gradient">Comissões por Vendedor</h1>
-                        <p className="subtitle">Apuração de ganhos e ranking de desempenho.</p>
+                        <h1>Comissões e Desempenho</h1>
+                        <p>Apuração de ganhos e ranking de vendas da equipe</p>
                     </div>
                 </div>
             </header>
 
-            {/* BARRA DE FILTROS */}
-            <form className="filtros-bar" onSubmit={handleGerar}>
-                <div className="filtro-grupo">
-                    <label>Data Inicial</label>
-                    <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} required />
-                </div>
-                <div className="filtro-grupo">
-                    <label>Data Final</label>
-                    <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} required />
-                </div>
-                <div className="filtro-grupo">
-                    <label>Vendedor</label>
-                    <select value={vendedorId} onChange={e => setVendedorId(e.target.value)}>
-                        <option value="">Todos os Vendedores</option>
-                        {vendedoresList.map(v => (
-                            <option key={v.id} value={v.id}>{v.nome}</option>
-                        ))}
-                    </select>
+            {/* BARRA DE FILTROS ELEGANTE */}
+            <form className="com-toolbar" onSubmit={handleGerar}>
+                <div className="com-filters-wrapper">
+                    <div className="com-input-group">
+                        <label>Data Inicial</label>
+                        <div className="input-with-icon">
+                            <Calendar size={16} className="input-icon" />
+                            <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)} required />
+                        </div>
+                    </div>
+
+                    <div className="com-input-group">
+                        <label>Data Final</label>
+                        <div className="input-with-icon">
+                            <Calendar size={16} className="input-icon" />
+                            <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)} required />
+                        </div>
+                    </div>
+
+                    <div className="com-input-group">
+                        <label>Vendedor</label>
+                        <div className="input-with-icon">
+                            <User size={16} className="input-icon" />
+                            <select value={vendedorId} onChange={e => setVendedorId(e.target.value)}>
+                                <option value="">Todos os Vendedores</option>
+                                {vendedoresList.map(v => (
+                                    <option key={v.id} value={v.id}>{v.nome}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
-                <div className="cfg-flex gap-sm">
-                    <button type="submit" className="btn-gerar" disabled={loading}>
-                        {loading ? <RefreshCw className="spin" size={18} /> : <Search size={18} />}
-                        Gerar
-                    </button>
-
-                    <button
-                        type="button"
-                        className="btn-gerar"
-                        onClick={handlePrint}
-                        style={{ background: '#6366f1' }}
-                        disabled={loadingPdf || !dados}
-                    >
+                <div className="com-actions-wrapper">
+                    <button type="button" className="com-btn-secondary" onClick={handlePrint} disabled={loadingPdf || !dados}>
                         {loadingPdf ? <RefreshCw className="spin" size={18} /> : <Printer size={18} />}
-                        PDF
+                        <span>Exportar PDF</span>
+                    </button>
+                    <button type="submit" className="com-btn-primary" disabled={loading}>
+                        {loading ? <RefreshCw className="spin" size={18} /> : <Search size={18} />}
+                        <span>Gerar Relatório</span>
                     </button>
                 </div>
             </form>
 
             {loading && !dados ? (
-                <div className="flex-center p-5"><RefreshCw className="spin text-blue" size={40} /></div>
+                <div className="com-empty-state">
+                    <RefreshCw className="spin text-slate-300" size={40} />
+                    <h2>Processando comissões...</h2>
+                </div>
             ) : dados ? (
                 <>
-                    {/* CARDS DE RESUMO */}
-                    <div className="cards-resumo">
-                        <div className="card-resumo blue">
-                            <div className="card-icone"><TrendingUp size={32} /></div>
-                            <div className="card-info">
-                                <h3>Total Faturado</h3>
-                                <h2>{formatMoney(dados.totalVendidoGeral)}</h2>
+                    {/* KPI CARDS - MESMO ESTILO DO CONTAS A PAGAR */}
+                    <div className="com-kpi-grid">
+                        <div className="com-kpi-card info">
+                            <div className="kpi-icon-wrapper"><TrendingUp size={24} /></div>
+                            <div className="kpi-content">
+                                <span>Total Faturado</span>
+                                <h3>{formatMoney(dados.totalVendidoGeral)}</h3>
                             </div>
                         </div>
 
-                        <div className="card-resumo green">
-                            <div className="card-icone"><DollarSign size={32} /></div>
-                            <div className="card-info">
-                                <h3>Comissões a Pagar</h3>
-                                <h2>{formatMoney(dados.totalComissoesGeral)}</h2>
+                        <div className="com-kpi-card success">
+                            <div className="kpi-icon-wrapper"><DollarSign size={24} /></div>
+                            <div className="kpi-content">
+                                <span>Comissões a Pagar</span>
+                                <h3>{formatMoney(dados.totalComissoesGeral)}</h3>
+                            </div>
+                        </div>
+
+                        <div className="com-kpi-card purple">
+                            <div className="kpi-icon-wrapper"><PieChart size={24} /></div>
+                            <div className="kpi-content">
+                                <span>Taxa Média Global</span>
+                                <h3>
+                                    {dados.totalVendidoGeral > 0
+                                      ? ((dados.totalComissoesGeral / dados.totalVendidoGeral) * 100).toFixed(1) + '%'
+                                      : '0%'}
+                                </h3>
                             </div>
                         </div>
                     </div>
 
-                    {/* TABELA DE RANKING */}
-                    <div className="ranking-table">
+                    {/* TABELA DE RANKING (APP CARDS NO MOBILE) */}
+                    <div className="com-table-card">
                         {dados.vendedores.length === 0 ? (
-                            <div className="empty-state p-5 text-center">
-                                <AlertCircle size={48} color="#94a3b8" className="mb-3" />
-                                <h3>Nenhuma venda encontrada</h3>
+                            <div className="com-empty-state">
+                                <AlertCircle size={48} className="text-slate-300" />
+                                <h2>Nenhuma venda processada neste período.</h2>
                             </div>
                         ) : (
-                            <table>
+                            <table className="com-table">
                                 <thead>
                                     <tr>
-                                        <th width="80" className="text-center">Pos.</th>
+                                        <th width="80" className="text-center">Rank</th>
                                         <th>Vendedor</th>
-                                        <th className="text-center">Vendas</th>
-                                        <th className="text-right">Faturamento</th>
-                                        <th className="text-right">Base de Cálculo</th>
-                                        <th className="text-right">Comissão</th>
+                                        <th className="text-center hide-mobile-col">Vendas Feitas</th>
+                                        <th className="text-right">Faturamento Base</th>
+                                        <th className="text-right">Comissão a Pagar</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {dados.vendedores.map((vendedor, index) => (
-                                        <tr key={vendedor.idVendedor}>
-                                            <td className="text-center">
-                                                <span className={`badge-rank rank-${index + 1}`}>
+                                        <tr key={vendedor.idVendedor} className="com-table-row">
+                                            <td className="text-center td-mobile-flex rank-cell">
+                                                <span className="mobile-label hide-desktop">Posição no Ranking</span>
+                                                <div className={`badge-rank rank-${index + 1}`}>
                                                     {index + 1 === 1 ? <Award size={18}/> : index + 1}
-                                                </span>
+                                                </div>
                                             </td>
-                                            <td>{vendedor.nomeVendedor}</td>
-                                            <td className="text-center">{vendedor.quantidadeVendas}</td>
-                                            <td className="text-right">{formatMoney(vendedor.valorTotalVendido)}</td>
-                                            <td className="text-right">{formatMoney(vendedor.valorBaseComissao)}</td>
-                                            <td className="text-right valor-destaque">{formatMoney(vendedor.valorComissao)}</td>
+
+                                            <td className="td-mobile-flex">
+                                                <span className="mobile-label hide-desktop"><User size={14}/> Vendedor</span>
+                                                <div>
+                                                    <div className="com-td-title">{vendedor.nomeVendedor}</div>
+                                                    <div className="com-td-subtitle hide-desktop mt-1">
+                                                        <span>{vendedor.quantidadeVendas} vendas computadas</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            <td className="text-center hide-mobile-col">
+                                                <span className="qtd-vendas-badge">{vendedor.quantidadeVendas} cupons</span>
+                                            </td>
+
+                                            <td className="text-right td-mobile-flex">
+                                                <span className="mobile-label hide-desktop"><TrendingUp size={14}/> Faturamento Base</span>
+                                                <div className="com-td-value-stack">
+                                                    <span className="value-restante">{formatMoney(vendedor.valorTotalVendido)}</span>
+                                                    {vendedor.valorBaseComissao < vendedor.valorTotalVendido && (
+                                                        <span className="value-original" title="Base de cálculo após descontos/devoluções">Base: {formatMoney(vendedor.valorBaseComissao)}</span>
+                                                    )}
+                                                </div>
+                                            </td>
+
+                                            <td className="text-right td-mobile-flex">
+                                                <span className="mobile-label hide-desktop"><DollarSign size={14}/> Comissão a Pagar</span>
+                                                <div className="valor-destaque text-success">{formatMoney(vendedor.valorComissao)}</div>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
