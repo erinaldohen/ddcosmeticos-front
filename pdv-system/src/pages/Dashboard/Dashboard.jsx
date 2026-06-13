@@ -457,9 +457,10 @@ const Dashboard = () => {
                         <span style={{ fontSize: '0.85rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}><div style={{width: '10px', height: '10px', background: '#3b82f6', borderRadius: '50%'}}></div> CMV</span>
                     </div>
                 </div>
-                <div className="chart-content mt-4">
+                <div className="chart-content mt-4" style={{ minHeight: '300px' }}>
                   {graficoEvolucao.length > 0 ? (
-                    <AreaChart width={chartWidth || 800} height={300} data={graficoEvolucao} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <AreaChart data={graficoEvolucao} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <defs>
                           <linearGradient id="colorFat" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#ec4899" stopOpacity={0.4}/><stop offset="95%" stopColor="#ec4899" stopOpacity={0}/></linearGradient>
                           <linearGradient id="colorCusto" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.2}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient>
@@ -471,6 +472,7 @@ const Dashboard = () => {
                       <Area type="monotone" dataKey="faturamento" stroke="#ec4899" strokeWidth={4} fill="url(#colorFat)" activeDot={{ r: 6, fill: '#ec4899', stroke: '#fff', strokeWidth: 2 }} />
                       <Area type="monotone" dataKey="custo" stroke="#3b82f6" strokeWidth={3} fill="url(#colorCusto)" />
                     </AreaChart>
+                    </ResponsiveContainer>
                   ) : <div className="empty-state" style={{ height: '250px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Sem dados de fluxo para este período.</div>}
                 </div>
             </div>
@@ -487,9 +489,9 @@ const Dashboard = () => {
                   <h3 className="flex-center-gap"><Clock size={18} className="text-primary"/> Mapa de Calor (Vendas por Hora) <InfoTooltip text="Identifique os horários de pico para reforçar o atendimento no balcão."/></h3>
                   <span className="ia-badge primary">Tráfego</span>
               </div>
-              <div className="chart-content mt-4" style={{ height: '240px' }}>
+              <div className="chart-content mt-4" style={{ height: '240px', minHeight: '240px' }}>
                   {mapaDeCalor.length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
+                      <ResponsiveContainer width="100%" height={240}>
                           <BarChart data={mapaDeCalor} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                               <XAxis dataKey="hora" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#94a3b8'}} />
@@ -538,8 +540,8 @@ const Dashboard = () => {
                               <div className="box-header">
                                   <h3 className="flex-center-gap"><PieChartIcon size={18} className="text-emerald"/> Preferência de Pagamento</h3>
                               </div>
-                              <div className="chart-content flex-center relative" style={{flexDirection: 'column', height: '240px'}}>
-                                 <ResponsiveContainer width="100%" height="100%">
+                              <div className="chart-content flex-center relative" style={{flexDirection: 'column', height: '240px', minHeight: '240px'}}>
+                                 <ResponsiveContainer width="100%" height={240}>
                                     <PieChart>
                                       <Pie
                                         data={formasPagamento}

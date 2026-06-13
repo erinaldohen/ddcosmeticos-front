@@ -235,3 +235,44 @@
   .dash-actions { width: 100%; justify-content: space-between; }
   .dash-top-grid, .dash-top-grid.triple, .dash-charts-grid.split-2, .dash-bottom-grid.split-3, .dash-kpi-grid { grid-template-columns: 1fr; }
 }
+/* =======================================================
+   🔥 AJUSTES ESTRITOS PARA MOBILE E RECHARTS
+   ======================================================= */
+@media (max-width: 900px) {
+  /* Alinhamento fluido do Cabeçalho e Filtros */
+  .dash-header { flex-direction: column; align-items: stretch; }
+  .dash-actions { flex-direction: column; width: 100%; align-items: stretch; }
+  .period-filter { width: 100%; justify-content: space-between; }
+
+  /* Permite arrastar as abas para o lado no telemóvel sem esmagar o texto */
+  .dash-tabs { overflow-x: auto; white-space: nowrap; padding-bottom: 5px; }
+
+  /* Empilha as grelhas (Quadros de métricas e Listas) numa só coluna vertical */
+  .dash-top-grid,
+  .dash-top-grid.triple,
+  .dash-charts-grid.split-2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Os Cartões KPI (pequenos) ficam lado a lado para poupar espaço vertical */
+  .dash-kpi-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  /* Impede a tabela DrillDown de vazar para fora do ecrã */
+  .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Esconde textos dos botões se necessário para não colapsar a barra de navegação */
+  .hide-mobile { display: none !important; }
+}
+
+@media (max-width: 450px) {
+  /* Em telemóveis muito pequenos, empilha até mesmo os KPIs */
+  .dash-kpi-grid { grid-template-columns: 1fr !important; }
+}
+
+/* Fix Global para evitar que os gráficos do Recharts colapsem */
+.recharts-responsive-container {
+  min-height: 240px;
+  min-width: 0;
+}
